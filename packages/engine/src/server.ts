@@ -37,7 +37,8 @@ const agentConfigs = [
 
 function findSpawnPositions(world: WorldEngine, count: number): { x: number; y: number }[] {
   const market = world.tileMap.pois.find(p => p.type === 'marketplace')
-  const center = market?.position ?? { x: Math.floor(world.tileMap.width / 2), y: Math.floor(world.tileMap.height / 2) }
+  // Use first marketplace POI or fallback to origin area
+  const center = market?.position ?? { x: 8, y: 8 }
   const positions: { x: number; y: number }[] = []
 
   for (let r = 0; r <= 15 && positions.length < count; r++) {
@@ -76,7 +77,7 @@ async function main() {
   const spawnPositions = findSpawnPositions(world, agentConfigs.length)
   for (let i = 0; i < agentConfigs.length; i++) {
     const cfg = agentConfigs[i]
-    const pos = spawnPositions[i] ?? { x: Math.floor(world.tileMap.width / 2), y: Math.floor(world.tileMap.height / 2) }
+    const pos = spawnPositions[i] ?? { x: 8, y: 8 }
     const provider = providerRegistry.getRandomOrMock()
     world.agentManager.createAgent({
       name: cfg.name,
@@ -132,6 +133,12 @@ async function main() {
     if (event.type === 'world:tick') {
       io.emit('world:agents', world.agentManager.getAllAgents())
     }
+
+    // Send new chunk data when chunks are generated
+    if (event.type === 'world:chunks_generated') {
+      const chunkData = world.tileMap.getSerializableChunks(event.chunkKeys)
+      io.emit('world:chunks', chunkData)
+    }
   })
 
   io.on('connection', (socket) => {
@@ -143,6 +150,12 @@ async function main() {
     // Client can request state at any time (e.g. after scene is ready)
     socket.on('request:state', () => {
       socket.emit('world:state', world.getState())
+    })
+
+    // Client can request specific chunks
+    socket.on('request:chunks', (keys: string[]) => {
+      const chunkData = world.tileMap.getSerializableChunks(keys)
+      socket.emit('world:chunks', chunkData)
     })
 
     // Speed controls

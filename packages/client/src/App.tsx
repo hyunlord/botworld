@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import Phaser from 'phaser'
-import type { Agent, WorldClock, WorldEvent } from '@botworld/shared'
+import type { Agent, WorldClock, WorldEvent, ChunkData } from '@botworld/shared'
 import { createGameConfig } from './game/config.js'
 import { WorldScene } from './game/scenes/world-scene.js'
 import { socketClient, type WorldState, type SpeedState } from './network/socket-client.js'
@@ -20,6 +20,7 @@ export function App() {
   const [selectedAgent, setSelectedAgent] = useState<Agent | null>(null)
   const [connected, setConnected] = useState(false)
   const [speedState, setSpeedState] = useState<SpeedState>({ paused: false, speed: 1 })
+  const [panelOpen, setPanelOpen] = useState(true)
 
   const agentNames = new Map(agents.map(a => [a.id, a.name]))
 
@@ -30,7 +31,7 @@ export function App() {
       pendingState.current = state
       return
     }
-    scene.setWorldData(state.map)
+    scene.addChunks(state.chunks)
     scene.updateAgents(state.agents)
     scene.updateClock(state.clock)
     setClock(state.clock)
@@ -117,11 +118,17 @@ export function App() {
       setSpeedState(state)
     })
 
+    // New chunks generated on the fly
+    const unsubChunks = socketClient.onChunks((chunks: Record<string, ChunkData>) => {
+      sceneRef.current?.addChunks(chunks)
+    })
+
     return () => {
       unsubState()
       unsubAgents()
       unsubEvent()
       unsubSpeed()
+      unsubChunks()
       socketClient.disconnect()
     }
   }, [])
@@ -131,37 +138,48 @@ export function App() {
       {/* Game canvas */}
       <div id="game-container" style={styles.game} />
 
+      {/* Panel toggle button */}
+      <button
+        style={{ ...styles.toggleBtn, right: panelOpen ? 320 : 0 }}
+        onClick={() => setPanelOpen(prev => !prev)}
+        title={panelOpen ? 'Hide panel' : 'Show panel'}
+      >
+        {panelOpen ? '\u25B6' : '\u25C0'}
+      </button>
+
       {/* Side panel */}
-      <div style={styles.panel}>
-        <div style={styles.header}>
-          <h1 style={styles.logo}>Botworld</h1>
-          <div style={{ ...styles.status, color: connected ? '#2ecc71' : '#e74c3c' }}>
-            {connected ? 'Connected' : 'Disconnected'}
-          </div>
-        </div>
-
-        <HUD clock={clock} agentCount={agents.length} speedState={speedState} />
-
-        <div style={styles.agentList}>
-          <h3 style={styles.sectionTitle}>Agents</h3>
-          {agents.map(agent => (
-            <div
-              key={agent.id}
-              style={{
-                ...styles.agentItem,
-                background: selectedAgent?.id === agent.id ? '#2a3a5e' : 'transparent',
-              }}
-              onClick={() => setSelectedAgent(agent)}
-            >
-              <span style={styles.agentName}>{agent.name}</span>
-              <span style={styles.agentAction}>{agent.currentAction?.type ?? 'idle'}</span>
+      {panelOpen && (
+        <div style={styles.panel}>
+          <div style={styles.header}>
+            <h1 style={styles.logo}>Botworld</h1>
+            <div style={{ ...styles.status, color: connected ? '#2ecc71' : '#e74c3c' }}>
+              {connected ? 'Connected' : 'Disconnected'}
             </div>
-          ))}
-        </div>
+          </div>
 
-        <AgentInspector agent={selectedAgent} />
-        <ChatLog events={events} agentNames={agentNames} />
-      </div>
+          <HUD clock={clock} agentCount={agents.length} speedState={speedState} />
+
+          <div style={styles.agentList}>
+            <h3 style={styles.sectionTitle}>Agents</h3>
+            {agents.map(agent => (
+              <div
+                key={agent.id}
+                style={{
+                  ...styles.agentItem,
+                  background: selectedAgent?.id === agent.id ? '#2a3a5e' : 'transparent',
+                }}
+                onClick={() => setSelectedAgent(agent)}
+              >
+                <span style={styles.agentName}>{agent.name}</span>
+                <span style={styles.agentAction}>{agent.currentAction?.type ?? 'idle'}</span>
+              </div>
+            ))}
+          </div>
+
+          <AgentInspector agent={selectedAgent} />
+          <ChatLog events={events} agentNames={agentNames} />
+        </div>
+      )}
     </div>
   )
 }
@@ -172,11 +190,32 @@ const styles: Record<string, React.CSSProperties> = {
     width: '100vw',
     height: '100vh',
     overflow: 'hidden',
+    position: 'relative',
   },
   game: {
     flex: 1,
     minWidth: 0,
     overflow: 'hidden',
+  },
+  toggleBtn: {
+    position: 'absolute',
+    right: 0,
+    top: '50%',
+    transform: 'translateY(-50%)',
+    zIndex: 100,
+    width: 24,
+    height: 48,
+    background: '#16213e',
+    border: '1px solid #1a2a4a',
+    borderRight: 'none',
+    borderRadius: '6px 0 0 6px',
+    color: '#8899aa',
+    fontSize: 12,
+    cursor: 'pointer',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 0,
   },
   panel: {
     width: 320,

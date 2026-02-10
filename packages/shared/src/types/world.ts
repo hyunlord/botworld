@@ -40,8 +40,35 @@ export interface Tile {
   }
   ownerId?: string
   buildingId?: string
+  variant?: number
+  decoration?: string
+  poiType?: ChunkPOI['type']
 }
 
+export interface ChunkCoord {
+  cx: number
+  cy: number
+}
+
+export type POIType = 'marketplace' | 'tavern' | 'workshop' | 'library' | 'farm' | 'mine'
+
+export interface ChunkPOI {
+  name: string
+  type: POIType
+  localX: number
+  localY: number
+  biome?: string
+}
+
+export interface ChunkData {
+  cx: number
+  cy: number
+  tiles: Tile[][]
+  poi?: ChunkPOI
+  generated: boolean
+}
+
+/** @deprecated Use chunks-based state instead */
 export interface WorldMap {
   width: number
   height: number

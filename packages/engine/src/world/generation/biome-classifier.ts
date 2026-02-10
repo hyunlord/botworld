@@ -39,7 +39,7 @@ const FALLBACK: BiomeRule = {
   elevMin: 0, elevMax: 1, tempMin: 0, tempMax: 1, moistMin: 0, moistMax: 1,
 }
 
-function classifyBiome(elev: number, temp: number, moist: number): BiomeRule {
+export function classifyBiome(elev: number, temp: number, moist: number): BiomeRule {
   for (const rule of BIOME_TABLE) {
     if (
       elev >= rule.elevMin && elev < rule.elevMax &&

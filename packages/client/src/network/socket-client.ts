@@ -1,10 +1,10 @@
 import { io, Socket } from 'socket.io-client'
-import type { WorldEvent, Agent, WorldClock, Tile } from '@botworld/shared'
+import type { WorldEvent, Agent, WorldClock, ChunkData } from '@botworld/shared'
 
 export interface WorldState {
   clock: WorldClock
   agents: Agent[]
-  map: { width: number; height: number; tiles: Tile[][] }
+  chunks: Record<string, ChunkData>
   recentEvents: WorldEvent[]
 }
 
@@ -17,6 +17,7 @@ type StateCallback = (state: WorldState) => void
 type EventCallback = (event: WorldEvent) => void
 type AgentsCallback = (agents: Agent[]) => void
 type SpeedCallback = (state: SpeedState) => void
+type ChunksCallback = (chunks: Record<string, ChunkData>) => void
 
 class SocketClient {
   private socket: Socket | null = null
@@ -24,6 +25,7 @@ class SocketClient {
   private eventCallbacks: EventCallback[] = []
   private agentsCallbacks: AgentsCallback[] = []
   private speedCallbacks: SpeedCallback[] = []
+  private chunksCallbacks: ChunksCallback[] = []
 
   connect(url?: string): void {
     this.socket = io(url ?? window.location.origin)
@@ -44,6 +46,10 @@ class SocketClient {
       for (const cb of this.speedCallbacks) cb(state)
     })
 
+    this.socket.on('world:chunks', (chunks: Record<string, ChunkData>) => {
+      for (const cb of this.chunksCallbacks) cb(chunks)
+    })
+
     this.socket.on('connect', () => {
       console.log('[Socket] Connected to Botworld server')
     })
@@ -53,54 +59,43 @@ class SocketClient {
     })
   }
 
-  /** Ask the server to re-send full world state */
   requestState(): void {
     this.socket?.emit('request:state')
   }
 
+  requestChunks(keys: string[]): void {
+    this.socket?.emit('request:chunks', keys)
+  }
+
   onState(callback: StateCallback): () => void {
     this.stateCallbacks.push(callback)
-    return () => {
-      this.stateCallbacks = this.stateCallbacks.filter(cb => cb !== callback)
-    }
+    return () => { this.stateCallbacks = this.stateCallbacks.filter(cb => cb !== callback) }
   }
 
   onEvent(callback: EventCallback): () => void {
     this.eventCallbacks.push(callback)
-    return () => {
-      this.eventCallbacks = this.eventCallbacks.filter(cb => cb !== callback)
-    }
+    return () => { this.eventCallbacks = this.eventCallbacks.filter(cb => cb !== callback) }
   }
 
   onAgents(callback: AgentsCallback): () => void {
     this.agentsCallbacks.push(callback)
-    return () => {
-      this.agentsCallbacks = this.agentsCallbacks.filter(cb => cb !== callback)
-    }
+    return () => { this.agentsCallbacks = this.agentsCallbacks.filter(cb => cb !== callback) }
   }
 
   onSpeed(callback: SpeedCallback): () => void {
     this.speedCallbacks.push(callback)
-    return () => {
-      this.speedCallbacks = this.speedCallbacks.filter(cb => cb !== callback)
-    }
+    return () => { this.speedCallbacks = this.speedCallbacks.filter(cb => cb !== callback) }
   }
 
-  pause(): void {
-    this.socket?.emit('world:pause')
+  onChunks(callback: ChunksCallback): () => void {
+    this.chunksCallbacks.push(callback)
+    return () => { this.chunksCallbacks = this.chunksCallbacks.filter(cb => cb !== callback) }
   }
 
-  resume(): void {
-    this.socket?.emit('world:resume')
-  }
-
-  setSpeed(speed: number): void {
-    this.socket?.emit('world:setSpeed', speed)
-  }
-
-  disconnect(): void {
-    this.socket?.disconnect()
-  }
+  pause(): void { this.socket?.emit('world:pause') }
+  resume(): void { this.socket?.emit('world:resume') }
+  setSpeed(speed: number): void { this.socket?.emit('world:setSpeed', speed) }
+  disconnect(): void { this.socket?.disconnect() }
 }
 
 export const socketClient = new SocketClient()

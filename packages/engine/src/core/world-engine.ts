@@ -1,5 +1,5 @@
 import type { WorldClock } from '@botworld/shared'
-import { TICK_RATE } from '@botworld/shared'
+import { TICK_RATE, LOAD_DISTANCE_CHUNKS } from '@botworld/shared'
 import { EventBus } from './event-bus.js'
 import { createWorldClock, advanceClock } from './world-clock.js'
 import { AgentManager } from '../agent/agent-manager.js'
@@ -87,18 +87,42 @@ export class WorldEngine {
       timestamp: this.clock.tick,
     })
 
-    // 3. Update all agents
+    // 3. Expand world around agents (lazy chunk generation)
+    this.expandWorldAroundAgents()
+
+    // 4. Update all agents
     this.agentManager.updateAll(this.clock)
 
-    // 4. Regenerate resources
+    // 5. Regenerate resources
     this.tileMap.tickResources()
+  }
+
+  /** Generate new chunks around agents as they explore */
+  private expandWorldAroundAgents(): void {
+    const agents = this.agentManager.getAllAgents()
+    const allNewKeys: string[] = []
+
+    for (const agent of agents) {
+      const newKeys = this.tileMap.ensureChunksAround(
+        agent.position.x, agent.position.y, LOAD_DISTANCE_CHUNKS,
+      )
+      allNewKeys.push(...newKeys)
+    }
+
+    if (allNewKeys.length > 0) {
+      this.eventBus.emit({
+        type: 'world:chunks_generated',
+        chunkKeys: allNewKeys,
+        timestamp: this.clock.tick,
+      })
+    }
   }
 
   getState() {
     return {
       clock: this.clock,
       agents: this.agentManager.getAllAgents(),
-      map: this.tileMap.getSerializable(),
+      chunks: this.tileMap.getSerializableChunks(),
       recentEvents: this.eventBus.getRecentEvents(20),
     }
   }

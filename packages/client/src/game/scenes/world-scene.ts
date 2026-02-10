@@ -1,29 +1,41 @@
 import Phaser from 'phaser'
-import type { Agent, Tile, WorldEvent, WorldClock } from '@botworld/shared'
+import type { Agent, Tile, WorldEvent, WorldClock, ChunkData } from '@botworld/shared'
+import { CHUNK_SIZE } from '@botworld/shared'
 
-// Grid spacing must match rendered tile top-face size
+// Grid spacing for isometric projection
 const TILE_W = 128
 const TILE_H = 64
 
-// Scale factors for resized images (tiles 128x128, agents 64x96, icons 48x48)
+// Scale factors
 const TILE_SCALE = 1.0
 const AGENT_SCALE = 0.6
 const RESOURCE_SCALE = 0.35
 
+interface RenderedChunk {
+  tileSprites: Phaser.GameObjects.Image[]
+  decoSprites: Phaser.GameObjects.Image[]
+  resourceSprites: Phaser.GameObjects.Image[]
+}
+
 /**
- * Main isometric world scene.
- * Renders AI-generated tile sprites and agent characters in 2.5D projection.
+ * Main isometric world scene with chunk-based rendering.
+ * Only renders chunks visible in the camera viewport.
  */
 export class WorldScene extends Phaser.Scene {
-  private tileSprites: Phaser.GameObjects.Image[][] = []
-  private resourceSprites: Phaser.GameObjects.Image[] = []
+  // Chunk data received from server
+  private chunkDataStore = new Map<string, ChunkData>()
+  // Currently rendered chunks (viewport-based)
+  private renderedChunks = new Map<string, RenderedChunk>()
+  // Track which chunk keys are currently visible
+  private lastVisibleKeys = new Set<string>()
+
+  // Agent rendering
   private agentSprites = new Map<string, Phaser.GameObjects.Container>()
   private actionIndicators = new Map<string, Phaser.GameObjects.Image>()
   private speechBubbles = new Map<string, { container: Phaser.GameObjects.Container; timer: number }>()
   private ambientOverlay: Phaser.GameObjects.Rectangle | null = null
   private selectionRing: Phaser.GameObjects.Image | null = null
 
-  private worldData: { width: number; height: number; tiles: Tile[][] } | null = null
   private agents: Agent[] = []
   private clock: WorldClock | null = null
   private selectedAgentId: string | null = null
@@ -46,7 +58,7 @@ export class WorldScene extends Phaser.Scene {
       .setScrollFactor(0)
       .setDepth(1500)
 
-    // Scroll wheel zoom - proportional to deltaY for smooth trackpad support
+    // Scroll wheel zoom
     this.input.on('wheel', (
       _pointer: Phaser.Input.Pointer,
       _over: Phaser.GameObjects.GameObject[],
@@ -68,16 +80,23 @@ export class WorldScene extends Phaser.Scene {
     })
   }
 
-  setWorldData(data: { width: number; height: number; tiles: Tile[][] }): void {
-    this.worldData = data
-    this.renderTiles()
+  update(_time: number, _delta: number): void {
+    this.updateVisibleChunks()
+  }
 
-    // Only center camera on first load
-    if (!this.hasCentered) {
+  // --- Chunk data management ---
+
+  addChunks(chunks: Record<string, ChunkData>): void {
+    for (const [key, chunk] of Object.entries(chunks)) {
+      this.chunkDataStore.set(key, chunk)
+    }
+
+    // Center camera on first data load
+    if (!this.hasCentered && this.chunkDataStore.size > 0) {
       this.hasCentered = true
-      const centerX = (data.width / 2) * TILE_W / 2
-      const centerY = (data.height / 2) * TILE_H / 2
-      this.cameras.main.centerOn(centerX, centerY)
+      // Center on origin (0,0) in tile space
+      const centerScreen = this.tileToScreen(0, 0)
+      this.cameras.main.centerOn(centerScreen.x, centerScreen.y)
     }
   }
 
@@ -114,6 +133,13 @@ export class WorldScene extends Phaser.Scene {
     }
 
     this.updateSelectionRing()
+
+    // Center on first agent if we haven't centered yet
+    if (!this.hasCentered && agents.length > 0) {
+      this.hasCentered = true
+      const pos = this.tileToScreen(agents[0].position.x, agents[0].position.y)
+      this.cameras.main.centerOn(pos.x, pos.y)
+    }
   }
 
   updateClock(clock: WorldClock): void {
@@ -218,29 +244,100 @@ export class WorldScene extends Phaser.Scene {
     return this.selectedAgentId
   }
 
-  private renderTiles(): void {
-    if (!this.worldData) return
+  // --- Viewport-based chunk rendering ---
 
-    for (const row of this.tileSprites) {
-      for (const sprite of row) sprite.destroy()
+  private updateVisibleChunks(): void {
+    const visibleKeys = this.getVisibleChunkKeys()
+
+    // Render newly visible chunks
+    for (const key of visibleKeys) {
+      if (!this.renderedChunks.has(key) && this.chunkDataStore.has(key)) {
+        this.renderChunk(key, this.chunkDataStore.get(key)!)
+      }
     }
-    this.tileSprites = []
-    for (const rs of this.resourceSprites) rs.destroy()
-    this.resourceSprites = []
 
-    for (let y = 0; y < this.worldData.height; y++) {
-      const row: Phaser.GameObjects.Image[] = []
-      for (let x = 0; x < this.worldData.width; x++) {
-        const tile = this.worldData.tiles[y][x]
-        const pos = this.tileToScreen(x, y)
-        const textureKey = `tile_${tile.type}`
+    // Remove chunks that are no longer visible
+    for (const [key, rendered] of this.renderedChunks) {
+      if (!visibleKeys.has(key)) {
+        this.destroyRenderedChunk(rendered)
+        this.renderedChunks.delete(key)
+      }
+    }
+
+    this.lastVisibleKeys = visibleKeys
+  }
+
+  private getVisibleChunkKeys(): Set<string> {
+    const cam = this.cameras.main
+    const wv = cam.worldView
+
+    // Convert camera viewport corners to tile coordinates
+    const corners = [
+      this.screenToTile(wv.left, wv.top),
+      this.screenToTile(wv.right, wv.top),
+      this.screenToTile(wv.left, wv.bottom),
+      this.screenToTile(wv.right, wv.bottom),
+    ]
+
+    // Bounding box in tile space with margin
+    const margin = CHUNK_SIZE * 2
+    const minTX = Math.min(corners[0].x, corners[1].x, corners[2].x, corners[3].x) - margin
+    const maxTX = Math.max(corners[0].x, corners[1].x, corners[2].x, corners[3].x) + margin
+    const minTY = Math.min(corners[0].y, corners[1].y, corners[2].y, corners[3].y) - margin
+    const maxTY = Math.max(corners[0].y, corners[1].y, corners[2].y, corners[3].y) + margin
+
+    // Convert to chunk coords
+    const minCX = Math.floor(minTX / CHUNK_SIZE)
+    const maxCX = Math.floor(maxTX / CHUNK_SIZE)
+    const minCY = Math.floor(minTY / CHUNK_SIZE)
+    const maxCY = Math.floor(maxTY / CHUNK_SIZE)
+
+    const keys = new Set<string>()
+    for (let cy = minCY; cy <= maxCY; cy++) {
+      for (let cx = minCX; cx <= maxCX; cx++) {
+        keys.add(`${cx},${cy}`)
+      }
+    }
+    return keys
+  }
+
+  private renderChunk(key: string, chunk: ChunkData): void {
+    const tileSprites: Phaser.GameObjects.Image[] = []
+    const decoSprites: Phaser.GameObjects.Image[] = []
+    const resourceSprites: Phaser.GameObjects.Image[] = []
+
+    for (let ly = 0; ly < chunk.tiles.length; ly++) {
+      for (let lx = 0; lx < chunk.tiles[ly].length; lx++) {
+        const tile = chunk.tiles[ly][lx]
+        const pos = this.tileToScreen(tile.position.x, tile.position.y)
+        const depth = tile.position.x + tile.position.y
+
+        // Texture selection: POI building > variant > base
+        let textureKey: string
+        if (tile.poiType) {
+          textureKey = `building_${tile.poiType}`
+          if (!this.textures.exists(textureKey)) textureKey = 'tile_building'
+        } else {
+          textureKey = `tile_${tile.type}_v${tile.variant ?? 0}`
+          if (!this.textures.exists(textureKey)) textureKey = `tile_${tile.type}`
+        }
 
         const sprite = this.add.image(pos.x, pos.y, textureKey)
           .setOrigin(0.5, 0.35)
           .setScale(TILE_SCALE)
-          .setDepth(x + y)
+          .setDepth(depth)
+        tileSprites.push(sprite)
 
-        // Resource indicator with type-specific icon
+        // Decoration overlay
+        if (tile.decoration && this.textures.exists(tile.decoration)) {
+          const deco = this.add.image(pos.x, pos.y - 10, tile.decoration)
+            .setOrigin(0.5, 0.5)
+            .setScale(0.5)
+            .setDepth(depth + 0.05)
+          decoSprites.push(deco)
+        }
+
+        // Resource indicator
         if (tile.resource && tile.resource.amount >= 1) {
           const resKey = `resource_${tile.resource.type}`
           const hasTexture = this.textures.exists(resKey)
@@ -251,11 +348,10 @@ export class WorldScene extends Phaser.Scene {
           )
             .setOrigin(0.5, 0.5)
             .setScale(hasTexture ? RESOURCE_SCALE : 0.5)
-            .setDepth(x + y + 0.1)
+            .setDepth(depth + 0.1)
             .setAlpha(0.75)
-          this.resourceSprites.push(resSprite)
+          resourceSprites.push(resSprite)
 
-          // Gentle floating animation
           this.tweens.add({
             targets: resSprite,
             y: resSprite.y - 2,
@@ -265,28 +361,32 @@ export class WorldScene extends Phaser.Scene {
             ease: 'Sine.easeInOut',
           })
         }
-
-        row.push(sprite)
       }
-      this.tileSprites.push(row)
     }
+
+    this.renderedChunks.set(key, { tileSprites, decoSprites, resourceSprites })
   }
+
+  private destroyRenderedChunk(rendered: RenderedChunk): void {
+    for (const s of rendered.tileSprites) s.destroy()
+    for (const s of rendered.decoSprites) s.destroy()
+    for (const s of rendered.resourceSprites) s.destroy()
+  }
+
+  // --- Agent rendering ---
 
   private createAgentSprite(agent: Agent, screenPos: { x: number; y: number }): void {
     const index = this.agents.indexOf(agent)
     const textureKey = `agent_${index >= 0 && index < 5 ? index : 'default'}`
 
-    // Shadow beneath agent
     const shadow = this.add.image(0, 6, 'agent_shadow')
       .setScale(0.7)
       .setAlpha(0.3)
 
-    // Agent character sprite
     const sprite = this.add.image(0, 0, textureKey)
       .setOrigin(0.5, 0.7)
       .setScale(AGENT_SCALE)
 
-    // Subtle breathing animation
     this.tweens.add({
       targets: sprite,
       scaleY: AGENT_SCALE * 1.015,
@@ -296,7 +396,6 @@ export class WorldScene extends Phaser.Scene {
       ease: 'Sine.easeInOut',
     })
 
-    // Name label
     const nameText = this.add.text(0, -22, agent.name, {
       fontSize: '10px',
       fontFamily: 'Arial, sans-serif',
@@ -305,7 +404,6 @@ export class WorldScene extends Phaser.Scene {
       strokeThickness: 3,
     }).setOrigin(0.5, 1)
 
-    // Current action text
     const actionText = this.add.text(0, 10, '', {
       fontSize: '8px',
       fontFamily: 'Arial, sans-serif',
@@ -328,7 +426,6 @@ export class WorldScene extends Phaser.Scene {
       this.events.emit('agent:selected', agent.id)
       this.updateSelectionRing()
 
-      // Selection pop animation
       this.tweens.add({
         targets: sprite,
         scaleX: AGENT_SCALE * 1.15,
@@ -345,7 +442,6 @@ export class WorldScene extends Phaser.Scene {
     const container = this.agentSprites.get(agent.id)
     if (!container || !container.list) return
 
-    // Action text is the 4th child: [shadow, sprite, nameText, actionText]
     const actionText = container.list[3] as Phaser.GameObjects.Text | undefined
     if (actionText && 'setText' in actionText) {
       const actionType = agent.currentAction?.type ?? 'idle'
@@ -395,7 +491,6 @@ export class WorldScene extends Phaser.Scene {
   }
 
   private showGatherEffect(x: number, y: number, resourceType?: string): void {
-    // Flash ring
     const flash = this.add.circle(x, y, 14, 0xFFFFAA, 0.5)
       .setDepth(3000)
     this.tweens.add({
@@ -406,7 +501,6 @@ export class WorldScene extends Phaser.Scene {
       onComplete: () => flash.destroy(),
     })
 
-    // Floating resource icons
     const texKey = resourceType && this.textures.exists(`resource_${resourceType}`)
       ? `resource_${resourceType}`
       : 'resource_indicator'
@@ -436,6 +530,14 @@ export class WorldScene extends Phaser.Scene {
     return {
       x: (x - y) * (TILE_W / 2),
       y: (x + y) * (TILE_H / 2),
+    }
+  }
+
+  /** Convert screen coordinates to tile coordinates (inverse isometric) */
+  private screenToTile(screenX: number, screenY: number): { x: number; y: number } {
+    return {
+      x: (screenX / (TILE_W / 2) + screenY / (TILE_H / 2)) / 2,
+      y: (screenY / (TILE_H / 2) - screenX / (TILE_W / 2)) / 2,
     }
   }
 }

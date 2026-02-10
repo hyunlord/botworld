@@ -9,17 +9,18 @@
     "build": "tsc",
     "dev": "tsx watch src/server.ts",
     "start": "tsx src/server.ts",
-    "clean": "rm -rf dist .turbo"
+    "clean": "rm -rf dist .turbo",
+    "db:migrate": "tsx src/db/migrate.ts"
   },
   "dependencies": {
     "@botworld/shared": "workspace:*",
-    "better-sqlite3": "^11.8.0",
+    "pg": "^8.13.1",
     "dotenv": "^17.2.4",
     "express": "^5.0.1",
     "socket.io": "^4.8.0"
   },
   "devDependencies": {
-    "@types/better-sqlite3": "^7.6.0",
+    "@types/pg": "^8.11.10",
     "@types/express": "^5.0.0",
     "tsx": "^4.19.0",
     "typescript": "^5.7.0"

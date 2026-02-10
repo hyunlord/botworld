@@ -14,6 +14,7 @@ export type WorldEvent =
   | MarketOrderEvent
   | TickEvent
   | AgentSpawnedEvent
+  | ChunksGeneratedEvent
 
 export interface AgentMovedEvent {
   type: 'agent:moved'
@@ -86,5 +87,11 @@ export interface TickEvent {
 export interface AgentSpawnedEvent {
   type: 'agent:spawned'
   agent: Agent
+  timestamp: number
+}
+
+export interface ChunksGeneratedEvent {
+  type: 'world:chunks_generated'
+  chunkKeys: string[]
   timestamp: number
 }

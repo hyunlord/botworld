@@ -213,9 +213,6 @@ function findExplorationTarget(pos: Position, map: TileMap): Position {
   let tx = Math.round(pos.x + Math.cos(angle) * radius)
   let ty = Math.round(pos.y + Math.sin(angle) * radius)
 
-  tx = Math.max(1, Math.min(map.width - 2, tx))
-  ty = Math.max(1, Math.min(map.height - 2, ty))
-
   if (!map.isWalkable(tx, ty)) {
     const neighbors = map.getNeighbors({ x: tx, y: ty })
     if (neighbors.length > 0) return neighbors[0]

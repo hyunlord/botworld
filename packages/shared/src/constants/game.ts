@@ -7,9 +7,10 @@ export const REAL_SECONDS_PER_GAME_DAY = 20 * 60 // 20 minutes
 /** Ticks per game day */
 export const TICKS_PER_GAME_DAY = REAL_SECONDS_PER_GAME_DAY * TICK_RATE
 
-/** Default map dimensions (tiles) */
-export const DEFAULT_MAP_WIDTH = 80
-export const DEFAULT_MAP_HEIGHT = 80
+/** Chunk-based world generation */
+export const CHUNK_SIZE = 16
+export const INITIAL_CHUNK_RADIUS = 3
+export const LOAD_DISTANCE_CHUNKS = 4
 
 /** Movement cost per tile type (0 = impassable) */
 export const MOVEMENT_COSTS: Record<string, number> = {
