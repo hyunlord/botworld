@@ -1,0 +1,23 @@
+{
+  "name": "botworld",
+  "version": "0.1.0",
+  "private": true,
+  "description": "AI Agent Game World Simulation - Where bots live, grow, and build civilizations",
+  "scripts": {
+    "dev": "turbo dev",
+    "build": "turbo build",
+    "lint": "turbo lint",
+    "clean": "turbo clean"
+  },
+  "devDependencies": {
+    "turbo": "^2.4.0",
+    "typescript": "^5.7.0"
+  },
+  "packageManager": "pnpm@10.29.2",
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "better-sqlite3",
+      "esbuild"
+    ]
+  }
+}

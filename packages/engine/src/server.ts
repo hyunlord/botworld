@@ -1,0 +1,154 @@
+import express from 'express'
+import { createServer } from 'node:http'
+import { Server as SocketServer } from 'socket.io'
+import { WorldEngine } from './core/world-engine.js'
+import { providerRegistry } from './llm/provider-registry.js'
+import { MockProvider } from './llm/providers/mock.js'
+import { OllamaProvider } from './llm/providers/ollama.js'
+import { OpenRouterProvider } from './llm/providers/openrouter.js'
+import { AnthropicProvider } from './llm/providers/anthropic.js'
+import { OpenAIProvider } from './llm/providers/openai.js'
+import { GeminiProvider } from './llm/providers/gemini.js'
+
+const PORT = Number(process.env.PORT) || 3001
+
+// Register all LLM providers
+providerRegistry.register(new MockProvider())
+providerRegistry.register(new OllamaProvider())
+providerRegistry.register(new OpenRouterProvider())
+providerRegistry.register(new AnthropicProvider())
+providerRegistry.register(new OpenAIProvider())
+providerRegistry.register(new GeminiProvider())
+
+// Agent configs
+const agentConfigs = [
+  { name: 'Aria', bio: 'A curious explorer who loves discovering new places and meeting new people.', x: 15, y: 15 },
+  { name: 'Bolt', bio: 'A hardworking gatherer who takes pride in collecting the finest resources.', x: 16, y: 16 },
+  { name: 'Cleo', bio: 'A skilled crafter with an eye for quality and a love of trading.', x: 14, y: 16 },
+  { name: 'Drake', bio: 'A natural leader who dreams of building a great organization.', x: 17, y: 15 },
+  { name: 'Echo', bio: 'A quiet observer who remembers everything and shares wisdom when asked.', x: 15, y: 17 },
+]
+
+async function main() {
+  // Detect which providers are actually available
+  console.log('[Botworld] Detecting available LLM providers...')
+  await providerRegistry.detectAvailable()
+
+  const realProviders = providerRegistry.getAvailable()
+  if (realProviders.length === 0) {
+    console.warn('[Botworld] No real LLM providers available! Agents will use MockProvider.')
+    console.warn('[Botworld] Set API keys to enable real LLM: OPENROUTER_API_KEY, ANTHROPIC_API_KEY, OPENAI_API_KEY, GEMINI_API_KEY')
+  } else {
+    console.log(`[Botworld] Available real providers: ${realProviders.map(p => p.name).join(', ')}`)
+  }
+
+  // Create world
+  const world = new WorldEngine()
+
+  // Spawn agents with random provider assignment
+  for (const cfg of agentConfigs) {
+    const provider = providerRegistry.getRandomOrMock()
+    world.agentManager.createAgent({
+      name: cfg.name,
+      position: { x: cfg.x, y: cfg.y },
+      bio: cfg.bio,
+      llmConfig: { provider: provider.id },
+    })
+    console.log(`[Botworld] Agent ${cfg.name} → ${provider.name}`)
+  }
+
+  // HTTP server
+  const app = express()
+  app.use(express.json())
+
+  const httpServer = createServer(app)
+
+  // Socket.io
+  const io = new SocketServer(httpServer, {
+    cors: { origin: '*' },
+  })
+
+  // REST endpoints
+  app.get('/api/state', (_req, res) => {
+    res.json(world.getState())
+  })
+
+  app.get('/api/agents', (_req, res) => {
+    res.json(world.agentManager.getAllAgents())
+  })
+
+  app.get('/api/agents/:id', (req, res) => {
+    const agent = world.agentManager.getAgent(req.params.id)
+    if (!agent) {
+      res.status(404).json({ error: 'Agent not found' })
+      return
+    }
+    const memory = world.agentManager.getMemoryStream(req.params.id)
+    res.json({
+      ...agent,
+      recentMemories: memory?.getRecent(20) ?? [],
+    })
+  })
+
+  app.get('/api/providers', (_req, res) => {
+    res.json(providerRegistry.listAll().map(p => ({ id: p.id, name: p.name })))
+  })
+
+  // WebSocket: stream world updates to clients
+  world.eventBus.onAny((event) => {
+    io.emit('world:event', event)
+
+    // Broadcast full agent state every tick so clients stay in sync
+    if (event.type === 'world:tick') {
+      io.emit('world:agents', world.agentManager.getAllAgents())
+    }
+  })
+
+  io.on('connection', (socket) => {
+    console.log(`[Socket] Client connected: ${socket.id}`)
+
+    // Send initial state immediately
+    socket.emit('world:state', world.getState())
+
+    // Client can request state at any time (e.g. after scene is ready)
+    socket.on('request:state', () => {
+      socket.emit('world:state', world.getState())
+    })
+
+    // Speed controls
+    socket.on('world:pause', () => {
+      world.setPaused(true)
+      io.emit('world:speed', { paused: true, speed: world.getSpeed() })
+    })
+
+    socket.on('world:resume', () => {
+      world.setPaused(false)
+      io.emit('world:speed', { paused: false, speed: world.getSpeed() })
+    })
+
+    socket.on('world:setSpeed', (speed: number) => {
+      world.setSpeed(speed)
+      io.emit('world:speed', { paused: world.isPaused(), speed: world.getSpeed() })
+    })
+
+    // Send current speed state
+    socket.emit('world:speed', { paused: world.isPaused(), speed: world.getSpeed() })
+
+    socket.on('disconnect', () => {
+      console.log(`[Socket] Client disconnected: ${socket.id}`)
+    })
+  })
+
+  // Start
+  httpServer.listen(PORT, () => {
+    console.log(`[Botworld] Server running on http://localhost:${PORT}`)
+    console.log(`[Botworld] LLM providers: ${providerRegistry.listIds().join(', ')}`)
+    console.log(`[Botworld] Agents: ${world.agentManager.getAllAgents().map(a => a.name).join(', ')}`)
+    world.start()
+  })
+}
+
+main().catch(err => {
+  console.error('[Botworld] Fatal error:', err)
+  process.exit(1)
+})
