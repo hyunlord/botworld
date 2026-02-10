@@ -180,6 +180,7 @@ const styles: Record<string, React.CSSProperties> = {
   },
   panel: {
     width: 320,
+    flexShrink: 0,
     background: '#0d1117',
     padding: 12,
     display: 'flex',

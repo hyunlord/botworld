@@ -1,14 +1,14 @@
 import Phaser from 'phaser'
 import type { Agent, Tile, WorldEvent, WorldClock } from '@botworld/shared'
 
-// Doubled grid spacing for AI-generated high-res tiles
-const TILE_W = 64
-const TILE_H = 32
+// Grid spacing must match rendered tile top-face size
+const TILE_W = 128
+const TILE_H = 64
 
-// Scale factors for ~1024x1024 AI-generated images
-const TILE_SCALE = 0.08
-const AGENT_SCALE = 0.04
-const RESOURCE_SCALE = 0.02
+// Scale factors for resized images (tiles 128x128, agents 64x96, icons 48x48)
+const TILE_SCALE = 1.0
+const AGENT_SCALE = 0.6
+const RESOURCE_SCALE = 0.35
 
 /**
  * Main isometric world scene.
@@ -34,7 +34,7 @@ export class WorldScene extends Phaser.Scene {
   }
 
   create(): void {
-    this.cameras.main.setZoom(1)
+    this.cameras.main.setZoom(0.5)
 
     // Ambient overlay for time-of-day tinting
     const { width, height } = this.cameras.main
