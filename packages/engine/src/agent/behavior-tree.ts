@@ -185,7 +185,7 @@ function isActionComplete(action: AgentAction, currentTick: number): boolean {
   return currentTick >= action.startedAt + action.duration
 }
 
-function findNearestResource(pos: Position, map: TileMap, radius = 10): Position | null {
+function findNearestResource(pos: Position, map: TileMap, radius = 20): Position | null {
   let closest: Position | null = null
   let closestDist = Infinity
 
@@ -208,7 +208,7 @@ function findNearestResource(pos: Position, map: TileMap, radius = 10): Position
 }
 
 function findExplorationTarget(pos: Position, map: TileMap): Position {
-  const radius = 5 + Math.floor(Math.random() * 5)
+  const radius = 8 + Math.floor(Math.random() * 12)
   const angle = Math.random() * Math.PI * 2
   let tx = Math.round(pos.x + Math.cos(angle) * radius)
   let ty = Math.round(pos.y + Math.sin(angle) * radius)

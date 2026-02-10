@@ -23,7 +23,7 @@ function posKey(pos: Position): string {
  * Returns array of positions from start (exclusive) to goal (inclusive),
  * or empty array if no path found.
  */
-export function findPath(map: TileMap, start: Position, goal: Position, maxSteps = 200): Position[] {
+export function findPath(map: TileMap, start: Position, goal: Position, maxSteps = 800): Position[] {
   if (!map.isWalkable(goal.x, goal.y)) return []
   if (start.x === goal.x && start.y === goal.y) return []
 
@@ -65,9 +65,11 @@ export function findPath(map: TileMap, start: Position, goal: Position, maxSteps
       const key = posKey(neighborPos)
       if (closedSet.has(key)) continue
 
-      // Diagonal movement costs more
+      // Tile-cost-aware movement
       const isDiag = neighborPos.x !== current.pos.x && neighborPos.y !== current.pos.y
-      const moveCost = isDiag ? 1.414 : 1
+      const tile = map.getTile(neighborPos.x, neighborPos.y)
+      const tileCost = tile?.movementCost ?? 1.0
+      const moveCost = (isDiag ? 1.414 : 1) * tileCost
       const tentativeG = current.g + moveCost
 
       const existing = openSet.get(key)

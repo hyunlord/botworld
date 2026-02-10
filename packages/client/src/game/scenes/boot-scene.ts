@@ -10,8 +10,8 @@ export class BootScene extends Phaser.Scene {
   }
 
   preload(): void {
-    // Tile sprites (8 types)
-    const tileTypes = ['grass', 'water', 'forest', 'sand', 'mountain', 'road', 'building', 'farmland']
+    // Tile sprites (12 types)
+    const tileTypes = ['grass', 'water', 'deep_water', 'forest', 'dense_forest', 'sand', 'mountain', 'road', 'building', 'farmland', 'snow', 'swamp']
     for (const type of tileTypes) {
       this.load.image(`tile_${type}`, `assets/tiles/tile_${type}.png`)
     }
@@ -56,6 +56,29 @@ export class BootScene extends Phaser.Scene {
     g.fillPath()
     g.generateTexture('resource_indicator', 8, 8)
     g.destroy()
+
+    // Procedural fallback tiles for new biome types (simple colored diamonds)
+    const fallbackTiles: Record<string, number> = {
+      tile_deep_water: 0x0a2a5e,
+      tile_dense_forest: 0x1a4a2a,
+      tile_snow: 0xe8e8f0,
+      tile_swamp: 0x4a5a3a,
+    }
+    for (const [key, color] of Object.entries(fallbackTiles)) {
+      if (!this.textures.exists(key)) {
+        const fg = this.add.graphics()
+        fg.fillStyle(color, 1)
+        fg.beginPath()
+        fg.moveTo(64, 0)
+        fg.lineTo(128, 32)
+        fg.lineTo(64, 64)
+        fg.lineTo(0, 32)
+        fg.closePath()
+        fg.fillPath()
+        fg.generateTexture(key, 128, 64)
+        fg.destroy()
+      }
+    }
 
     // agent_default fallback (reuses agent_0)
     if (this.textures.exists('agent_0') && !this.textures.exists('agent_default')) {

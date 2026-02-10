@@ -26,14 +26,35 @@ providerRegistry.register(new AnthropicProvider())
 providerRegistry.register(new OpenAIProvider())
 providerRegistry.register(new GeminiProvider())
 
-// Agent configs
+// Agent configs (positions will be determined dynamically near marketplace POI)
 const agentConfigs = [
-  { name: 'Aria', bio: 'A curious explorer who loves discovering new places and meeting new people.', x: 15, y: 15 },
-  { name: 'Bolt', bio: 'A hardworking gatherer who takes pride in collecting the finest resources.', x: 16, y: 16 },
-  { name: 'Cleo', bio: 'A skilled crafter with an eye for quality and a love of trading.', x: 14, y: 16 },
-  { name: 'Drake', bio: 'A natural leader who dreams of building a great organization.', x: 17, y: 15 },
-  { name: 'Echo', bio: 'A quiet observer who remembers everything and shares wisdom when asked.', x: 15, y: 17 },
+  { name: 'Aria', bio: 'A curious explorer who loves discovering new places and meeting new people.' },
+  { name: 'Bolt', bio: 'A hardworking gatherer who takes pride in collecting the finest resources.' },
+  { name: 'Cleo', bio: 'A skilled crafter with an eye for quality and a love of trading.' },
+  { name: 'Drake', bio: 'A natural leader who dreams of building a great organization.' },
+  { name: 'Echo', bio: 'A quiet observer who remembers everything and shares wisdom when asked.' },
 ]
+
+function findSpawnPositions(world: WorldEngine, count: number): { x: number; y: number }[] {
+  const market = world.tileMap.pois.find(p => p.type === 'marketplace')
+  const center = market?.position ?? { x: Math.floor(world.tileMap.width / 2), y: Math.floor(world.tileMap.height / 2) }
+  const positions: { x: number; y: number }[] = []
+
+  for (let r = 0; r <= 15 && positions.length < count; r++) {
+    for (let dy = -r; dy <= r && positions.length < count; dy++) {
+      for (let dx = -r; dx <= r && positions.length < count; dx++) {
+        if (Math.abs(dx) !== r && Math.abs(dy) !== r) continue
+        const x = center.x + dx
+        const y = center.y + dy
+        if (world.tileMap.isWalkable(x, y)) {
+          positions.push({ x, y })
+        }
+      }
+    }
+  }
+
+  return positions
+}
 
 async function main() {
   // Detect which providers are actually available
@@ -51,16 +72,19 @@ async function main() {
   // Create world
   const world = new WorldEngine()
 
-  // Spawn agents with random provider assignment
-  for (const cfg of agentConfigs) {
+  // Spawn agents near marketplace with random provider assignment
+  const spawnPositions = findSpawnPositions(world, agentConfigs.length)
+  for (let i = 0; i < agentConfigs.length; i++) {
+    const cfg = agentConfigs[i]
+    const pos = spawnPositions[i] ?? { x: Math.floor(world.tileMap.width / 2), y: Math.floor(world.tileMap.height / 2) }
     const provider = providerRegistry.getRandomOrMock()
     world.agentManager.createAgent({
       name: cfg.name,
-      position: { x: cfg.x, y: cfg.y },
+      position: pos,
       bio: cfg.bio,
       llmConfig: { provider: provider.id, model: provider.defaultModel },
     })
-    console.log(`[Botworld] Agent ${cfg.name} → ${provider.name} (${provider.defaultModel})`)
+    console.log(`[Botworld] Agent ${cfg.name} → ${provider.name} (${provider.defaultModel}) at (${pos.x}, ${pos.y})`)
   }
 
   // HTTP server

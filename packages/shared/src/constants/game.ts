@@ -8,8 +8,24 @@ export const REAL_SECONDS_PER_GAME_DAY = 20 * 60 // 20 minutes
 export const TICKS_PER_GAME_DAY = REAL_SECONDS_PER_GAME_DAY * TICK_RATE
 
 /** Default map dimensions (tiles) */
-export const DEFAULT_MAP_WIDTH = 32
-export const DEFAULT_MAP_HEIGHT = 32
+export const DEFAULT_MAP_WIDTH = 80
+export const DEFAULT_MAP_HEIGHT = 80
+
+/** Movement cost per tile type (0 = impassable) */
+export const MOVEMENT_COSTS: Record<string, number> = {
+  road: 0.5,
+  grass: 1.0,
+  building: 1.0,
+  farmland: 1.2,
+  sand: 1.3,
+  forest: 1.5,
+  snow: 1.8,
+  swamp: 2.0,
+  dense_forest: 2.5,
+  water: 0,
+  deep_water: 0,
+  mountain: 0,
+}
 
 /** Agent defaults */
 export const DEFAULT_MAX_HP = 100

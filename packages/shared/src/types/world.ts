@@ -6,9 +6,13 @@ export interface Position {
 export type TileType =
   | 'grass'
   | 'water'
+  | 'deep_water'
   | 'mountain'
   | 'forest'
+  | 'dense_forest'
   | 'sand'
+  | 'snow'
+  | 'swamp'
   | 'road'
   | 'building'
   | 'farmland'
@@ -26,6 +30,8 @@ export interface Tile {
   type: TileType
   position: Position
   walkable: boolean
+  movementCost: number
+  biome?: string
   resource?: {
     type: ResourceType
     amount: number
