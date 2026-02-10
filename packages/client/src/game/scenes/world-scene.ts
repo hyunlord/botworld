@@ -1,41 +1,50 @@
 import Phaser from 'phaser'
 import type { Agent, Tile, WorldEvent, WorldClock } from '@botworld/shared'
 
-const TILE_W = 32
-const TILE_H = 16
+// Doubled grid spacing for AI-generated high-res tiles
+const TILE_W = 64
+const TILE_H = 32
 
-const ACTION_ICONS: Record<string, string> = {
-  gather: 'action_gather',
-  talk: 'action_talk',
-  craft: 'action_craft',
-  rest: 'action_rest',
-  trade: 'action_trade',
-}
+// Scale factors for ~1024x1024 AI-generated images
+const TILE_SCALE = 0.08
+const AGENT_SCALE = 0.04
+const RESOURCE_SCALE = 0.02
 
 /**
  * Main isometric world scene.
- * Renders tiles and agents in 2.5D isometric projection.
+ * Renders AI-generated tile sprites and agent characters in 2.5D projection.
  */
 export class WorldScene extends Phaser.Scene {
   private tileSprites: Phaser.GameObjects.Image[][] = []
+  private resourceSprites: Phaser.GameObjects.Image[] = []
   private agentSprites = new Map<string, Phaser.GameObjects.Container>()
   private actionIndicators = new Map<string, Phaser.GameObjects.Image>()
   private speechBubbles = new Map<string, { container: Phaser.GameObjects.Container; timer: number }>()
+  private ambientOverlay: Phaser.GameObjects.Rectangle | null = null
+  private selectionRing: Phaser.GameObjects.Image | null = null
 
   private worldData: { width: number; height: number; tiles: Tile[][] } | null = null
   private agents: Agent[] = []
   private clock: WorldClock | null = null
   private selectedAgentId: string | null = null
+  private hasCentered = false
 
   constructor() {
     super({ key: 'WorldScene' })
   }
 
-  private hasCentered = false
-
   create(): void {
-    // Camera setup
-    this.cameras.main.setZoom(2)
+    this.cameras.main.setZoom(1)
+
+    // Ambient overlay for time-of-day tinting
+    const { width, height } = this.cameras.main
+    this.ambientOverlay = this.add.rectangle(
+      width / 2, height / 2,
+      width * 3, height * 3,
+      0x000000, 0,
+    )
+      .setScrollFactor(0)
+      .setDepth(1500)
 
     // Scroll wheel zoom - proportional to deltaY for smooth trackpad support
     this.input.on('wheel', (
@@ -46,7 +55,7 @@ export class WorldScene extends Phaser.Scene {
     ) => {
       const cam = this.cameras.main
       const zoomDelta = -dy * 0.002 * cam.zoom
-      cam.setZoom(Phaser.Math.Clamp(cam.zoom + zoomDelta, 0.5, 4))
+      cam.setZoom(Phaser.Math.Clamp(cam.zoom + zoomDelta, 0.3, 3))
     })
 
     // Drag to pan
@@ -85,13 +94,12 @@ export class WorldScene extends Phaser.Scene {
         this.tweens.add({
           targets: container,
           x: screenPos.x,
-          y: screenPos.y - 12,
+          y: screenPos.y - TILE_H * 0.4,
           duration: 300,
           ease: 'Linear',
         })
       }
 
-      // Update action indicator
       this.updateActionIndicator(agent)
     }
 
@@ -104,6 +112,8 @@ export class WorldScene extends Phaser.Scene {
         this.actionIndicators.delete(id)
       }
     }
+
+    this.updateSelectionRing()
   }
 
   updateClock(clock: WorldClock): void {
@@ -117,6 +127,7 @@ export class WorldScene extends Phaser.Scene {
       night: '#0d0d17',
     }
     this.cameras.main.setBackgroundColor(bgColors[clock.timeOfDay] ?? '#1a1a2e')
+    this.updateAmbientOverlay(clock.timeOfDay)
   }
 
   showSpeechBubble(agentId: string, message: string): void {
@@ -125,30 +136,35 @@ export class WorldScene extends Phaser.Scene {
       existing.container.destroy()
     }
 
-    const sprite = this.agentSprites.get(agentId)
-    if (!sprite) return
+    const agentContainer = this.agentSprites.get(agentId)
+    if (!agentContainer) return
 
-    // Styled speech bubble
     const isPlan = message.startsWith('[Plan]')
     const bgColor = isPlan ? '#2d5016' : '#333333'
     const displayMsg = isPlan ? message.slice(7).trim() : message
 
-    const text = this.add.text(0, -30, displayMsg.slice(0, 80), {
-      fontSize: '9px',
+    const text = this.add.text(0, -44, displayMsg.slice(0, 80), {
+      fontSize: '10px',
       fontFamily: 'Arial, sans-serif',
       color: '#ffffff',
       backgroundColor: bgColor + 'dd',
-      padding: { x: 5, y: 3 },
-      wordWrap: { width: 160 },
+      padding: { x: 6, y: 3 },
+      wordWrap: { width: 180 },
     }).setOrigin(0.5, 1)
 
-    // Small triangle pointer
     const pointer = this.add.graphics()
     pointer.fillStyle(isPlan ? 0x2d5016 : 0x333333, 0.87)
-    pointer.fillTriangle(-3, -1, 3, -1, 0, 3)
+    pointer.fillTriangle(-4, -1, 4, -1, 0, 4)
 
-    const container = this.add.container(sprite.x, sprite.y - 4, [text, pointer])
+    const container = this.add.container(agentContainer.x, agentContainer.y - 10, [text, pointer])
     container.setDepth(2000)
+    container.setAlpha(0)
+
+    this.tweens.add({
+      targets: container,
+      alpha: 1,
+      duration: 200,
+    })
 
     this.speechBubbles.set(agentId, {
       container,
@@ -158,8 +174,15 @@ export class WorldScene extends Phaser.Scene {
     this.time.delayedCall(6000, () => {
       const bubble = this.speechBubbles.get(agentId)
       if (bubble) {
-        bubble.container.destroy()
-        this.speechBubbles.delete(agentId)
+        this.tweens.add({
+          targets: bubble.container,
+          alpha: 0,
+          duration: 300,
+          onComplete: () => {
+            bubble.container.destroy()
+            this.speechBubbles.delete(agentId)
+          },
+        })
       }
     })
   }
@@ -170,13 +193,13 @@ export class WorldScene extends Phaser.Scene {
         this.showSpeechBubble(event.agentId, event.message)
         break
       case 'agent:moved': {
-        const sprite = this.agentSprites.get(event.agentId)
-        if (sprite) {
+        const container = this.agentSprites.get(event.agentId)
+        if (container) {
           const pos = this.tileToScreen(event.to.x, event.to.y)
           this.tweens.add({
-            targets: sprite,
+            targets: container,
             x: pos.x,
-            y: pos.y - 12,
+            y: pos.y - TILE_H * 0.4,
             duration: 500,
             ease: 'Linear',
           })
@@ -184,9 +207,8 @@ export class WorldScene extends Phaser.Scene {
         break
       }
       case 'resource:gathered': {
-        // Sparkle effect at gather position
         const gatherPos = this.tileToScreen(event.position.x, event.position.y)
-        this.showGatherEffect(gatherPos.x, gatherPos.y)
+        this.showGatherEffect(gatherPos.x, gatherPos.y, event.resourceType)
         break
       }
     }
@@ -203,6 +225,8 @@ export class WorldScene extends Phaser.Scene {
       for (const sprite of row) sprite.destroy()
     }
     this.tileSprites = []
+    for (const rs of this.resourceSprites) rs.destroy()
+    this.resourceSprites = []
 
     for (let y = 0; y < this.worldData.height; y++) {
       const row: Phaser.GameObjects.Image[] = []
@@ -212,13 +236,34 @@ export class WorldScene extends Phaser.Scene {
         const textureKey = `tile_${tile.type}`
 
         const sprite = this.add.image(pos.x, pos.y, textureKey)
-          .setOrigin(0.5, 0.5)
-          .setDepth(y)
+          .setOrigin(0.5, 0.35)
+          .setScale(TILE_SCALE)
+          .setDepth(x + y)
 
-        if (tile.resource && tile.resource.amount > 0) {
-          this.add.image(pos.x, pos.y - 4, 'resource_indicator')
+        // Resource indicator with type-specific icon
+        if (tile.resource && tile.resource.amount >= 1) {
+          const resKey = `resource_${tile.resource.type}`
+          const hasTexture = this.textures.exists(resKey)
+          const resSprite = this.add.image(
+            pos.x,
+            pos.y - TILE_H * 0.4,
+            hasTexture ? resKey : 'resource_indicator',
+          )
             .setOrigin(0.5, 0.5)
-            .setDepth(y + 0.1)
+            .setScale(hasTexture ? RESOURCE_SCALE : 0.5)
+            .setDepth(x + y + 0.1)
+            .setAlpha(0.75)
+          this.resourceSprites.push(resSprite)
+
+          // Gentle floating animation
+          this.tweens.add({
+            targets: resSprite,
+            y: resSprite.y - 2,
+            duration: 1500 + Math.random() * 500,
+            yoyo: true,
+            repeat: -1,
+            ease: 'Sine.easeInOut',
+          })
         }
 
         row.push(sprite)
@@ -231,9 +276,28 @@ export class WorldScene extends Phaser.Scene {
     const index = this.agents.indexOf(agent)
     const textureKey = `agent_${index >= 0 && index < 5 ? index : 'default'}`
 
-    const sprite = this.add.image(0, 0, textureKey).setOrigin(0.5, 1)
+    // Shadow beneath agent
+    const shadow = this.add.image(0, 6, 'agent_shadow')
+      .setScale(0.7)
+      .setAlpha(0.3)
 
-    const nameText = this.add.text(0, -26, agent.name, {
+    // Agent character sprite
+    const sprite = this.add.image(0, 0, textureKey)
+      .setOrigin(0.5, 0.7)
+      .setScale(AGENT_SCALE)
+
+    // Subtle breathing animation
+    this.tweens.add({
+      targets: sprite,
+      scaleY: AGENT_SCALE * 1.015,
+      duration: 1200 + Math.random() * 400,
+      yoyo: true,
+      repeat: -1,
+      ease: 'Sine.easeInOut',
+    })
+
+    // Name label
+    const nameText = this.add.text(0, -22, agent.name, {
       fontSize: '10px',
       fontFamily: 'Arial, sans-serif',
       color: '#ffffff',
@@ -241,8 +305,8 @@ export class WorldScene extends Phaser.Scene {
       strokeThickness: 3,
     }).setOrigin(0.5, 1)
 
-    // Action text (shows current action type)
-    const actionText = this.add.text(0, 4, '', {
+    // Current action text
+    const actionText = this.add.text(0, 10, '', {
       fontSize: '8px',
       fontFamily: 'Arial, sans-serif',
       color: '#aabbcc',
@@ -250,20 +314,25 @@ export class WorldScene extends Phaser.Scene {
       strokeThickness: 2,
     }).setOrigin(0.5, 0)
 
-    const container = this.add.container(screenPos.x, screenPos.y - 12, [sprite, nameText, actionText])
+    const container = this.add.container(
+      screenPos.x,
+      screenPos.y - TILE_H * 0.4,
+      [shadow, sprite, nameText, actionText],
+    )
     container.setDepth(500 + agent.position.y)
-    container.setSize(16, 24)
+    container.setSize(30, 40)
     container.setInteractive()
 
     container.on('pointerdown', () => {
       this.selectedAgentId = agent.id
       this.events.emit('agent:selected', agent.id)
+      this.updateSelectionRing()
 
-      // Selection highlight effect
+      // Selection pop animation
       this.tweens.add({
         targets: sprite,
-        scaleX: 1.2,
-        scaleY: 1.2,
+        scaleX: AGENT_SCALE * 1.15,
+        scaleY: AGENT_SCALE * 1.15,
         duration: 100,
         yoyo: true,
       })
@@ -276,8 +345,8 @@ export class WorldScene extends Phaser.Scene {
     const container = this.agentSprites.get(agent.id)
     if (!container || !container.list) return
 
-    // Update the action text (third child in container)
-    const actionText = container.list[2] as Phaser.GameObjects.Text | undefined
+    // Action text is the 4th child: [shadow, sprite, nameText, actionText]
+    const actionText = container.list[3] as Phaser.GameObjects.Text | undefined
     if (actionText && 'setText' in actionText) {
       const actionType = agent.currentAction?.type ?? 'idle'
       const display = actionType === 'idle' ? '' : actionType
@@ -285,21 +354,77 @@ export class WorldScene extends Phaser.Scene {
     }
   }
 
-  private showGatherEffect(x: number, y: number): void {
-    // Simple sparkle particles
+  private updateSelectionRing(): void {
+    if (this.selectionRing) {
+      this.selectionRing.destroy()
+      this.selectionRing = null
+    }
+
+    if (!this.selectedAgentId) return
+    const container = this.agentSprites.get(this.selectedAgentId)
+    if (!container) return
+
+    this.selectionRing = this.add.image(container.x, container.y + 6, 'selection_ring')
+      .setDepth(container.depth - 0.1)
+      .setScale(0.8)
+
+    this.tweens.add({
+      targets: this.selectionRing,
+      alpha: { from: 1, to: 0.4 },
+      scale: { from: 0.8, to: 0.95 },
+      duration: 800,
+      yoyo: true,
+      repeat: -1,
+      ease: 'Sine.easeInOut',
+    })
+  }
+
+  private updateAmbientOverlay(timeOfDay: string): void {
+    if (!this.ambientOverlay) return
+
+    const tints: Record<string, { color: number; alpha: number }> = {
+      dawn: { color: 0xFF8844, alpha: 0.08 },
+      morning: { color: 0xFFCC88, alpha: 0.03 },
+      noon: { color: 0x000000, alpha: 0 },
+      afternoon: { color: 0xFF9944, alpha: 0.04 },
+      evening: { color: 0xFF6622, alpha: 0.1 },
+      night: { color: 0x0000AA, alpha: 0.15 },
+    }
+    const tint = tints[timeOfDay] ?? { color: 0x000000, alpha: 0 }
+    this.ambientOverlay.setFillStyle(tint.color, tint.alpha)
+  }
+
+  private showGatherEffect(x: number, y: number, resourceType?: string): void {
+    // Flash ring
+    const flash = this.add.circle(x, y, 14, 0xFFFFAA, 0.5)
+      .setDepth(3000)
+    this.tweens.add({
+      targets: flash,
+      alpha: 0,
+      scale: 2.5,
+      duration: 400,
+      onComplete: () => flash.destroy(),
+    })
+
+    // Floating resource icons
+    const texKey = resourceType && this.textures.exists(`resource_${resourceType}`)
+      ? `resource_${resourceType}`
+      : 'resource_indicator'
+    const iconScale = texKey === 'resource_indicator' ? 0.5 : RESOURCE_SCALE * 0.8
+
     for (let i = 0; i < 3; i++) {
       const sparkle = this.add.image(
-        x + Phaser.Math.Between(-6, 6),
-        y + Phaser.Math.Between(-8, 0),
-        'resource_indicator',
-      ).setDepth(3000).setScale(0.5).setAlpha(1)
+        x + Phaser.Math.Between(-10, 10),
+        y + Phaser.Math.Between(-12, 0),
+        texKey,
+      ).setDepth(3000).setScale(iconScale).setAlpha(1)
 
       this.tweens.add({
         targets: sparkle,
-        y: sparkle.y - 10,
+        y: sparkle.y - 18,
         alpha: 0,
         scale: 0,
-        duration: 600 + i * 100,
+        duration: 700 + i * 120,
         ease: 'Quad.easeOut',
         onComplete: () => sparkle.destroy(),
       })

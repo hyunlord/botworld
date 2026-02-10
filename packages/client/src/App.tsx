@@ -176,6 +176,7 @@ const styles: Record<string, React.CSSProperties> = {
   game: {
     flex: 1,
     minWidth: 0,
+    overflow: 'hidden',
   },
   panel: {
     width: 320,

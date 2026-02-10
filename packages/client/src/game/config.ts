@@ -6,7 +6,7 @@ export function createGameConfig(parent: string): Phaser.Types.Core.GameConfig {
   return {
     type: Phaser.AUTO,
     parent,
-    width: window.innerWidth * 0.7,
+    width: window.innerWidth - 350,
     height: window.innerHeight,
     backgroundColor: '#1a1a2e',
     scene: [BootScene, WorldScene],
