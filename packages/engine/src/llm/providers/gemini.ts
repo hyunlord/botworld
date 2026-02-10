@@ -7,6 +7,7 @@ import type { LLMProvider, LLMOptions, LLMResponse, ChatMessage } from '@botworl
 export class GeminiProvider implements LLMProvider {
   id = 'gemini'
   name = 'Google Gemini'
+  defaultModel = 'gemini-2.0-flash'
 
   private get apiKey(): string | undefined {
     return process.env.GEMINI_API_KEY

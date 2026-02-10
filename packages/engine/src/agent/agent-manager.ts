@@ -304,7 +304,7 @@ export class AgentManager {
             })
           }
           agent.xp += 5
-          agent.skills.gathering = Math.min(100, agent.skills.gathering + 0.1)
+          agent.skills.gathering = Math.min(100, parseFloat((agent.skills.gathering + 0.1).toFixed(2)))
           runtime.memory.add(
             `I gathered ${result.harvested} ${result.type} at (${agent.position.x}, ${agent.position.y})`,
             3, clock.tick,

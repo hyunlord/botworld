@@ -7,6 +7,7 @@ import type { LLMProvider, LLMOptions, LLMResponse, ChatMessage } from '@botworl
 export class AnthropicProvider implements LLMProvider {
   id = 'anthropic'
   name = 'Anthropic Claude'
+  defaultModel = 'claude-haiku-4-5-20251001'
 
   private get apiKey(): string | undefined {
     return process.env.ANTHROPIC_API_KEY

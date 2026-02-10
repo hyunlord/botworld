@@ -24,6 +24,8 @@ export interface LLMResponse {
 export interface LLMProvider {
   id: string
   name: string
+  /** Default model used when none is specified */
+  defaultModel: string
   generate(prompt: string, options?: LLMOptions): Promise<LLMResponse>
   generateChat(messages: ChatMessage[], options?: LLMOptions): Promise<LLMResponse>
   /** Check if this provider is configured and reachable */

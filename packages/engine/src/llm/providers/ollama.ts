@@ -7,6 +7,7 @@ import type { LLMProvider, LLMOptions, LLMResponse, ChatMessage } from '@botworl
 export class OllamaProvider implements LLMProvider {
   id = 'ollama'
   name = 'Ollama (Local)'
+  defaultModel = 'llama3'
 
   constructor(private baseUrl = 'http://localhost:11434') {}
 

@@ -7,6 +7,7 @@ import type { LLMProvider, LLMOptions, LLMResponse, ChatMessage } from '@botworl
 export class OpenRouterProvider implements LLMProvider {
   id = 'openrouter'
   name = 'OpenRouter'
+  defaultModel = 'meta-llama/llama-3-8b-instruct'
 
   constructor(private apiKey?: string) {}
 

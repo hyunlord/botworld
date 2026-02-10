@@ -20,6 +20,7 @@ const MOCK_RESPONSES = [
 export class MockProvider implements LLMProvider {
   id = 'mock'
   name = 'Mock Provider (Development)'
+  defaultModel = 'mock'
 
   async isAvailable(): Promise<boolean> {
     return true // Always available as fallback

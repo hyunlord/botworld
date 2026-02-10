@@ -31,12 +31,22 @@ export class WorldScene extends Phaser.Scene {
     super({ key: 'WorldScene' })
   }
 
+  private hasCentered = false
+
   create(): void {
     // Camera setup
     this.cameras.main.setZoom(2)
-    this.input.on('wheel', (_p: unknown, _gx: unknown, _gy: unknown, _gz: unknown, deltaY: number) => {
+
+    // Scroll wheel zoom - proportional to deltaY for smooth trackpad support
+    this.input.on('wheel', (
+      _pointer: Phaser.Input.Pointer,
+      _over: Phaser.GameObjects.GameObject[],
+      _dx: number,
+      dy: number,
+    ) => {
       const cam = this.cameras.main
-      cam.setZoom(Phaser.Math.Clamp(cam.zoom + (deltaY > 0 ? -0.1 : 0.1), 0.5, 4))
+      const zoomDelta = -dy * 0.002 * cam.zoom
+      cam.setZoom(Phaser.Math.Clamp(cam.zoom + zoomDelta, 0.5, 4))
     })
 
     // Drag to pan
@@ -52,9 +62,14 @@ export class WorldScene extends Phaser.Scene {
   setWorldData(data: { width: number; height: number; tiles: Tile[][] }): void {
     this.worldData = data
     this.renderTiles()
-    const centerX = (data.width / 2) * TILE_W / 2
-    const centerY = (data.height / 2) * TILE_H / 2
-    this.cameras.main.centerOn(centerX, centerY)
+
+    // Only center camera on first load
+    if (!this.hasCentered) {
+      this.hasCentered = true
+      const centerX = (data.width / 2) * TILE_W / 2
+      const centerY = (data.height / 2) * TILE_H / 2
+      this.cameras.main.centerOn(centerX, centerY)
+    }
   }
 
   updateAgents(agents: Agent[]): void {
@@ -118,12 +133,13 @@ export class WorldScene extends Phaser.Scene {
     const bgColor = isPlan ? '#2d5016' : '#333333'
     const displayMsg = isPlan ? message.slice(7).trim() : message
 
-    const text = this.add.text(0, -28, displayMsg.slice(0, 80), {
-      fontSize: '7px',
+    const text = this.add.text(0, -30, displayMsg.slice(0, 80), {
+      fontSize: '9px',
+      fontFamily: 'Arial, sans-serif',
       color: '#ffffff',
       backgroundColor: bgColor + 'dd',
-      padding: { x: 4, y: 3 },
-      wordWrap: { width: 140 },
+      padding: { x: 5, y: 3 },
+      wordWrap: { width: 160 },
     }).setOrigin(0.5, 1)
 
     // Small triangle pointer
@@ -217,19 +233,21 @@ export class WorldScene extends Phaser.Scene {
 
     const sprite = this.add.image(0, 0, textureKey).setOrigin(0.5, 1)
 
-    const nameText = this.add.text(0, -24, agent.name, {
-      fontSize: '7px',
+    const nameText = this.add.text(0, -26, agent.name, {
+      fontSize: '10px',
+      fontFamily: 'Arial, sans-serif',
       color: '#ffffff',
       stroke: '#000000',
-      strokeThickness: 2,
+      strokeThickness: 3,
     }).setOrigin(0.5, 1)
 
     // Action text (shows current action type)
     const actionText = this.add.text(0, 4, '', {
-      fontSize: '6px',
+      fontSize: '8px',
+      fontFamily: 'Arial, sans-serif',
       color: '#aabbcc',
       stroke: '#000000',
-      strokeThickness: 1,
+      strokeThickness: 2,
     }).setOrigin(0.5, 0)
 
     const container = this.add.container(screenPos.x, screenPos.y - 12, [sprite, nameText, actionText])

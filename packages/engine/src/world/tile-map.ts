@@ -45,9 +45,9 @@ export class TileMap {
 
   harvestResource(x: number, y: number, amount: number): { type: ResourceType; harvested: number } | null {
     const tile = this.getTile(x, y)
-    if (!tile?.resource || tile.resource.amount <= 0) return null
+    if (!tile?.resource || tile.resource.amount < 1) return null
 
-    const harvested = Math.min(amount, tile.resource.amount)
+    const harvested = Math.round(Math.min(amount, tile.resource.amount))
     tile.resource.amount -= harvested
     return { type: tile.resource.type, harvested }
   }

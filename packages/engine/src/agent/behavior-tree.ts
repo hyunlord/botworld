@@ -194,7 +194,7 @@ function findNearestResource(pos: Position, map: TileMap, radius = 10): Position
       const x = pos.x + dx
       const y = pos.y + dy
       const tile = map.getTile(x, y)
-      if (tile?.resource && tile.resource.amount > 0 && tile.walkable) {
+      if (tile?.resource && tile.resource.amount >= 1 && tile.walkable) {
         const dist = Math.abs(dx) + Math.abs(dy)
         if (dist < closestDist) {
           closestDist = dist

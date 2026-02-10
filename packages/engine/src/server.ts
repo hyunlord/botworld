@@ -1,3 +1,9 @@
+import { config } from 'dotenv'
+import { resolve } from 'node:path'
+
+// Load .env from monorepo root
+config({ path: resolve(import.meta.dirname, '../../../.env') })
+
 import express from 'express'
 import { createServer } from 'node:http'
 import { Server as SocketServer } from 'socket.io'
@@ -52,9 +58,9 @@ async function main() {
       name: cfg.name,
       position: { x: cfg.x, y: cfg.y },
       bio: cfg.bio,
-      llmConfig: { provider: provider.id },
+      llmConfig: { provider: provider.id, model: provider.defaultModel },
     })
-    console.log(`[Botworld] Agent ${cfg.name} → ${provider.name}`)
+    console.log(`[Botworld] Agent ${cfg.name} → ${provider.name} (${provider.defaultModel})`)
   }
 
   // HTTP server

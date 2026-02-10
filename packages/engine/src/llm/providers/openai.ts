@@ -7,6 +7,7 @@ import type { LLMProvider, LLMOptions, LLMResponse, ChatMessage } from '@botworl
 export class OpenAIProvider implements LLMProvider {
   id = 'openai'
   name = 'OpenAI'
+  defaultModel = 'gpt-4o-mini'
 
   private get apiKey(): string | undefined {
     return process.env.OPENAI_API_KEY
