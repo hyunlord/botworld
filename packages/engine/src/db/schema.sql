@@ -97,3 +97,15 @@ CREATE INDEX IF NOT EXISTS idx_audit_agent_recent
 ALTER TABLE agents ADD COLUMN IF NOT EXISTS claim_code VARCHAR(32) UNIQUE;
 CREATE INDEX IF NOT EXISTS idx_agents_claim_code ON agents (claim_code)
     WHERE claim_code IS NOT NULL;
+
+-- ============================================================
+-- Column: agents.violation_count (content filter violations)
+-- ============================================================
+ALTER TABLE agents ADD COLUMN IF NOT EXISTS violation_count INTEGER NOT NULL DEFAULT 0;
+
+-- ============================================================
+-- Extend api_key_audit_log event_type CHECK (add key_leak_attempt)
+-- ============================================================
+ALTER TABLE api_key_audit_log DROP CONSTRAINT IF EXISTS api_key_audit_log_event_type_check;
+ALTER TABLE api_key_audit_log ADD CONSTRAINT api_key_audit_log_event_type_check
+    CHECK (event_type IN ('created', 'rotated', 'revoked', 'used', 'failed_auth', 'key_leak_attempt'));

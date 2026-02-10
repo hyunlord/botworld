@@ -78,7 +78,7 @@ setInterval(() => {
 
 export async function logAuditEvent(
   agentId: string,
-  eventType: 'created' | 'rotated' | 'revoked' | 'used' | 'failed_auth',
+  eventType: 'created' | 'rotated' | 'revoked' | 'used' | 'failed_auth' | 'key_leak_attempt',
   ipAddress: string | undefined,
   metadata?: Record<string, unknown>,
 ): Promise<void> {

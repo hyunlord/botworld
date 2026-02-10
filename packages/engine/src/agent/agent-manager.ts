@@ -17,6 +17,7 @@ import { GoalSystem } from './goal-system.js'
 import { DayPlanner } from './day-planner.js'
 import { ConversationManager } from './conversation-manager.js'
 import { DecisionQueue } from '../llm/decision-queue.js'
+import { contentFilter } from '../security/content-filter.js'
 import { processInteraction, personalityCompatibility } from '../systems/social/relationship.js'
 
 interface AgentRuntime {
@@ -164,18 +165,22 @@ export class AgentManager {
     const nearbyAgents = this.getNearbyAgents(agent, 15)
 
     this.dayPlanner.createPlan(agent, clock, runtime.memory, this.tileMap, nearbyAgents)
-      .then(goals => {
+      .then(async goals => {
         runtime.goals.setPlan(goals)
         const goalDescriptions = goals.map(g => g.description).join(', ')
         runtime.memory.addPlan(`Today's plan: ${goalDescriptions}`, clock.tick)
         console.log(`[DayPlanner] ${agent.name}'s plan: ${goalDescriptions}`)
 
-        this.eventBus.emit({
-          type: 'agent:spoke',
-          agentId: agent.id,
-          message: `[Plan] ${goalDescriptions}`,
-          timestamp: clock.tick,
-        })
+        const planMessage = `[Plan] ${goalDescriptions}`
+        const filterResult = await contentFilter.filterMessage(agent.id, planMessage)
+        if (filterResult.allowed) {
+          this.eventBus.emit({
+            type: 'agent:spoke',
+            agentId: agent.id,
+            message: planMessage,
+            timestamp: clock.tick,
+          })
+        }
       })
       .catch(err => {
         console.warn(`[DayPlanner] Failed for ${agent.name}:`, err)

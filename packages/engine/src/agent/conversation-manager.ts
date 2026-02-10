@@ -3,6 +3,7 @@ import { buildAgentSystemPrompt } from '../llm/prompt-builder.js'
 import { DecisionQueue } from '../llm/decision-queue.js'
 import { EventBus } from '../core/event-bus.js'
 import type { MemoryStream } from './memory/memory-stream.js'
+import { contentFilter } from '../security/content-filter.js'
 
 interface ActiveConversation {
   id: string
@@ -97,6 +98,13 @@ export class ConversationManager {
       )
 
       if (!message || message.trim().length === 0) break
+
+      // Content filter: block messages containing API keys or credentials
+      const filterResult = await contentFilter.filterMessage(currentSpeaker.id, message)
+      if (!filterResult.allowed) {
+        console.warn(`[SECURITY] Blocked message from ${currentSpeaker.name}: ${filterResult.reason}`)
+        break
+      }
 
       conversation.turns.push({ speakerId: currentSpeaker.id, message })
 
