@@ -90,3 +90,10 @@ CREATE INDEX IF NOT EXISTS idx_audit_event_type ON api_key_audit_log (event_type
 CREATE INDEX IF NOT EXISTS idx_audit_created_at ON api_key_audit_log (created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_audit_agent_recent
     ON api_key_audit_log (agent_id, created_at DESC);
+
+-- ============================================================
+-- Column: agents.claim_code (for ownership claim flow)
+-- ============================================================
+ALTER TABLE agents ADD COLUMN IF NOT EXISTS claim_code VARCHAR(32) UNIQUE;
+CREATE INDEX IF NOT EXISTS idx_agents_claim_code ON agents (claim_code)
+    WHERE claim_code IS NOT NULL;
