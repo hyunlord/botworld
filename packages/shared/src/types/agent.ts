@@ -15,6 +15,8 @@ export type SkillType =
 
 export type OrgRank = 'leader' | 'officer' | 'member' | 'recruit'
 
+export type NpcRole = 'merchant' | 'innkeeper' | 'guild_master' | 'wanderer' | 'guard'
+
 export type ActionType =
   | 'idle'
   | 'move'
@@ -75,6 +77,8 @@ export interface Agent {
   llmConfig?: AgentLLMConfig
   currentAction: AgentAction | null
   bio: string
+  isNpc?: boolean
+  npcRole?: NpcRole
 }
 
 export interface Organization {

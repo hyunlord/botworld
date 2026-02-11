@@ -5,12 +5,14 @@ import { createWorldClock, advanceClock } from './world-clock.js'
 import { AgentManager } from '../agent/agent-manager.js'
 import { TileMap } from '../world/tile-map.js'
 import { WeatherSystem } from '../systems/weather.js'
+import { NpcManager } from '../systems/npc-manager.js'
 
 export class WorldEngine {
   readonly eventBus = new EventBus()
   readonly agentManager: AgentManager
   readonly tileMap: TileMap
   readonly weather: WeatherSystem
+  readonly npcManager: NpcManager
   clock: WorldClock
 
   private tickInterval: ReturnType<typeof setInterval> | null = null
@@ -22,12 +24,18 @@ export class WorldEngine {
     this.clock = createWorldClock()
     this.tileMap = new TileMap()
     this.weather = new WeatherSystem()
+    this.npcManager = new NpcManager(this.eventBus, this.tileMap, () => this.clock)
     this.agentManager = new AgentManager(this.eventBus, this.tileMap, () => this.clock)
   }
 
   start(): void {
     if (this.running) return
     this.running = true
+
+    // Spawn NPCs at POIs if none exist yet
+    if (this.npcManager.getAllNpcs().length === 0) {
+      this.npcManager.spawnFromPOIs(this.tileMap.pois)
+    }
 
     console.log('[WorldEngine] Starting simulation...')
     this.restartInterval()
@@ -102,7 +110,10 @@ export class WorldEngine {
     // 6. Regenerate resources
     this.tileMap.tickResources()
 
-    // 7. Weather system tick
+    // 7. NPC behaviors (wanderer movement, idle chatter)
+    this.npcManager.tick(this.clock)
+
+    // 8. Weather system tick
     const weatherChanged = this.weather.tick(this.clock)
     if (weatherChanged) {
       this.eventBus.emit({
@@ -112,7 +123,7 @@ export class WorldEngine {
       })
     }
 
-    // 8. Broadcast updated state (all processing complete)
+    // 9. Broadcast updated state (all processing complete)
     this.eventBus.emit({
       type: 'world:state_updated',
       clock: this.clock,
@@ -145,7 +156,7 @@ export class WorldEngine {
     return {
       clock: this.clock,
       weather: this.weather.getState(),
-      agents: this.agentManager.getAllAgents(),
+      agents: [...this.agentManager.getAllAgents(), ...this.npcManager.getAllNpcs()],
       chunks: this.tileMap.getSerializableChunks(),
       recentEvents: this.eventBus.getRecentEvents(20),
     }

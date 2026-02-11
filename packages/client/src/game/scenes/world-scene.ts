@@ -620,10 +620,14 @@ export class WorldScene extends Phaser.Scene {
       })
     }
 
-    const nameText = this.add.text(0, -22, agent.name, {
+    const isNpc = agent.isNpc === true
+    const displayName = isNpc ? `[NPC] ${agent.name}` : agent.name
+    const nameColor = isNpc ? '#f0c040' : '#ffffff'
+
+    const nameText = this.add.text(0, -22, displayName, {
       fontSize: '10px',
       fontFamily: 'Arial, sans-serif',
-      color: '#ffffff',
+      color: nameColor,
       stroke: '#000000',
       strokeThickness: 3,
     }).setOrigin(0.5, 1)

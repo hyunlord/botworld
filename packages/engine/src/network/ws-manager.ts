@@ -289,7 +289,10 @@ export class WsManager {
 
       if (event.type === 'world:state_updated') {
         // All processing complete — broadcast fresh state
-        this.spectatorNs.emit('world:agents', this.world.agentManager.getAllAgents())
+        this.spectatorNs.emit('world:agents', [
+          ...this.world.agentManager.getAllAgents(),
+          ...this.world.npcManager.getAllNpcs(),
+        ])
         this.sendNearbyUpdates()
       }
 
