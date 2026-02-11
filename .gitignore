@@ -6,3 +6,4 @@ dist/
 .env.local
 
 .omc/
+scripts/assets-raw/

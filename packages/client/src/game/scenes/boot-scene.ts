@@ -11,6 +11,12 @@ export class BootScene extends Phaser.Scene {
   }
 
   preload(): void {
+    // ── Terrain tilemap spritesheet (primary ground layer) ──
+    this.load.spritesheet('terrain-sheet', 'assets/tiles/terrain-sheet.png', {
+      frameWidth: TILE_SIZE,
+      frameHeight: TILE_SIZE,
+    })
+
     // ── Legacy tile sprites (12 types) ──
     const tileTypes = ['grass', 'water', 'deep_water', 'forest', 'dense_forest', 'sand', 'mountain', 'road', 'building', 'farmland', 'snow', 'swamp']
     for (const type of tileTypes) {

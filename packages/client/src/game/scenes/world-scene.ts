@@ -18,45 +18,45 @@ interface RenderedChunk {
   objectSprites: Phaser.GameObjects.GameObject[]
 }
 
-// ── Biome-aware tile texture mapping (for object sprites that still use individual textures) ──
+// ── Ground tile index mapping (terrain-sheet.png spritesheet) ──
 
-function getNewTileKey(tile: Tile): string | null {
-  const biome = tile.biome ?? ''
+function getGroundTileIndex(tile: Tile): number {
   const variant = tile.variant ?? 0
+  const biome = tile.biome ?? ''
 
   switch (tile.type) {
     case 'grass':
-      if (tile.decoration?.includes('flower') || variant === 2) return 'tile_new_grass_flowers'
-      return 'tile_new_grass_plains'
+      if (tile.decoration?.includes('flower') || variant === 2) return 2   // grass_3
+      return variant >= 1 ? 1 : 0  // grass_2 or grass_1
     case 'forest':
-      return variant >= 1 ? 'tile_new_forest_dense' : 'tile_new_forest_light'
     case 'dense_forest':
-      return biome === 'tundra' ? 'tile_new_snow_forest' : 'tile_new_forest_dense'
-    case 'mountain':
-      if (variant >= 2) return 'tile_new_mountain_high'
-      if (variant === 1) return 'tile_new_mountain_rocky'
-      return 'tile_new_mountain_low'
+      return 13  // dark_grass (ground beneath tree sprites)
     case 'water':
-      return 'tile_new_water_shallow'
+      return 17  // water_shallow
     case 'deep_water':
-      return 'tile_new_water_deep'
-    case 'sand':
-      if (biome === 'beach' || biome === 'coast') return 'tile_new_beach'
-      return 'tile_new_desert_sand'
-    case 'snow':
-      return 'tile_new_snow_field'
-    case 'swamp':
-      return 'tile_new_swamp'
-    case 'farmland':
-      return 'tile_new_farmland'
-    case 'road':
-      return tile.poiType ? 'tile_new_road_stone' : 'tile_new_road_dirt'
+      return 16  // water_deep
     case 'river':
-      return 'tile_new_water_river'
+      return 30  // water_river_H
+    case 'sand':
+      if (biome === 'beach' || biome === 'coast') return 6
+      return variant >= 1 ? 7 : 6  // sand_2 or sand_1
+    case 'mountain':
+      if (variant >= 2) return 56  // mountain_top
+      return 10  // stone_floor
+    case 'snow':
+      return variant >= 1 ? 9 : 8  // snow_2 or snow_1
+    case 'swamp':
+      return 12
+    case 'farmland':
+      return 11
+    case 'road':
+      return tile.poiType ? 39 : 32  // road_stone_H or road_dirt_H
     default:
-      return null
+      return 0  // grass_1 fallback
   }
 }
+
+// ── Object/building texture resolution (for sprites on top of tilemap) ──
 
 /** Map POI type to the best available building texture key */
 function resolveBuildingTexture(poiType: string, textures: Phaser.Textures.TextureManager): string {
@@ -118,7 +118,7 @@ function resolveResourceTexture(resourceType: string, biome: string, textures: P
 
 /**
  * Main top-down world scene with chunk-based rendering.
- * Renders flat square tiles using a RenderTexture ground layer,
+ * Renders flat square tiles using a Phaser Tilemap ground layer,
  * with object sprites (resources, buildings, agents) on top.
  */
 export class WorldScene extends Phaser.Scene {
@@ -126,14 +126,14 @@ export class WorldScene extends Phaser.Scene {
   private chunkDataStore = new Map<string, ChunkData>()
   // Currently rendered chunks (viewport-based)
   private renderedChunks = new Map<string, RenderedChunk>()
-  // Ground layer: RenderTexture for painting tiles
-  private groundRT: Phaser.GameObjects.RenderTexture | null = null
-  // Track which chunks have been painted to the ground RT
+  // Phaser Tilemap for ground rendering
+  private tilemap: Phaser.Tilemaps.Tilemap | null = null
+  private groundLayer: Phaser.Tilemaps.TilemapLayer | null = null
   private paintedChunks = new Set<string>()
-  // Ground RT offset: the world-space origin of the RT (in tiles)
-  private groundOriginX = -150
-  private groundOriginY = -150
-  private groundSizeTiles = 300
+  // Tilemap origin in world tile coords and size
+  private tmOriginX = -150
+  private tmOriginY = -150
+  private tmSize = 300
 
   // Agent rendering
   private agentSprites = new Map<string, Phaser.GameObjects.Container>()
@@ -163,13 +163,20 @@ export class WorldScene extends Phaser.Scene {
     this.cameras.main.setRoundPixels(true)
     this.cameras.main.setBackgroundColor('#1a2e1a')
 
-    // Create the ground RenderTexture — covers a generous area for chunk rendering
-    const rtPixelSize = this.groundSizeTiles * TILE_SIZE
-    const rtOriginPx = this.groundOriginX * TILE_SIZE
-    const rtOriginPyPx = this.groundOriginY * TILE_SIZE
-    this.groundRT = this.add.renderTexture(rtOriginPx, rtOriginPyPx, rtPixelSize, rtPixelSize)
-    this.groundRT.setOrigin(0, 0)
-    this.groundRT.setDepth(-1)
+    // Create Phaser Tilemap for ground layer (covers tmSize x tmSize tiles)
+    this.tilemap = this.make.tilemap({
+      tileWidth: TILE_SIZE,
+      tileHeight: TILE_SIZE,
+      width: this.tmSize,
+      height: this.tmSize,
+    })
+    const tileset = this.tilemap.addTilesetImage('terrain', 'terrain-sheet', TILE_SIZE, TILE_SIZE, 0, 0, 0)!
+    this.groundLayer = this.tilemap.createBlankLayer(
+      'ground', tileset,
+      this.tmOriginX * TILE_SIZE,
+      this.tmOriginY * TILE_SIZE,
+    )!
+    this.groundLayer.setDepth(-1)
 
     // Day-night cycle (tint overlay, stars, building lights, agent torches)
     this.dayNightCycle = new DayNightCycle(this)
@@ -642,9 +649,9 @@ export class WorldScene extends Phaser.Scene {
   private renderChunk(key: string, chunk: ChunkData): void {
     const objectSprites: Phaser.GameObjects.GameObject[] = []
 
-    // Paint ground tiles onto the RenderTexture (if not already painted)
-    if (!this.paintedChunks.has(key) && this.groundRT) {
-      this.paintChunkTiles(chunk)
+    // Place ground tiles into the Phaser Tilemap (if not already placed)
+    if (!this.paintedChunks.has(key) && this.groundLayer) {
+      this.paintChunkToTilemap(chunk)
       this.paintedChunks.add(key)
     }
 
@@ -747,46 +754,23 @@ export class WorldScene extends Phaser.Scene {
     this.renderedChunks.set(key, { objectSprites })
   }
 
-  /** Paint a chunk's ground tiles onto the RenderTexture */
-  private paintChunkTiles(chunk: ChunkData): void {
-    if (!this.groundRT) return
-
-    const rtOriginPx = this.groundOriginX * TILE_SIZE
-    const rtOriginPy = this.groundOriginY * TILE_SIZE
+  /** Place a chunk's ground tiles into the Phaser Tilemap layer */
+  private paintChunkToTilemap(chunk: ChunkData): void {
+    if (!this.groundLayer) return
 
     for (let ly = 0; ly < chunk.tiles.length; ly++) {
       for (let lx = 0; lx < chunk.tiles[ly].length; lx++) {
         const tile = chunk.tiles[ly][lx]
+        const localX = tile.position.x - this.tmOriginX
+        const localY = tile.position.y - this.tmOriginY
 
-        // Screen position of this tile relative to the RT origin
-        const drawX = tile.position.x * TILE_SIZE - rtOriginPx
-        const drawY = tile.position.y * TILE_SIZE - rtOriginPy
+        // Skip tiles outside the tilemap bounds
+        if (localX < 0 || localY < 0 || localX >= this.tmSize || localY >= this.tmSize) continue
 
-        // Skip tiles outside the RT bounds
-        if (drawX < 0 || drawY < 0 ||
-            drawX + TILE_SIZE > this.groundSizeTiles * TILE_SIZE ||
-            drawY + TILE_SIZE > this.groundSizeTiles * TILE_SIZE) {
-          continue
-        }
-
-        // Draw the per-tile flat texture (generated in boot-scene as 32x32 squares)
-        const tileTexKey = this.resolveFlatTileTexture(tile)
-        if (this.textures.exists(tileTexKey)) {
-          this.groundRT.draw(tileTexKey, drawX, drawY)
-        }
+        const tileIndex = getGroundTileIndex(tile)
+        this.groundLayer.putTileAt(tileIndex, localX, localY)
       }
     }
-  }
-
-  /** Resolve the best flat tile texture key for a tile */
-  private resolveFlatTileTexture(tile: Tile): string {
-    const newKey = getNewTileKey(tile)
-    if (newKey && this.textures.exists(newKey)) return newKey
-
-    const variantKey = `tile_${tile.type}_v${tile.variant ?? 0}`
-    if (this.textures.exists(variantKey)) return variantKey
-
-    return `tile_${tile.type}`
   }
 
   private destroyRenderedChunk(rendered: RenderedChunk): void {
