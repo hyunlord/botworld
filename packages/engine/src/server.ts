@@ -17,6 +17,7 @@ import { Marketplace } from './systems/marketplace.js'
 import { createMarketRouter } from './api/market.js'
 import { createAdminRouter } from './api/admin.js'
 import { createPromptsRouter } from './api/prompts.js'
+import { authRouter } from './api/auth.js'
 import { MetricsCollector } from './monitoring/metrics.js'
 import { createHealthRouter } from './monitoring/health-check.js'
 import { WsManager } from './network/ws-manager.js'
@@ -124,6 +125,7 @@ async function main() {
   // Auth routes (public — no Bearer required)
   app.use('/api', registryRouter)
   app.use('/api', claimRouter)
+  app.use('/api', authRouter)
   app.use('/api', characterRouter)
   app.use('/api', createActionRouter(world, chatRelay))
   app.use('/api', createWorldRouter(world))
