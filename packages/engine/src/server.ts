@@ -16,6 +16,7 @@ import { AnthropicProvider } from './llm/providers/anthropic.js'
 import { OpenAIProvider } from './llm/providers/openai.js'
 import { GeminiProvider } from './llm/providers/gemini.js'
 import { registryRouter, claimRouter } from './auth/index.js'
+import { characterRouter } from './api/character.js'
 
 const PORT = Number(process.env.PORT) || 3001
 
@@ -96,6 +97,7 @@ async function main() {
   // Auth routes (public — no Bearer required)
   app.use('/api', registryRouter)
   app.use('/api', claimRouter)
+  app.use('/api', characterRouter)
 
   const httpServer = createServer(app)
 
