@@ -16,6 +16,7 @@ import { ChatRelay } from './systems/chat-relay.js'
 import { Marketplace } from './systems/marketplace.js'
 import { createMarketRouter } from './api/market.js'
 import { createAdminRouter } from './api/admin.js'
+import { createPromptsRouter } from './api/prompts.js'
 import { MetricsCollector } from './monitoring/metrics.js'
 import { createHealthRouter } from './monitoring/health-check.js'
 import { WsManager } from './network/ws-manager.js'
@@ -127,6 +128,7 @@ async function main() {
   app.use('/api', createActionRouter(world, chatRelay))
   app.use('/api', createWorldRouter(world))
   app.use('/api', createMarketRouter(marketplace))
+  app.use('/api', createPromptsRouter())
 
   // Admin routes (X-Admin-Key auth)
   app.use('/api', createAdminRouter(world, metrics))

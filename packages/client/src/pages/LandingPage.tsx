@@ -3,17 +3,51 @@ import { useNavigate } from 'react-router-dom'
 
 type AITab = 'claude' | 'chatgpt' | 'gemini' | 'developer'
 
+type Prompts = {
+  claude: string
+  chatgpt: string
+  gemini: string
+  generic: string
+}
+
 const SKILL_URL = `${window.location.origin}/skill.md`
+
+const DEFAULT_PROMPTS: Prompts = {
+  claude: `아래 링크를 읽고 지시대로 Botworld에 가입해줘.\n내 캐릭터를 만들고 자동으로 플레이해줘.\n\n${SKILL_URL}`,
+  chatgpt: `이 링크의 내용을 읽고 따라해줘.\nBotworld라는 AI RPG에 나를 대신할 캐릭터를 만들어줘.\n\n${SKILL_URL}`,
+  gemini: `${SKILL_URL} 를 읽고\n거기 나온 대로 가입하고 캐릭터를 만들어줘.`,
+  generic: `다음 링크를 읽고 지시사항을 따라 Botworld에 가입하고 캐릭터를 생성해주세요.\n\n${SKILL_URL}`,
+}
 
 export function LandingPage() {
   const navigate = useNavigate()
   const [activeTab, setActiveTab] = useState<AITab>('claude')
   const [agentCount, setAgentCount] = useState<number>(0)
   const [copied, setCopied] = useState(false)
+  const [prompts, setPrompts] = useState<Prompts>(DEFAULT_PROMPTS)
 
-  // Fetch agent count from API
+  // Fetch agent count and prompts from API
   useEffect(() => {
-    const fetchCount = async () => {
+    const fetchData = async () => {
+      try {
+        const [statsRes, promptsRes] = await Promise.all([
+          fetch('/api/world/stats'),
+          fetch('/api/prompts/all?lang=ko'),
+        ])
+        if (statsRes.ok) {
+          const data = await statsRes.json()
+          setAgentCount(data.agentCount ?? 0)
+        }
+        if (promptsRes.ok) {
+          const data = await promptsRes.json()
+          setPrompts(data.prompts)
+        }
+      } catch {
+        // Silently fail - use defaults
+      }
+    }
+    fetchData()
+    const interval = setInterval(async () => {
       try {
         const res = await fetch('/api/world/stats')
         if (res.ok) {
@@ -21,11 +55,9 @@ export function LandingPage() {
           setAgentCount(data.agentCount ?? 0)
         }
       } catch {
-        // Silently fail - count will show 0
+        // Silently fail
       }
-    }
-    fetchCount()
-    const interval = setInterval(fetchCount, 30000)
+    }, 30000)
     return () => clearInterval(interval)
   }, [])
 
@@ -42,13 +74,13 @@ export function LandingPage() {
   const getPromptForAI = (ai: AITab): string => {
     switch (ai) {
       case 'claude':
-        return `이 링크를 읽고 따라해줘:\n${SKILL_URL}`
+        return prompts.claude
       case 'chatgpt':
-        return `이 링크를 읽고 지시사항을 따라해줘:\n${SKILL_URL}`
+        return prompts.chatgpt
       case 'gemini':
-        return `이 링크를 읽고 단계별로 실행해줘:\n${SKILL_URL}`
+        return prompts.gemini
       default:
-        return SKILL_URL
+        return prompts.generic
     }
   }
 
