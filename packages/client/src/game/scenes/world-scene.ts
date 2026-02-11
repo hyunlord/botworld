@@ -1,5 +1,5 @@
 import Phaser from 'phaser'
-import type { Agent, Tile, WorldEvent, WorldClock, ChunkData, CharacterAppearance, Race, CharacterAppearanceMap, WeatherState } from '@botworld/shared'
+import type { Agent, Tile, WorldEvent, WorldClock, ChunkData, CharacterAppearance, Race, CharacterAppearanceMap, WeatherState, ActiveWorldEvent } from '@botworld/shared'
 import { CHUNK_SIZE } from '@botworld/shared'
 import { composeCharacterSprite } from '../character/sprite-composer.js'
 import { SpriteCache } from '../character/sprite-cache.js'
@@ -155,6 +155,7 @@ export class WorldScene extends Phaser.Scene {
   private ambientOverlay: Phaser.GameObjects.Rectangle | null = null
   private selectionRing: Phaser.GameObjects.Image | null = null
   private weatherEffects: WeatherEffects | null = null
+  private eventMarkers = new Map<string, Phaser.GameObjects.Container>()
 
   // Character appearance (layered sprite) data
   private characterAppearances: CharacterAppearanceMap = {}
@@ -391,6 +392,70 @@ export class WorldScene extends Phaser.Scene {
 
   getSelectedAgentId(): string | null {
     return this.selectedAgentId
+  }
+
+  // ── World event markers ──
+
+  setWorldEvents(events: ActiveWorldEvent[]): void {
+    const currentIds = new Set(events.map(e => e.id))
+
+    // Remove expired markers
+    for (const [id, container] of this.eventMarkers) {
+      if (!currentIds.has(id)) {
+        container.destroy()
+        this.eventMarkers.delete(id)
+      }
+    }
+
+    // Add/update markers
+    for (const event of events) {
+      if (!this.eventMarkers.has(event.id)) {
+        this.createEventMarker(event)
+      }
+    }
+  }
+
+  private createEventMarker(event: ActiveWorldEvent): void {
+    const pos = this.tileToScreen(event.position.x, event.position.y)
+    const container = this.add.container(pos.x, pos.y - TILE_H * 0.5)
+    container.setDepth(900)
+
+    const CATEGORY_COLORS: Record<string, number> = {
+      resource: 0x2ecc71,
+      social: 0xf1c40f,
+      danger: 0xe74c3c,
+      discovery: 0x9b59b6,
+    }
+    const color = CATEGORY_COLORS[event.category] ?? 0x888888
+
+    // Pulsing circle
+    const circle = this.add.graphics()
+    circle.fillStyle(color, 0.3)
+    circle.fillCircle(0, 0, 16)
+    circle.lineStyle(2, color, 0.8)
+    circle.strokeCircle(0, 0, 16)
+    container.add(circle)
+
+    // Inner diamond icon
+    const diamond = this.add.graphics()
+    diamond.fillStyle(color, 0.9)
+    diamond.fillTriangle(0, -8, 6, 0, 0, 8)
+    diamond.fillTriangle(0, -8, -6, 0, 0, 8)
+    container.add(diamond)
+
+    // Pulse animation
+    this.tweens.add({
+      targets: container,
+      scaleX: { from: 0.8, to: 1.2 },
+      scaleY: { from: 0.8, to: 1.2 },
+      alpha: { from: 0.6, to: 1 },
+      duration: 1000,
+      yoyo: true,
+      repeat: -1,
+      ease: 'Sine.easeInOut',
+    })
+
+    this.eventMarkers.set(event.id, container)
   }
 
   // --- Viewport-based chunk rendering ---

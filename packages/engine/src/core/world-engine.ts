@@ -7,6 +7,7 @@ import { TileMap } from '../world/tile-map.js'
 import { WeatherSystem } from '../systems/weather.js'
 import { NpcManager } from '../systems/npc-manager.js'
 import { QuestManager } from '../systems/quest-manager.js'
+import { WorldEventSystem } from '../systems/world-events.js'
 
 export class WorldEngine {
   readonly eventBus = new EventBus()
@@ -15,6 +16,7 @@ export class WorldEngine {
   readonly weather: WeatherSystem
   readonly npcManager: NpcManager
   readonly questManager: QuestManager
+  readonly worldEvents: WorldEventSystem
   clock: WorldClock
 
   private tickInterval: ReturnType<typeof setInterval> | null = null
@@ -29,6 +31,7 @@ export class WorldEngine {
     this.npcManager = new NpcManager(this.eventBus, this.tileMap, () => this.clock)
     this.agentManager = new AgentManager(this.eventBus, this.tileMap, () => this.clock)
     this.questManager = new QuestManager(this.eventBus, this.tileMap, this.npcManager, () => this.clock)
+    this.worldEvents = new WorldEventSystem(this.eventBus, this.tileMap, () => this.clock)
   }
 
   start(): void {
@@ -119,7 +122,10 @@ export class WorldEngine {
     // 8. Quest system tick (refresh pool, expire old quests)
     this.questManager.tick(this.clock)
 
-    // 9. Weather system tick
+    // 9. World events tick (spawn/expire events)
+    this.worldEvents.tick(this.clock)
+
+    // 10. Weather system tick
     const weatherChanged = this.weather.tick(this.clock)
     if (weatherChanged) {
       this.eventBus.emit({
@@ -129,7 +135,7 @@ export class WorldEngine {
       })
     }
 
-    // 10. Broadcast updated state (all processing complete)
+    // 11. Broadcast updated state (all processing complete)
     this.eventBus.emit({
       type: 'world:state_updated',
       clock: this.clock,
@@ -164,6 +170,7 @@ export class WorldEngine {
       weather: this.weather.getState(),
       agents: [...this.agentManager.getAllAgents(), ...this.npcManager.getAllNpcs()],
       chunks: this.tileMap.getSerializableChunks(),
+      worldEvents: this.worldEvents.getActiveEvents(),
       recentEvents: this.eventBus.getRecentEvents(20),
     }
   }

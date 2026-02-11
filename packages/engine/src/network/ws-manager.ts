@@ -305,6 +305,44 @@ export class WsManager {
         this.spectatorNs.emit('world:weather', event.weather)
       }
 
+      // ── World events (started/ended) ──
+      if (event.type === 'world_event:started') {
+        this.spectatorNs.emit('world:event_started', {
+          eventId: event.eventId,
+          eventType: event.eventType,
+          title: event.title,
+          description: event.description,
+          category: event.category,
+          position: event.position,
+          radius: event.radius,
+          effects: event.effects,
+          duration: event.duration,
+          expiresAt: event.expiresAt,
+        })
+        // Also notify bots
+        this.botNs.emit('world:event_started', {
+          eventId: event.eventId,
+          eventType: event.eventType,
+          title: event.title,
+          description: event.description,
+          category: event.category,
+          position: event.position,
+          radius: event.radius,
+        })
+      }
+
+      if (event.type === 'world_event:ended') {
+        this.spectatorNs.emit('world:event_ended', {
+          eventId: event.eventId,
+          eventType: event.eventType,
+          title: event.title,
+        })
+        this.botNs.emit('world:event_ended', {
+          eventId: event.eventId,
+          eventType: event.eventType,
+        })
+      }
+
       // ── Chat delivery ──
       if (event.type === 'chat:delivered') {
         // Spectators get all chat

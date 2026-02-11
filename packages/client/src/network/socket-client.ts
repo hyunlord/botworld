@@ -1,5 +1,5 @@
 import { io, Socket } from 'socket.io-client'
-import type { WorldEvent, Agent, WorldClock, ChunkData, CharacterAppearanceMap, CharacterAppearance, CharacterClass, Race, WeatherState } from '@botworld/shared'
+import type { WorldEvent, Agent, WorldClock, ChunkData, CharacterAppearanceMap, CharacterAppearance, CharacterClass, Race, WeatherState, ActiveWorldEvent } from '@botworld/shared'
 
 export interface WorldState {
   clock: WorldClock
@@ -7,6 +7,7 @@ export interface WorldState {
   chunks: Record<string, ChunkData>
   recentEvents: WorldEvent[]
   weather?: WeatherState
+  worldEvents?: ActiveWorldEvent[]
 }
 
 export interface SpeedState {
@@ -31,6 +32,8 @@ type ChunksCallback = (chunks: Record<string, ChunkData>) => void
 type CharactersCallback = (map: CharacterAppearanceMap) => void
 type CharacterUpdateCallback = (update: CharacterUpdatePayload) => void
 type WeatherCallback = (weather: WeatherState) => void
+type WorldEventStartedCallback = (event: ActiveWorldEvent) => void
+type WorldEventEndedCallback = (data: { eventId: string; eventType: string; title: string }) => void
 
 class SocketClient {
   private socket: Socket | null = null
@@ -42,6 +45,8 @@ class SocketClient {
   private charactersCallbacks: CharactersCallback[] = []
   private characterUpdateCallbacks: CharacterUpdateCallback[] = []
   private weatherCallbacks: WeatherCallback[] = []
+  private worldEventStartedCallbacks: WorldEventStartedCallback[] = []
+  private worldEventEndedCallbacks: WorldEventEndedCallback[] = []
   private spectatorCountCallbacks: ((count: number) => void)[] = []
 
   connect(url?: string): void {
@@ -78,6 +83,14 @@ class SocketClient {
 
     this.socket.on('world:weather', (weather: WeatherState) => {
       for (const cb of this.weatherCallbacks) cb(weather)
+    })
+
+    this.socket.on('world:event_started', (event: ActiveWorldEvent) => {
+      for (const cb of this.worldEventStartedCallbacks) cb(event)
+    })
+
+    this.socket.on('world:event_ended', (data: { eventId: string; eventType: string; title: string }) => {
+      for (const cb of this.worldEventEndedCallbacks) cb(data)
     })
 
     this.socket.on('spectator:count', (count: number) => {
@@ -139,6 +152,16 @@ class SocketClient {
   onWeather(callback: WeatherCallback): () => void {
     this.weatherCallbacks.push(callback)
     return () => { this.weatherCallbacks = this.weatherCallbacks.filter(cb => cb !== callback) }
+  }
+
+  onWorldEventStarted(callback: WorldEventStartedCallback): () => void {
+    this.worldEventStartedCallbacks.push(callback)
+    return () => { this.worldEventStartedCallbacks = this.worldEventStartedCallbacks.filter(cb => cb !== callback) }
+  }
+
+  onWorldEventEnded(callback: WorldEventEndedCallback): () => void {
+    this.worldEventEndedCallbacks.push(callback)
+    return () => { this.worldEventEndedCallbacks = this.worldEventEndedCallbacks.filter(cb => cb !== callback) }
   }
 
   onSpectatorCount(callback: (count: number) => void): () => void {

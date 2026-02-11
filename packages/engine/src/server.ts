@@ -20,6 +20,7 @@ import { createPromptsRouter } from './api/prompts.js'
 import { authRouter } from './api/auth.js'
 import { createNotificationRouter } from './api/notifications.js'
 import { createQuestRouter } from './api/quests.js'
+import { createWorldEventsRouter } from './api/world-events.js'
 import { NotificationManager } from './systems/notifications.js'
 import { MetricsCollector } from './monitoring/metrics.js'
 import { createHealthRouter } from './monitoring/health-check.js'
@@ -140,6 +141,7 @@ async function main() {
   app.use('/api', createPromptsRouter())
   app.use('/api', createNotificationRouter(notifications))
   app.use('/api', createQuestRouter(world))
+  app.use('/api', createWorldEventsRouter(world))
 
   // Admin routes (X-Admin-Key auth)
   app.use('/api', createAdminRouter(world, metrics))

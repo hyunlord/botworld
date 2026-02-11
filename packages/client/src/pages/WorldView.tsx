@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, useMemo } from 'react'
 import Phaser from 'phaser'
-import type { Agent, WorldClock, WorldEvent, ChunkData, CharacterAppearanceMap, WeatherState } from '@botworld/shared'
+import type { Agent, WorldClock, WorldEvent, ChunkData, CharacterAppearanceMap, WeatherState, ActiveWorldEvent } from '@botworld/shared'
 import { CHUNK_SIZE } from '@botworld/shared'
 import { createGameConfig } from '../game/config.js'
 import { WorldScene } from '../game/scenes/world-scene.js'
@@ -10,6 +10,7 @@ import { ChatLog } from '../ui/ChatLog.js'
 import { AgentInspector } from '../ui/AgentInspector.js'
 import { Minimap } from '../ui/Minimap.js'
 import { RACE_ICONS, CLASS_ICONS, ACTION_ICONS } from '../ui/constants.js'
+import { EventBanner } from '../ui/EventBanner.js'
 
 export function WorldView() {
   const gameRef = useRef<Phaser.Game | null>(null)
@@ -27,6 +28,7 @@ export function WorldView() {
   const [characterMap, setCharacterMap] = useState<CharacterAppearanceMap>({})
   const [spectatorCount, setSpectatorCount] = useState(0)
   const [chunks, setChunks] = useState<Record<string, ChunkData>>({})
+  const [worldEvents, setWorldEvents] = useState<ActiveWorldEvent[]>([])
 
   const agentNames = new Map(agents.map(a => [a.id, a.name]))
 
@@ -56,6 +58,7 @@ export function WorldView() {
     scene.updateAgents(state.agents)
     scene.updateClock(state.clock)
     if (state.weather) scene.setWeather(state.weather)
+    if (state.worldEvents) setWorldEvents(state.worldEvents)
     setClock(state.clock)
     setAgents(state.agents)
     setChunks(prev => ({ ...prev, ...state.chunks }))
@@ -175,6 +178,22 @@ export function WorldView() {
       sceneRef.current?.setWeather(weather)
     })
 
+    // World events
+    const unsubEventStarted = socketClient.onWorldEventStarted((event) => {
+      setWorldEvents(prev => {
+        const next = [...prev.filter(e => e.id !== event.id), event]
+        sceneRef.current?.setWorldEvents(next)
+        return next
+      })
+    })
+    const unsubEventEnded = socketClient.onWorldEventEnded((data) => {
+      setWorldEvents(prev => {
+        const next = prev.filter(e => e.id !== data.eventId)
+        sceneRef.current?.setWorldEvents(next)
+        return next
+      })
+    })
+
     // Spectator count
     const unsubSpectators = socketClient.onSpectatorCount(setSpectatorCount)
 
@@ -187,6 +206,8 @@ export function WorldView() {
       unsubChars()
       unsubCharUpdate()
       unsubWeather()
+      unsubEventStarted()
+      unsubEventEnded()
       unsubSpectators()
       socketClient.disconnect()
     }
@@ -196,6 +217,10 @@ export function WorldView() {
     <div style={styles.app}>
       {/* Game canvas + minimap overlay */}
       <div id="game-container" style={styles.game}>
+        <EventBanner
+          activeEvents={worldEvents}
+          onNavigate={(x, y) => sceneRef.current?.centerOnTile(x, y)}
+        />
         <Minimap
           agents={agents}
           pois={pois}

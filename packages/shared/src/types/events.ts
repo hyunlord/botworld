@@ -2,6 +2,7 @@ import type { Agent, AgentAction, Memory } from './agent.js'
 import type { Position, WorldClock, WeatherState } from './world.js'
 import type { Item, MarketOrder } from './item.js'
 import type { CharacterAppearance, CharacterClass, Race } from './character.js'
+import type { WorldEventType, WorldEventCategory, WorldEventEffect } from './world-event.js'
 
 /** All event types in the world */
 export type WorldEvent =
@@ -21,6 +22,8 @@ export type WorldEvent =
   | ChatDeliveredEvent
   | StateUpdatedEvent
   | WeatherChangedEvent
+  | WorldEventStartedEvent
+  | WorldEventEndedEvent
 
 export interface AgentMovedEvent {
   type: 'agent:moved'
@@ -143,5 +146,28 @@ export interface StateUpdatedEvent {
 export interface WeatherChangedEvent {
   type: 'weather:changed'
   weather: WeatherState
+  timestamp: number
+}
+
+export interface WorldEventStartedEvent {
+  type: 'world_event:started'
+  eventId: string
+  eventType: WorldEventType
+  title: string
+  description: string
+  category: WorldEventCategory
+  position: Position
+  radius: number
+  effects: WorldEventEffect[]
+  duration: number
+  expiresAt: number
+  timestamp: number
+}
+
+export interface WorldEventEndedEvent {
+  type: 'world_event:ended'
+  eventId: string
+  eventType: WorldEventType
+  title: string
   timestamp: number
 }
