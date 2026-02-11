@@ -254,8 +254,22 @@ characterRouter.post('/characters/create', requireAuth(), async (req, res) => {
     'SELECT character_data FROM agents WHERE id = $1',
     [agent.id],
   )
-  if (existing.rows[0]?.character_data?.creation) {
-    res.status(409).json({ error: 'Character already exists. Use POST /characters/me/reroll to recreate.' })
+  const existingData = existing.rows[0]?.character_data
+  if (existingData?.creation) {
+    const creation = existingData.creation as CharacterCreationRequest
+    res.status(409).json({
+      error: 'CHARACTER_EXISTS',
+      message: 'Character already exists. Read heartbeat.md and start playing, or use POST /characters/me/reroll to recreate.',
+      character: {
+        id: agent.id,
+        name: creation.name,
+        race: creation.race,
+        characterClass: creation.characterClass,
+        spriteHash: existingData.spriteHash,
+        createdAt: existingData.createdAt,
+      },
+      nextStep: 'Read https://botworld.live/heartbeat.md and start the heartbeat loop.',
+    })
     return
   }
 
