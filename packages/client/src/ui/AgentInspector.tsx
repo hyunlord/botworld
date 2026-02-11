@@ -10,9 +10,13 @@ interface CharacterData {
   spriteHash: string
 }
 
-export function AgentInspector({ agent, characterData }: {
+export function AgentInspector({ agent, characterData, onFollow, onUnfollow, isFollowing, recentChat }: {
   agent: Agent | null
   characterData?: CharacterData
+  onFollow?: (agentId: string) => void
+  onUnfollow?: () => void
+  isFollowing?: boolean
+  recentChat?: string[]
 }) {
   if (!agent) {
     return (
@@ -36,7 +40,20 @@ export function AgentInspector({ agent, characterData }: {
 
   return (
     <div style={styles.container}>
-      <h3 style={styles.title}>{agent.name}</h3>
+      <div style={styles.headerRow}>
+        <h3 style={styles.title}>{agent.name}</h3>
+        {onFollow && (
+          <button
+            onClick={() => isFollowing ? onUnfollow?.() : onFollow(agent.id)}
+            style={{
+              ...styles.followBtn,
+              background: isFollowing ? '#e74c3c' : '#2a3a5e',
+            }}
+          >
+            {isFollowing ? 'Unfollow' : 'Follow'}
+          </button>
+        )}
+      </div>
       <p style={styles.bio}>{agent.bio}</p>
 
       {characterData && (
@@ -140,6 +157,15 @@ export function AgentInspector({ agent, characterData }: {
           ))}
         </div>
       </div>
+
+      {recentChat && recentChat.length > 0 && (
+        <div style={styles.section}>
+          <h4 style={styles.sectionTitle}>Recent Chat</h4>
+          {recentChat.slice(-5).map((msg, i) => (
+            <div key={i} style={styles.chatMsg}>"{msg}"</div>
+          ))}
+        </div>
+      )}
     </div>
   )
 }
@@ -167,10 +193,26 @@ const styles: Record<string, React.CSSProperties> = {
     overflowY: 'auto',
     maxHeight: 400,
   },
+  headerRow: {
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 4,
+  },
   title: {
-    margin: '0 0 4px 0',
+    margin: 0,
     fontSize: 16,
     color: '#e2b714',
+  },
+  followBtn: {
+    border: 'none',
+    borderRadius: 4,
+    padding: '3px 10px',
+    fontSize: 10,
+    color: '#ccddee',
+    cursor: 'pointer',
+    fontFamily: 'inherit',
+    flexShrink: 0,
   },
   bio: {
     fontSize: 11,
@@ -302,5 +344,15 @@ const styles: Record<string, React.CSSProperties> = {
     background: '#0d1117',
     borderRadius: 3,
     padding: '1px 5px',
+  },
+  chatMsg: {
+    fontSize: 10,
+    color: '#9ae6b4',
+    fontStyle: 'italic',
+    marginBottom: 2,
+    lineHeight: 1.4,
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap' as const,
   },
 }

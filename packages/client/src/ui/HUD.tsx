@@ -13,13 +13,23 @@ const TIME_ICONS: Record<string, string> = {
   night: '🌙',
 }
 
+const WEATHER_ICONS: Record<string, string> = {
+  clear: '\u2600\uFE0F',
+  cloudy: '\u2601\uFE0F',
+  rain: '\uD83C\uDF27\uFE0F',
+  storm: '\u26C8\uFE0F',
+  snow: '\uD83C\uDF28\uFE0F',
+  fog: '\uD83C\uDF2B\uFE0F',
+}
+
 const SPEED_OPTIONS = [0.5, 1, 2, 3, 5]
 
-export function HUD({ clock, agentCount, spectatorCount, speedState }: {
+export function HUD({ clock, agentCount, spectatorCount, speedState, weather }: {
   clock: WorldClock | null
   agentCount: number
   spectatorCount: number
   speedState: SpeedState
+  weather?: string | null
 }) {
   const [bgmVol, setBgmVol] = useState(soundManager.getBgmVolume())
   const [sfxVol, setSfxVol] = useState(soundManager.getSfxVolume())
@@ -67,6 +77,12 @@ export function HUD({ clock, agentCount, spectatorCount, speedState }: {
         <div style={styles.item}>
           {'\uD83D\uDC41'} {spectatorCount}
         </div>
+        {weather && (
+          <div style={styles.item}>
+            {WEATHER_ICONS[weather] ?? ''} {weather}
+          </div>
+        )}
+        <a href="/" style={styles.sendBtn}>+ Send Agent</a>
       </div>
       <div style={styles.controls}>
         <button
@@ -204,5 +220,15 @@ const styles: Record<string, React.CSSProperties> = {
     height: 4,
     accentColor: '#e2b714',
     cursor: 'pointer',
+  },
+  sendBtn: {
+    fontSize: 10,
+    color: '#e2b714',
+    textDecoration: 'none',
+    marginLeft: 'auto',
+    padding: '1px 6px',
+    border: '1px solid #e2b714',
+    borderRadius: 3,
+    flexShrink: 0,
   },
 }

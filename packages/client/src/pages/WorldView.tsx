@@ -30,6 +30,9 @@ export function WorldView() {
   const [spectatorCount, setSpectatorCount] = useState(0)
   const [chunks, setChunks] = useState<Record<string, ChunkData>>({})
   const [worldEvents, setWorldEvents] = useState<ActiveWorldEvent[]>([])
+  const [following, setFollowing] = useState(false)
+  const [weather, setWeather] = useState<string | null>(null)
+  const [agentChat, setAgentChat] = useState<Map<string, string[]>>(new Map())
 
   const agentNames = new Map(agents.map(a => [a.id, a.name]))
 
@@ -139,6 +142,15 @@ export function WorldView() {
       }
 
       sceneRef.current?.handleEvent(event)
+
+      if (event.type === 'agent:spoke') {
+        setAgentChat(prev => {
+          const next = new Map(prev)
+          const msgs = next.get(event.agentId) ?? []
+          next.set(event.agentId, [...msgs.slice(-9), event.message])
+          return next
+        })
+      }
     })
 
     // Speed state
@@ -177,6 +189,7 @@ export function WorldView() {
 
     // Weather changes (visuals + ambient audio)
     const unsubWeather = socketClient.onWeather((weather: WeatherState) => {
+      setWeather(weather.current)
       sceneRef.current?.setWeather(weather)
       // Ambient weather sounds
       if (weather.current === 'rain' || weather.current === 'storm') {
@@ -257,6 +270,24 @@ export function WorldView() {
     }
   }, [])
 
+  const handleFollow = (agentId: string) => {
+    sceneRef.current?.followAgent(agentId)
+    setFollowing(true)
+  }
+
+  const handleUnfollow = () => {
+    sceneRef.current?.unfollowAgent()
+    setFollowing(false)
+  }
+
+  const handleLogSelectAgent = (agentId: string) => {
+    const agent = agents.find(a => a.id === agentId)
+    if (agent) {
+      setSelectedAgent(agent)
+      sceneRef.current?.centerOnTile(agent.position.x, agent.position.y)
+    }
+  }
+
   return (
     <div style={styles.app}>
       {/* Game canvas + minimap overlay */}
@@ -292,7 +323,7 @@ export function WorldView() {
             </div>
           </div>
 
-          <HUD clock={clock} agentCount={agents.length} spectatorCount={spectatorCount} speedState={speedState} />
+          <HUD clock={clock} agentCount={agents.length} spectatorCount={spectatorCount} speedState={speedState} weather={weather} />
 
           <div style={styles.agentList}>
             <h3 style={styles.sectionTitle}>Agents</h3>
@@ -305,7 +336,7 @@ export function WorldView() {
                     ...styles.agentItem,
                     background: selectedAgent?.id === agent.id ? '#2a3a5e' : 'transparent',
                   }}
-                  onClick={() => setSelectedAgent(agent)}
+                  onClick={() => { setFollowing(false); setSelectedAgent(agent) }}
                 >
                   <div style={styles.agentItemRow}>
                     {charData && (
@@ -327,8 +358,17 @@ export function WorldView() {
           <AgentInspector
             agent={selectedAgent}
             characterData={selectedAgent ? characterMap[selectedAgent.id] : undefined}
+            onFollow={handleFollow}
+            onUnfollow={handleUnfollow}
+            isFollowing={following}
+            recentChat={selectedAgent ? agentChat.get(selectedAgent.id) : undefined}
           />
-          <ChatLog events={events} agentNames={agentNames} />
+          <ChatLog
+            events={events}
+            agentNames={agentNames}
+            onNavigate={(x, y) => sceneRef.current?.centerOnTile(x, y)}
+            onSelectAgent={handleLogSelectAgent}
+          />
         </div>
       )}
     </div>

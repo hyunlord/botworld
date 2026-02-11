@@ -167,6 +167,7 @@ export class WorldScene extends Phaser.Scene {
   private agents: Agent[] = []
   private clock: WorldClock | null = null
   private selectedAgentId: string | null = null
+  private followingAgentId: string | null = null
   private hasCentered = false
 
   constructor() {
@@ -174,7 +175,7 @@ export class WorldScene extends Phaser.Scene {
   }
 
   create(): void {
-    this.cameras.main.setZoom(0.5)
+    this.cameras.main.setZoom(0.25)
 
     // Day-night cycle (tint overlay, stars, building lights, agent torches)
     this.dayNightCycle = new DayNightCycle(this)
@@ -202,6 +203,7 @@ export class WorldScene extends Phaser.Scene {
     // Drag to pan
     this.input.on('pointermove', (pointer: Phaser.Input.Pointer) => {
       if (pointer.isDown) {
+        this.followingAgentId = null  // Stop following on manual pan
         const cam = this.cameras.main
         cam.scrollX -= (pointer.x - pointer.prevPosition.x) / cam.zoom
         cam.scrollY -= (pointer.y - pointer.prevPosition.y) / cam.zoom
@@ -210,6 +212,21 @@ export class WorldScene extends Phaser.Scene {
   }
 
   update(_time: number, _delta: number): void {
+    // Camera follow mode
+    if (this.followingAgentId) {
+      const agent = this.agents.find(a => a.id === this.followingAgentId)
+      if (agent) {
+        const pos = this.tileToScreen(agent.position.x, agent.position.y)
+        const cam = this.cameras.main
+        const targetX = pos.x - cam.width / (2 * cam.zoom)
+        const targetY = (pos.y - TILE_H * 0.4) - cam.height / (2 * cam.zoom)
+        cam.scrollX += (targetX - cam.scrollX) * 0.08
+        cam.scrollY += (targetY - cam.scrollY) * 0.08
+      } else {
+        this.followingAgentId = null
+      }
+    }
+
     this.updateVisibleChunks()
   }
 
@@ -220,13 +237,44 @@ export class WorldScene extends Phaser.Scene {
       this.chunkDataStore.set(key, chunk)
     }
 
-    // Center camera on first data load
+    // Center camera on first data load with cinematic intro
     if (!this.hasCentered && this.chunkDataStore.size > 0) {
       this.hasCentered = true
-      // Center on origin (0,0) in tile space
+      // Start centered on origin
       const centerScreen = this.tileToScreen(0, 0)
       this.cameras.main.centerOn(centerScreen.x, centerScreen.y)
+      // Delay intro until agents arrive
+      this.time.delayedCall(300, () => this.playCameraIntro())
     }
+  }
+
+  private playCameraIntro(): void {
+    const cam = this.cameras.main
+
+    // Find the most active area (cluster of agents)
+    let targetX = 0, targetY = 0
+    if (this.agents.length > 0) {
+      // Average position of all agents
+      let sumX = 0, sumY = 0
+      for (const a of this.agents) {
+        sumX += a.position.x
+        sumY += a.position.y
+      }
+      targetX = sumX / this.agents.length
+      targetY = sumY / this.agents.length
+    }
+
+    const targetScreen = this.tileToScreen(targetX, targetY)
+
+    // Pan to active area + zoom in over 1.5s
+    this.tweens.add({
+      targets: cam,
+      scrollX: targetScreen.x - cam.width / 2,
+      scrollY: targetScreen.y - cam.height / 2,
+      zoom: 0.5,
+      duration: 1500,
+      ease: 'Cubic.easeInOut',
+    })
   }
 
   /** Receive full character appearance map (on connect) */
@@ -395,11 +443,68 @@ export class WorldScene extends Phaser.Scene {
         soundManager.playGather(event.resourceType)
         break
       }
+      case 'item:crafted': {
+        // Find the agent's position
+        const crafter = this.agents.find(a => a.id === event.agentId)
+        if (crafter) {
+          const pos = this.tileToScreen(crafter.position.x, crafter.position.y)
+          this.showCraftEffect(pos.x, pos.y - TILE_H * 0.4, event.item.name)
+        }
+        break
+      }
+      case 'trade:completed': {
+        const buyer = this.agents.find(a => a.id === event.buyerId)
+        if (buyer) {
+          const pos = this.tileToScreen(buyer.position.x, buyer.position.y)
+          this.showTradeEffect(pos.x, pos.y - TILE_H * 0.4)
+        }
+        break
+      }
+      case 'agent:action': {
+        const actor = this.agents.find(a => a.id === event.agentId)
+        if (actor && event.action.type === 'rest') {
+          const pos = this.tileToScreen(actor.position.x, actor.position.y)
+          this.showRestEffect(pos.x, pos.y - TILE_H * 0.4)
+        }
+        break
+      }
+      case 'combat:started': {
+        this.showCombatEffect(event.position.x, event.position.y)
+        break
+      }
+      case 'combat:round': {
+        const fighter = this.agents.find(a => a.id === event.agentId)
+        if (fighter) {
+          this.showCombatEffect(fighter.position.x, fighter.position.y)
+          if (event.round.agentDamage > 0) {
+            this.showDamagePopup(fighter.position.x, fighter.position.y, event.round.agentDamage, true)
+          }
+          if (event.round.monsterDamage > 0) {
+            this.showDamagePopup(fighter.position.x, fighter.position.y, event.round.monsterDamage, false)
+          }
+        }
+        break
+      }
     }
   }
 
   getSelectedAgentId(): string | null {
     return this.selectedAgentId
+  }
+
+  followAgent(agentId: string): void {
+    this.followingAgentId = agentId
+    this.selectedAgentId = agentId
+    this.events.emit('agent:selected', agentId)
+    this.updateSelectionRing()
+  }
+
+  unfollowAgent(): void {
+    this.followingAgentId = null
+  }
+
+  isFollowing(): boolean {
+    return this.followingAgentId !== null
   }
 
   // ── World event markers ──
@@ -868,6 +973,171 @@ export class WorldScene extends Phaser.Scene {
         onComplete: () => sparkle.destroy(),
       })
     }
+  }
+
+  private showCraftEffect(x: number, y: number, itemName: string): void {
+    // Anvil spark burst
+    for (let i = 0; i < 5; i++) {
+      const angle = (Math.PI * 2 * i) / 5
+      const spark = this.add.rectangle(
+        x + Math.cos(angle) * 4, y + Math.sin(angle) * 4,
+        3, 3, 0xF1C40F, 1,
+      ).setDepth(3000)
+
+      this.tweens.add({
+        targets: spark,
+        x: spark.x + Math.cos(angle) * 20,
+        y: spark.y + Math.sin(angle) * 20 - 10,
+        alpha: 0,
+        scale: 0.2,
+        duration: 500 + i * 60,
+        onComplete: () => spark.destroy(),
+      })
+    }
+
+    // Item name popup
+    const label = this.add.text(x, y - 20, `+ ${itemName}`, {
+      fontSize: '11px',
+      fontFamily: 'Arial, sans-serif',
+      color: '#f1c40f',
+      stroke: '#000000',
+      strokeThickness: 3,
+      fontStyle: 'bold',
+    }).setOrigin(0.5).setDepth(3000)
+
+    this.tweens.add({
+      targets: label,
+      y: label.y - 25,
+      alpha: 0,
+      duration: 1200,
+      ease: 'Quad.easeOut',
+      onComplete: () => label.destroy(),
+    })
+  }
+
+  private showTradeEffect(x: number, y: number): void {
+    // Gold coin particles flying
+    for (let i = 0; i < 4; i++) {
+      const coin = this.add.circle(
+        x + Phaser.Math.Between(-8, 8),
+        y + Phaser.Math.Between(-5, 5),
+        3, 0xF1C40F, 1,
+      ).setDepth(3000)
+
+      this.tweens.add({
+        targets: coin,
+        y: coin.y - 20 - i * 5,
+        x: coin.x + Phaser.Math.Between(-15, 15),
+        alpha: 0,
+        duration: 600 + i * 100,
+        ease: 'Quad.easeOut',
+        onComplete: () => coin.destroy(),
+      })
+    }
+
+    // Handshake text
+    const text = this.add.text(x, y - 25, 'Trade!', {
+      fontSize: '10px',
+      fontFamily: 'Arial, sans-serif',
+      color: '#2ecc71',
+      stroke: '#000000',
+      strokeThickness: 3,
+    }).setOrigin(0.5).setDepth(3000)
+
+    this.tweens.add({
+      targets: text,
+      y: text.y - 20,
+      alpha: 0,
+      duration: 1000,
+      onComplete: () => text.destroy(),
+    })
+  }
+
+  private showRestEffect(x: number, y: number): void {
+    // Zzz particles rising
+    const letters = ['z', 'Z', 'z']
+    for (let i = 0; i < 3; i++) {
+      this.time.delayedCall(i * 400, () => {
+        const zzz = this.add.text(
+          x + 8 + i * 4, y - 10,
+          letters[i],
+          {
+            fontSize: `${10 + i * 2}px`,
+            fontFamily: 'Arial, sans-serif',
+            color: '#9b9ecf',
+            stroke: '#000000',
+            strokeThickness: 2,
+          },
+        ).setOrigin(0.5).setDepth(3000).setAlpha(0)
+
+        this.tweens.add({
+          targets: zzz,
+          y: zzz.y - 25 - i * 8,
+          x: zzz.x + 5,
+          alpha: { from: 0, to: 0.8 },
+          duration: 500,
+          yoyo: true,
+          hold: 300,
+          onComplete: () => zzz.destroy(),
+        })
+      })
+    }
+  }
+
+  showLevelUpEffect(agentId: string, newLevel: number): void {
+    const container = this.agentSprites.get(agentId)
+    if (!container) return
+
+    const x = container.x
+    const y = container.y
+
+    // Golden glow ring
+    const glow = this.add.circle(x, y, 5, 0xF1C40F, 0.8).setDepth(3000)
+    this.tweens.add({
+      targets: glow,
+      scale: 4,
+      alpha: 0,
+      duration: 800,
+      ease: 'Quad.easeOut',
+      onComplete: () => glow.destroy(),
+    })
+
+    // Sparkle particles
+    for (let i = 0; i < 8; i++) {
+      const angle = (Math.PI * 2 * i) / 8
+      const sparkle = this.add.rectangle(
+        x, y, 2, 6, 0xFFD700, 1,
+      ).setDepth(3000).setRotation(angle)
+
+      this.tweens.add({
+        targets: sparkle,
+        x: x + Math.cos(angle) * 25,
+        y: y + Math.sin(angle) * 25,
+        alpha: 0,
+        duration: 600,
+        ease: 'Quad.easeOut',
+        onComplete: () => sparkle.destroy(),
+      })
+    }
+
+    // Level text popup
+    const text = this.add.text(x, y - 30, `Level ${newLevel}!`, {
+      fontSize: '14px',
+      fontFamily: 'Arial, sans-serif',
+      color: '#FFD700',
+      stroke: '#000000',
+      strokeThickness: 4,
+      fontStyle: 'bold',
+    }).setOrigin(0.5).setDepth(3001)
+
+    this.tweens.add({
+      targets: text,
+      y: text.y - 35,
+      alpha: 0,
+      duration: 2000,
+      ease: 'Quad.easeOut',
+      onComplete: () => text.destroy(),
+    })
   }
 
   /** Navigate camera to a tile position (used by minimap) */
