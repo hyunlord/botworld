@@ -204,18 +204,18 @@ export class BootScene extends Phaser.Scene {
    */
   private generateTileVariants(): void {
     const baseColors: Record<string, number> = {
-      grass:        0x4a8c3f,
-      water:        0x1a6eaa,
-      deep_water:   0x0a2a5e,
-      forest:       0x2d6b33,
-      dense_forest: 0x1a4a2a,
-      sand:         0xd4b96a,
-      mountain:     0x7a7a7a,
-      road:         0x8b7d5e,
+      grass:        0x5a9a4a,
+      water:        0x2878b0,
+      deep_water:   0x0e3868,
+      forest:       0x3a7840,
+      dense_forest: 0x1e5428,
+      sand:         0xd8c478,
+      mountain:     0x8a8888,
+      road:         0x9a8b6e,
       building:     0x8a6a4a,
-      farmland:     0x6b8f3f,
-      snow:         0xe8e8f0,
-      swamp:        0x4a5a3a,
+      farmland:     0x6e9440,
+      snow:         0xeaecf4,
+      swamp:        0x4e5e3e,
     }
 
     // Tint offsets for v0/v1/v2
@@ -255,10 +255,22 @@ export class BootScene extends Phaser.Scene {
       if (this.textures.exists(key)) continue
 
       const g = this.add.graphics()
-      // Ground diamond
+      // Ground diamond (base)
       g.fillStyle(colors.base, 1)
       g.beginPath()
       g.moveTo(64, 8); g.lineTo(120, 32); g.lineTo(64, 56); g.lineTo(8, 32)
+      g.closePath(); g.fillPath()
+
+      // Base highlight (left face)
+      g.fillStyle(0xffffff, 0.08)
+      g.beginPath()
+      g.moveTo(64, 8); g.lineTo(8, 32); g.lineTo(64, 32)
+      g.closePath(); g.fillPath()
+
+      // Base shadow (right-bottom)
+      g.fillStyle(0x000000, 0.10)
+      g.beginPath()
+      g.moveTo(120, 32); g.lineTo(64, 56); g.lineTo(64, 32)
       g.closePath(); g.fillPath()
 
       // Roof / structure
@@ -267,11 +279,24 @@ export class BootScene extends Phaser.Scene {
       g.moveTo(64, 0); g.lineTo(104, 18); g.lineTo(64, 36); g.lineTo(24, 18)
       g.closePath(); g.fillPath()
 
-      // Outline
-      g.lineStyle(1, 0x222222, 0.4)
+      // Roof highlight (left)
+      g.fillStyle(0xffffff, 0.12)
       g.beginPath()
-      g.moveTo(64, 0); g.lineTo(104, 18); g.lineTo(64, 36); g.lineTo(24, 18)
-      g.closePath(); g.strokePath()
+      g.moveTo(64, 0); g.lineTo(24, 18); g.lineTo(64, 18)
+      g.closePath(); g.fillPath()
+
+      // Roof shadow (right)
+      g.fillStyle(0x000000, 0.10)
+      g.beginPath()
+      g.moveTo(64, 0); g.lineTo(104, 18); g.lineTo(64, 18)
+      g.closePath(); g.fillPath()
+
+      // Soft outline
+      g.lineStyle(1, 0xffffff, 0.10)
+      g.beginPath(); g.moveTo(64, 0); g.lineTo(24, 18); g.strokePath()
+      g.lineStyle(1, 0x000000, 0.20)
+      g.beginPath(); g.moveTo(104, 18); g.lineTo(64, 36); g.strokePath()
+      g.beginPath(); g.moveTo(24, 18); g.lineTo(64, 36); g.strokePath()
 
       g.generateTexture(key, 128, 64)
       g.destroy()
@@ -487,7 +512,7 @@ export class BootScene extends Phaser.Scene {
 
   /* ───── helpers ───── */
 
-  /** Draw an isometric diamond tile with optional variant detail */
+  /** Draw an isometric diamond tile with face shading, edge highlights, and organic texture */
   private generateDiamondTexture(key: string, color: number, w: number, h: number, variant: number): void {
     const g = this.add.graphics()
     const hw = w / 2, hh = h / 2
@@ -498,19 +523,68 @@ export class BootScene extends Phaser.Scene {
     g.moveTo(hw, 0); g.lineTo(w, hh); g.lineTo(hw, h); g.lineTo(0, hh)
     g.closePath(); g.fillPath()
 
-    // Variant detail: subtle inner markings
+    // Isometric face shading: top-left face lighter (sun), bottom-right darker (shadow)
+    g.fillStyle(0xffffff, 0.10)
+    g.beginPath()
+    g.moveTo(hw, 0); g.lineTo(0, hh); g.lineTo(hw, hh)
+    g.closePath(); g.fillPath()
+
+    g.fillStyle(0xffffff, 0.05)
+    g.beginPath()
+    g.moveTo(hw, 0); g.lineTo(w, hh); g.lineTo(hw, hh)
+    g.closePath(); g.fillPath()
+
+    g.fillStyle(0x000000, 0.08)
+    g.beginPath()
+    g.moveTo(0, hh); g.lineTo(hw, h); g.lineTo(hw, hh)
+    g.closePath(); g.fillPath()
+
+    g.fillStyle(0x000000, 0.12)
+    g.beginPath()
+    g.moveTo(w, hh); g.lineTo(hw, h); g.lineTo(hw, hh)
+    g.closePath(); g.fillPath()
+
+    // Top edge highlight
+    g.lineStyle(1, 0xffffff, 0.18)
+    g.beginPath(); g.moveTo(hw, 1); g.lineTo(1, hh); g.strokePath()
+    g.lineStyle(1, 0xffffff, 0.12)
+    g.beginPath(); g.moveTo(hw, 1); g.lineTo(w - 1, hh); g.strokePath()
+
+    // Bottom edge shadow
+    g.lineStyle(1, 0x000000, 0.18)
+    g.beginPath(); g.moveTo(1, hh); g.lineTo(hw, h - 1); g.strokePath()
+    g.beginPath(); g.moveTo(w - 1, hh); g.lineTo(hw, h - 1); g.strokePath()
+
+    // Organic texture: scattered semi-transparent marks for natural feel
+    const seed = (color + variant * 7919) & 0xFFFF
+    for (let i = 0; i < 10 + variant * 4; i++) {
+      const s = ((seed + i * 131 + i * i * 17) & 0xFFFF) / 0xFFFF
+      const t = ((seed + i * 97 + i * i * 31) & 0xFFFF) / 0xFFFF
+      // Place dots inside diamond using barycentric-like coords
+      const dx = hw + (s - 0.5) * (w * 0.7)
+      const dy = hh + (t - 0.5) * (h * 0.7)
+      // Check inside diamond
+      if (Math.abs(dx - hw) / hw + Math.abs(dy - hh) / hh < 0.82) {
+        const isLight = i % 3 === 0
+        g.fillStyle(isLight ? 0xffffff : 0x000000, 0.03 + (i % 4) * 0.01)
+        g.fillCircle(dx, dy, 1.5 + (i % 3))
+      }
+    }
+
+    // Variant-specific character
     if (variant === 1) {
-      // Slight highlight stripe
-      g.fillStyle(0xffffff, 0.08)
-      g.beginPath()
-      g.moveTo(hw, hh - 6); g.lineTo(hw + 20, hh); g.lineTo(hw, hh + 6); g.lineTo(hw - 20, hh)
-      g.closePath(); g.fillPath()
+      // Subtle lighter patches (worn/dry spots)
+      g.fillStyle(0xffffff, 0.05)
+      g.fillCircle(hw - 18, hh - 4, 8)
+      g.fillCircle(hw + 14, hh + 6, 6)
+      g.fillCircle(hw + 4, hh - 10, 5)
     } else if (variant === 2) {
-      // Small dots
-      g.fillStyle(0x000000, 0.06)
-      g.fillCircle(hw - 15, hh - 2, 3)
-      g.fillCircle(hw + 10, hh + 5, 2)
-      g.fillCircle(hw + 5, hh - 8, 2)
+      // Darker scattered patches (shadow / dirt / moss)
+      g.fillStyle(0x000000, 0.05)
+      g.fillCircle(hw - 14, hh + 2, 7)
+      g.fillCircle(hw + 16, hh - 3, 5)
+      g.fillCircle(hw + 2, hh + 10, 6)
+      g.fillCircle(hw - 8, hh - 8, 4)
     }
 
     g.generateTexture(key, w, h)

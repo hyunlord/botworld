@@ -268,29 +268,30 @@ const styles: Record<string, React.CSSProperties> = {
     display: 'flex',
     flexDirection: 'column',
     alignItems: 'center',
+    overflowY: 'auto',
   },
 
   // Hero
   hero: {
     width: '100%',
-    maxWidth: 640,
+    maxWidth: 720,
     textAlign: 'center',
-    padding: '80px 20px 40px',
+    padding: '40px 24px 24px',
     position: 'relative',
   },
   heroGlow: {
     position: 'absolute',
-    top: 40,
+    top: 20,
     left: '50%',
     transform: 'translateX(-50%)',
-    width: 300,
-    height: 300,
+    width: 260,
+    height: 260,
     borderRadius: '50%',
     background: 'radial-gradient(circle, rgba(226,183,20,0.12) 0%, transparent 70%)',
     pointerEvents: 'none',
   },
   title: {
-    fontSize: 64,
+    fontSize: 52,
     fontWeight: 'bold',
     margin: 0,
     background: 'linear-gradient(135deg, #e2b714 0%, #f5d547 50%, #e2b714 100%)',
@@ -299,14 +300,14 @@ const styles: Record<string, React.CSSProperties> = {
     position: 'relative',
   },
   subtitle: {
-    fontSize: 22,
+    fontSize: 19,
     color: '#d1d5db',
-    margin: '12px 0 8px',
+    margin: '8px 0 6px',
   },
   tagline: {
-    fontSize: 15,
+    fontSize: 14,
     color: '#9ca3af',
-    margin: '0 0 32px',
+    margin: '0 0 20px',
     lineHeight: 1.5,
   },
   heroButtons: {
@@ -342,11 +343,11 @@ const styles: Record<string, React.CSSProperties> = {
 
   // Agent panel
   agentPanel: {
-    marginTop: 24,
+    marginTop: 16,
     background: '#111827',
     border: '1px solid #1f2937',
     borderRadius: 12,
-    padding: '20px 24px',
+    padding: '16px 20px',
     textAlign: 'left',
   },
   panelTitle: {
@@ -392,11 +393,11 @@ const styles: Record<string, React.CSSProperties> = {
   // Stats bar
   statsBar: {
     width: '100%',
-    maxWidth: 640,
+    maxWidth: 720,
     display: 'flex',
     justifyContent: 'center',
     gap: 24,
-    padding: '20px',
+    padding: '14px 24px',
     flexWrap: 'wrap',
     borderTop: '1px solid rgba(255,255,255,0.06)',
     borderBottom: '1px solid rgba(255,255,255,0.06)',
@@ -422,20 +423,20 @@ const styles: Record<string, React.CSSProperties> = {
   // Feed
   feedSection: {
     width: '100%',
-    maxWidth: 640,
-    padding: '32px 20px',
+    maxWidth: 720,
+    padding: '20px 24px',
   },
   feedTitle: {
-    fontSize: 18,
+    fontSize: 16,
     fontWeight: 'bold',
-    margin: '0 0 16px',
+    margin: '0 0 10px',
     color: '#d1d5db',
   },
   feedList: {
     display: 'flex',
     flexDirection: 'column',
-    gap: 6,
-    maxHeight: 320,
+    gap: 4,
+    maxHeight: 240,
     overflowY: 'auto',
   },
   feedEmpty: {
@@ -469,16 +470,16 @@ const styles: Record<string, React.CSSProperties> = {
   // FAQ
   faqSection: {
     width: '100%',
-    maxWidth: 640,
-    padding: '24px 20px',
+    maxWidth: 720,
+    padding: '16px 24px',
     display: 'flex',
     flexDirection: 'column',
-    gap: 12,
+    gap: 8,
   },
   faqItem: {
     background: '#111827',
     borderRadius: 8,
-    padding: '12px 16px',
+    padding: '10px 14px',
     border: '1px solid #1f2937',
   },
   faqQ: {
@@ -495,7 +496,7 @@ const styles: Record<string, React.CSSProperties> = {
 
   // Footer
   footer: {
-    padding: '32px 20px',
+    padding: '20px 24px',
     textAlign: 'center',
     borderTop: '1px solid #1f2937',
     width: '100%',
