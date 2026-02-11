@@ -4,6 +4,7 @@ import { CHUNK_SIZE } from '@botworld/shared'
 import { composeCharacterSprite } from '../character/sprite-composer.js'
 import { SpriteCache } from '../character/sprite-cache.js'
 import { WeatherEffects } from '../effects/weather-effects.js'
+import { DayNightCycle } from '../effects/day-night-cycle.js'
 
 // Grid spacing for isometric projection
 const TILE_W = 128
@@ -152,7 +153,7 @@ export class WorldScene extends Phaser.Scene {
   private agentSprites = new Map<string, Phaser.GameObjects.Container>()
   private actionIndicators = new Map<string, Phaser.GameObjects.Image>()
   private speechBubbles = new Map<string, { container: Phaser.GameObjects.Container; timer: number }>()
-  private ambientOverlay: Phaser.GameObjects.Rectangle | null = null
+  private dayNightCycle: DayNightCycle | null = null
   private selectionRing: Phaser.GameObjects.Image | null = null
   private weatherEffects: WeatherEffects | null = null
   private eventMarkers = new Map<string, Phaser.GameObjects.Container>()
@@ -173,15 +174,8 @@ export class WorldScene extends Phaser.Scene {
   create(): void {
     this.cameras.main.setZoom(0.5)
 
-    // Ambient overlay for time-of-day tinting
-    const { width, height } = this.cameras.main
-    this.ambientOverlay = this.add.rectangle(
-      width / 2, height / 2,
-      width * 3, height * 3,
-      0x000000, 0,
-    )
-      .setScrollFactor(0)
-      .setDepth(1500)
+    // Day-night cycle (tint overlay, stars, building lights, agent torches)
+    this.dayNightCycle = new DayNightCycle(this)
 
     // Weather visual effects layer
     this.weatherEffects = new WeatherEffects(this)
@@ -290,16 +284,16 @@ export class WorldScene extends Phaser.Scene {
 
   updateClock(clock: WorldClock): void {
     this.clock = clock
-    const bgColors: Record<string, string> = {
-      dawn: '#2a1a3e',
-      morning: '#1a1a2e',
-      noon: '#1a1a2e',
-      afternoon: '#1a1a2e',
-      evening: '#1a1a3e',
-      night: '#0d0d17',
+    this.dayNightCycle?.update(clock.timeOfDay, clock.dayProgress)
+
+    // Update agent torch positions
+    if (this.dayNightCycle && this.agents.length > 0) {
+      const torchPositions = this.agents.map(a => {
+        const pos = this.tileToScreen(a.position.x, a.position.y)
+        return { screenX: pos.x, screenY: pos.y - TILE_H * 0.4 }
+      })
+      this.dayNightCycle.drawAgentTorches(torchPositions)
     }
-    this.cameras.main.setBackgroundColor(bgColors[clock.timeOfDay] ?? '#1a1a2e')
-    this.updateAmbientOverlay(clock.timeOfDay)
   }
 
   setWeather(weather: WeatherState): void {
@@ -479,6 +473,32 @@ export class WorldScene extends Phaser.Scene {
     }
 
     this.lastVisibleKeys = visibleKeys
+
+    // Update building lights for day-night cycle
+    this.updateBuildingLights()
+  }
+
+  private updateBuildingLights(): void {
+    if (!this.dayNightCycle) return
+
+    const buildings: { key: string; screenX: number; screenY: number }[] = []
+    for (const [chunkKey, chunk] of this.chunkDataStore) {
+      if (!this.renderedChunks.has(chunkKey)) continue
+      for (const row of chunk.tiles) {
+        for (const tile of row) {
+          if (tile.poiType) {
+            const pos = this.tileToScreen(tile.position.x, tile.position.y)
+            buildings.push({
+              key: `${tile.position.x},${tile.position.y}`,
+              screenX: pos.x,
+              screenY: pos.y - TILE_H * 0.6,
+            })
+          }
+        }
+      }
+    }
+
+    this.dayNightCycle.setBuildingLights(buildings)
   }
 
   private getVisibleChunkKeys(): Set<string> {
@@ -799,21 +819,6 @@ export class WorldScene extends Phaser.Scene {
       repeat: -1,
       ease: 'Sine.easeInOut',
     })
-  }
-
-  private updateAmbientOverlay(timeOfDay: string): void {
-    if (!this.ambientOverlay) return
-
-    const tints: Record<string, { color: number; alpha: number }> = {
-      dawn: { color: 0xFFE0C0, alpha: 0.1 },
-      morning: { color: 0xFFCC88, alpha: 0.03 },
-      noon: { color: 0xFFFFFF, alpha: 0 },
-      afternoon: { color: 0xFF9944, alpha: 0.04 },
-      evening: { color: 0xFFC080, alpha: 0.12 },
-      night: { color: 0x6080B0, alpha: 0.18 },
-    }
-    const tint = tints[timeOfDay] ?? { color: 0x000000, alpha: 0 }
-    this.ambientOverlay.setFillStyle(tint.color, tint.alpha)
   }
 
   private showGatherEffect(x: number, y: number, resourceType?: string): void {
