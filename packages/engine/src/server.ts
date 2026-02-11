@@ -11,6 +11,7 @@ import { WorldEngine } from './core/world-engine.js'
 import { registryRouter, claimRouter } from './auth/index.js'
 import { characterRouter } from './api/character.js'
 import { createActionRouter } from './api/actions.js'
+import { createWorldRouter } from './api/world.js'
 import { ChatRelay } from './systems/chat-relay.js'
 import { WsManager } from './network/ws-manager.js'
 import { pool } from './db/connection.js'
@@ -83,6 +84,9 @@ async function main() {
   const app = express()
   app.use(express.json())
 
+  // Serve static files (skill.md, heartbeat.md)
+  app.use(express.static(resolve(import.meta.dirname, '../public')))
+
   // Expose world engine to route handlers
   app.set('world', world)
 
@@ -109,6 +113,7 @@ async function main() {
   app.use('/api', claimRouter)
   app.use('/api', characterRouter)
   app.use('/api', createActionRouter(world, chatRelay))
+  app.use('/api', createWorldRouter(world))
 
   // REST endpoints
   app.get('/api/state', (_req, res) => {
@@ -130,6 +135,10 @@ async function main() {
       ...agent,
       recentMemories: memory?.getRecent(20) ?? [],
     })
+  })
+
+  app.get('/api/world/clock', (_req, res) => {
+    res.json(world.clock)
   })
 
   // Start
