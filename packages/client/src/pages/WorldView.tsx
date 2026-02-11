@@ -33,6 +33,11 @@ export function WorldView() {
   const [following, setFollowing] = useState(false)
   const [weather, setWeather] = useState<string | null>(null)
   const [agentChat, setAgentChat] = useState<Map<string, string[]>>(new Map())
+  const [sectionsOpen, setSectionsOpen] = useState<Record<string, boolean>>({
+    agents: true,
+    inspector: true,
+    log: true,
+  })
 
   const agentNames = new Map(agents.map(a => [a.id, a.name]))
 
@@ -325,50 +330,83 @@ export function WorldView() {
 
           <HUD clock={clock} agentCount={agents.length} spectatorCount={spectatorCount} speedState={speedState} weather={weather} />
 
-          <div style={styles.agentList}>
-            <h3 style={styles.sectionTitle}>Agents</h3>
-            {agents.map(agent => {
-              const charData = characterMap[agent.id]
-              return (
-                <div
-                  key={agent.id}
-                  style={{
-                    ...styles.agentItem,
-                    background: selectedAgent?.id === agent.id ? '#2a3a5e' : 'transparent',
-                  }}
-                  onClick={() => { setFollowing(false); setSelectedAgent(agent) }}
-                >
-                  <div style={styles.agentItemRow}>
-                    {charData && (
-                      <span style={styles.agentBadges}>
-                        {RACE_ICONS[charData.race] ?? ''}{charData.characterClass ? CLASS_ICONS[charData.characterClass] ?? '' : ''}
+          {/* ── Agents section (collapsible) ── */}
+          <div style={styles.section}>
+            <button
+              style={styles.sectionHeader}
+              onClick={() => setSectionsOpen(prev => ({ ...prev, agents: !prev.agents }))}
+            >
+              <span>{sectionsOpen.agents ? '\u25BC' : '\u25B6'} Agents ({agents.length})</span>
+            </button>
+            {sectionsOpen.agents && (
+              <div style={styles.agentList}>
+                {agents.map(agent => {
+                  const charData = characterMap[agent.id]
+                  return (
+                    <div
+                      key={agent.id}
+                      style={{
+                        ...styles.agentItem,
+                        background: selectedAgent?.id === agent.id ? '#2a3a5e' : 'transparent',
+                      }}
+                      onClick={() => { setFollowing(false); setSelectedAgent(agent) }}
+                    >
+                      <div style={styles.agentItemRow}>
+                        {charData && (
+                          <span style={styles.agentBadges}>
+                            {RACE_ICONS[charData.race] ?? ''}{charData.characterClass ? CLASS_ICONS[charData.characterClass] ?? '' : ''}
+                          </span>
+                        )}
+                        <span style={styles.agentName}>{agent.name}</span>
+                        <span style={styles.agentLevel}>Lv{agent.level}</span>
+                      </div>
+                      <span style={styles.agentAction}>
+                        {ACTION_ICONS[agent.currentAction?.type ?? 'idle'] ?? ''} {agent.currentAction?.type ?? 'idle'}
                       </span>
-                    )}
-                    <span style={styles.agentName}>{agent.name}</span>
-                    <span style={styles.agentLevel}>Lv{agent.level}</span>
-                  </div>
-                  <span style={styles.agentAction}>
-                    {ACTION_ICONS[agent.currentAction?.type ?? 'idle'] ?? ''} {agent.currentAction?.type ?? 'idle'}
-                  </span>
-                </div>
-              )
-            })}
+                    </div>
+                  )
+                })}
+              </div>
+            )}
           </div>
 
-          <AgentInspector
-            agent={selectedAgent}
-            characterData={selectedAgent ? characterMap[selectedAgent.id] : undefined}
-            onFollow={handleFollow}
-            onUnfollow={handleUnfollow}
-            isFollowing={following}
-            recentChat={selectedAgent ? agentChat.get(selectedAgent.id) : undefined}
-          />
-          <ChatLog
-            events={events}
-            agentNames={agentNames}
-            onNavigate={(x, y) => sceneRef.current?.centerOnTile(x, y)}
-            onSelectAgent={handleLogSelectAgent}
-          />
+          {/* ── Inspector section (collapsible) ── */}
+          <div style={styles.section}>
+            <button
+              style={styles.sectionHeader}
+              onClick={() => setSectionsOpen(prev => ({ ...prev, inspector: !prev.inspector }))}
+            >
+              <span>{sectionsOpen.inspector ? '\u25BC' : '\u25B6'} Inspector{selectedAgent ? ` - ${selectedAgent.name}` : ''}</span>
+            </button>
+            {sectionsOpen.inspector && (
+              <AgentInspector
+                agent={selectedAgent}
+                characterData={selectedAgent ? characterMap[selectedAgent.id] : undefined}
+                onFollow={handleFollow}
+                onUnfollow={handleUnfollow}
+                isFollowing={following}
+                recentChat={selectedAgent ? agentChat.get(selectedAgent.id) : undefined}
+              />
+            )}
+          </div>
+
+          {/* ── Activity Log section (collapsible, fills remaining space) ── */}
+          <div style={{ ...styles.section, flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
+            <button
+              style={styles.sectionHeader}
+              onClick={() => setSectionsOpen(prev => ({ ...prev, log: !prev.log }))}
+            >
+              <span>{sectionsOpen.log ? '\u25BC' : '\u25B6'} Activity Log</span>
+            </button>
+            {sectionsOpen.log && (
+              <ChatLog
+                events={events}
+                agentNames={agentNames}
+                onNavigate={(x, y) => sceneRef.current?.centerOnTile(x, y)}
+                onSelectAgent={handleLogSelectAgent}
+              />
+            )}
+          </div>
         </div>
       )}
     </div>
@@ -434,6 +472,26 @@ const styles: Record<string, React.CSSProperties> = {
   status: {
     fontSize: 11,
   },
+  section: {
+    display: 'flex',
+    flexDirection: 'column',
+  },
+  sectionHeader: {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    background: '#16213e',
+    border: 'none',
+    borderRadius: '6px 6px 0 0',
+    padding: '6px 10px',
+    fontSize: 12,
+    fontWeight: 'bold',
+    color: '#8899aa',
+    cursor: 'pointer',
+    fontFamily: 'inherit',
+    textAlign: 'left' as const,
+    width: '100%',
+  },
   sectionTitle: {
     margin: '0 0 6px 0',
     fontSize: 13,
@@ -441,8 +499,10 @@ const styles: Record<string, React.CSSProperties> = {
   },
   agentList: {
     background: '#16213e',
-    borderRadius: 8,
-    padding: 10,
+    borderRadius: '0 0 6px 6px',
+    padding: '4px 8px 8px',
+    maxHeight: 200,
+    overflowY: 'auto',
   },
   agentItem: {
     padding: '4px 8px',

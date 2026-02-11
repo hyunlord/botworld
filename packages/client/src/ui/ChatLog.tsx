@@ -150,8 +150,8 @@ export function ChatLog({ events, agentNames, onNavigate, onSelectAgent }: {
 const styles: Record<string, React.CSSProperties> = {
   container: {
     background: '#16213e',
-    borderRadius: 8,
-    padding: 12,
+    borderRadius: '0 0 6px 6px',
+    padding: '8px 10px',
     flex: 1,
     minHeight: 0,
     display: 'flex',

@@ -523,36 +523,22 @@ export class BootScene extends Phaser.Scene {
     g.moveTo(hw, 0); g.lineTo(w, hh); g.lineTo(hw, h); g.lineTo(0, hh)
     g.closePath(); g.fillPath()
 
-    // Isometric face shading: top-left face lighter (sun), bottom-right darker (shadow)
-    g.fillStyle(0xffffff, 0.10)
+    // Subtle face shading for gentle depth (flat terrain, not raised cubes)
+    g.fillStyle(0xffffff, 0.04)
     g.beginPath()
     g.moveTo(hw, 0); g.lineTo(0, hh); g.lineTo(hw, hh)
     g.closePath(); g.fillPath()
 
-    g.fillStyle(0xffffff, 0.05)
-    g.beginPath()
-    g.moveTo(hw, 0); g.lineTo(w, hh); g.lineTo(hw, hh)
-    g.closePath(); g.fillPath()
-
-    g.fillStyle(0x000000, 0.08)
-    g.beginPath()
-    g.moveTo(0, hh); g.lineTo(hw, h); g.lineTo(hw, hh)
-    g.closePath(); g.fillPath()
-
-    g.fillStyle(0x000000, 0.12)
+    g.fillStyle(0x000000, 0.04)
     g.beginPath()
     g.moveTo(w, hh); g.lineTo(hw, h); g.lineTo(hw, hh)
     g.closePath(); g.fillPath()
 
-    // Top edge highlight
-    g.lineStyle(1, 0xffffff, 0.18)
+    // Very soft edge lines
+    g.lineStyle(1, 0xffffff, 0.06)
     g.beginPath(); g.moveTo(hw, 1); g.lineTo(1, hh); g.strokePath()
-    g.lineStyle(1, 0xffffff, 0.12)
-    g.beginPath(); g.moveTo(hw, 1); g.lineTo(w - 1, hh); g.strokePath()
 
-    // Bottom edge shadow
-    g.lineStyle(1, 0x000000, 0.18)
-    g.beginPath(); g.moveTo(1, hh); g.lineTo(hw, h - 1); g.strokePath()
+    g.lineStyle(1, 0x000000, 0.06)
     g.beginPath(); g.moveTo(w - 1, hh); g.lineTo(hw, h - 1); g.strokePath()
 
     // Organic texture: scattered semi-transparent marks for natural feel

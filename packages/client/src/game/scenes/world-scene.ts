@@ -11,8 +11,8 @@ import { soundManager } from '../audio/sound-manager.js'
 const TILE_W = 128
 const TILE_H = 64
 
-// Scale factors
-const TILE_SCALE = 1.0
+// Scale factors — slight overscale eliminates diamond-corner gaps
+const TILE_SCALE = 1.06
 const AGENT_SCALE = 0.6
 const RESOURCE_SCALE = 0.35
 const BUILDING_SCALE = 1.2

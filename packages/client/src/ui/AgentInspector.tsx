@@ -188,10 +188,10 @@ function StatBar({ label, value, max, color }: {
 const styles: Record<string, React.CSSProperties> = {
   container: {
     background: '#16213e',
-    borderRadius: 8,
-    padding: 12,
+    borderRadius: '0 0 6px 6px',
+    padding: '8px 10px',
     overflowY: 'auto',
-    maxHeight: 400,
+    maxHeight: 280,
   },
   headerRow: {
     display: 'flex',
