@@ -1,12 +1,12 @@
 import { type Router as IRouter, Router, type Request, type Response, type NextFunction } from 'express'
 import type { ActionType, Position } from '@botworld/shared'
-import { ENERGY_COST, REST_ENERGY_REGEN, generateId } from '@botworld/shared'
+import { ENERGY_COST, REST_ENERGY_REGEN } from '@botworld/shared'
 import { requireAuth } from '../auth/middleware.js'
 import { contentFilter } from '../security/content-filter.js'
-import { processInteraction } from '../systems/social/relationship.js'
 import { findPath } from '../world/pathfinding.js'
 import { pool } from '../db/connection.js'
 import type { WorldEngine } from '../core/world-engine.js'
+import type { ChatRelay } from '../systems/chat-relay.js'
 
 // ──────────────────────────────────────────────
 // Cooldown system
@@ -157,7 +157,7 @@ function requireNoCooldown(actionType: ActionType) {
 // Router factory
 // ──────────────────────────────────────────────
 
-export function createActionRouter(world: WorldEngine): IRouter {
+export function createActionRouter(world: WorldEngine, chatRelay: ChatRelay): IRouter {
   const router = Router()
   const tradeManager = new TradeManager()
 
@@ -304,67 +304,73 @@ export function createActionRouter(world: WorldEngine): IRouter {
         return
       }
 
-      // Content filter
-      const filterResult = await contentFilter.filterMessage(req.agent!.id, message)
-      if (!filterResult.allowed) {
+      const result = await chatRelay.handleSpeak(req.agent!.id, message, targetAgentId)
+
+      if (!result.allowed) {
         res.status(403).json({
           error: 'MESSAGE_BLOCKED_SECURITY',
-          warning: filterResult.reason,
+          warning: result.reason,
           violation_count: contentFilter.getViolationCount(req.agent!.id),
         })
         return
       }
 
-      const agent = world.agentManager.getAgent(req.agent!.id)!
-
-      // Proximity check for targeted speech
-      if (targetAgentId) {
-        const target = world.agentManager.getAgent(targetAgentId)
-        if (!target) {
-          res.status(404).json({ error: 'Target agent not found' })
-          return
-        }
-        const dist = Math.abs(agent.position.x - target.position.x) + Math.abs(agent.position.y - target.position.y)
-        if (dist > 8) {
-          res.status(400).json({ error: 'Target agent is too far away (max distance: 8)' })
-          return
-        }
-      }
-
       // Deduct energy
+      const agent = world.agentManager.getAgent(req.agent!.id)!
       agent.stats.energy = Math.max(0, agent.stats.energy - (ENERGY_COST.speak ?? 1))
-
-      // Emit speech event
-      world.eventBus.emit({
-        type: 'agent:spoke',
-        agentId: agent.id,
-        targetAgentId,
-        message,
-        timestamp: world.clock.tick,
-      })
-
-      // Add to memory
-      const memory = world.agentManager.getMemoryStream(agent.id)
-      if (memory) {
-        memory.add(
-          `Said: "${message}"${targetAgentId ? ` to another agent` : ''}`,
-          3, world.clock.tick, targetAgentId ? [targetAgentId] : [],
-        )
-      }
-
-      // Social interaction for targeted speech
-      if (targetAgentId) {
-        const target = world.agentManager.getAgent(targetAgentId)
-        if (target) {
-          processInteraction(agent, target, { type: 'conversation', positive: true, intensity: 0.3 }, world.clock.tick)
-        }
-      }
 
       setCooldown(req.agent!.id, 'speak', world.clock.tick)
       res.json({
         action: 'speak',
         message,
-        filtered: false,
+        recipientCount: result.recipientCount,
+      })
+    },
+  )
+
+  // ── POST /actions/whisper ──
+  router.post('/actions/whisper',
+    requireAuth(), requireCharacter(), requireEnergy('speak'), requireNoCooldown('speak'),
+    async (req: Request, res: Response) => {
+      const { targetAgentId, message } = req.body
+
+      if (!targetAgentId || typeof targetAgentId !== 'string') {
+        res.status(400).json({ error: 'targetAgentId is required' })
+        return
+      }
+
+      if (!message || typeof message !== 'string' || message.length < 1 || message.length > 200) {
+        res.status(400).json({ error: 'message must be 1-200 characters' })
+        return
+      }
+
+      const result = await chatRelay.handleWhisper(req.agent!.id, targetAgentId, message)
+
+      if (!result.allowed) {
+        if (result.reason?.includes('not found')) {
+          res.status(404).json({ error: result.reason })
+        } else if (result.reason?.includes('too far')) {
+          res.status(400).json({ error: result.reason })
+        } else {
+          res.status(403).json({
+            error: 'MESSAGE_BLOCKED_SECURITY',
+            warning: result.reason,
+            violation_count: contentFilter.getViolationCount(req.agent!.id),
+          })
+        }
+        return
+      }
+
+      // Deduct energy
+      const agent = world.agentManager.getAgent(req.agent!.id)!
+      agent.stats.energy = Math.max(0, agent.stats.energy - (ENERGY_COST.speak ?? 1))
+
+      setCooldown(req.agent!.id, 'speak', world.clock.tick)
+      res.json({
+        action: 'whisper',
+        targetAgentId,
+        message,
+        recipientCount: result.recipientCount,
       })
     },
   )
@@ -626,6 +632,20 @@ export function createActionRouter(world: WorldEngine): IRouter {
         estimatedTicks: duration,
         energyCost: ENERGY_COST.explore,
       })
+    },
+  )
+
+  // ── GET /chat ──
+  router.get('/chat',
+    requireAuth(),
+    async (req: Request, res: Response) => {
+      const { limit, messageType, since } = req.query
+      const messages = await chatRelay.getRecentChat({
+        limit: Math.min(Number(limit) || 50, 100),
+        messageType: messageType as string | undefined,
+        since: since as string | undefined,
+      })
+      res.json({ messages })
     },
   )
 

@@ -18,6 +18,7 @@ export type WorldEvent =
   | ChunksGeneratedEvent
   | CharacterUpdatedEvent
   | TradeProposedEvent
+  | ChatDeliveredEvent
 
 export interface AgentMovedEvent {
   type: 'agent:moved'
@@ -115,5 +116,16 @@ export interface TradeProposedEvent {
   toAgentId: string
   offerItemId: string
   requestItemId: string
+  timestamp: number
+}
+
+export interface ChatDeliveredEvent {
+  type: 'chat:delivered'
+  fromAgentId: string
+  fromAgentName: string
+  message: string
+  messageType: 'say' | 'whisper' | 'shout'
+  recipientIds: string[]
+  position: { x: number; y: number }
   timestamp: number
 }

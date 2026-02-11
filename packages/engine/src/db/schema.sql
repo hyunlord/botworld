@@ -109,3 +109,9 @@ ALTER TABLE agents ADD COLUMN IF NOT EXISTS violation_count INTEGER NOT NULL DEF
 ALTER TABLE api_key_audit_log DROP CONSTRAINT IF EXISTS api_key_audit_log_event_type_check;
 ALTER TABLE api_key_audit_log ADD CONSTRAINT api_key_audit_log_event_type_check
     CHECK (event_type IN ('created', 'rotated', 'revoked', 'used', 'failed_auth', 'key_leak_attempt'));
+
+-- ============================================================
+-- Column: chat_messages.blocked (ContentFilter blocked flag)
+-- ============================================================
+ALTER TABLE chat_messages ADD COLUMN IF NOT EXISTS blocked BOOLEAN NOT NULL DEFAULT false;
+CREATE INDEX IF NOT EXISTS idx_chat_blocked ON chat_messages (blocked) WHERE blocked = true;

@@ -11,6 +11,7 @@ import { WorldEngine } from './core/world-engine.js'
 import { registryRouter, claimRouter } from './auth/index.js'
 import { characterRouter } from './api/character.js'
 import { createActionRouter } from './api/actions.js'
+import { ChatRelay } from './systems/chat-relay.js'
 import { pool } from './db/connection.js'
 import type { CharacterAppearanceMap } from '@botworld/shared'
 
@@ -85,12 +86,6 @@ async function main() {
   // Expose world engine to route handlers
   app.set('world', world)
 
-  // Auth routes (public — no Bearer required)
-  app.use('/api', registryRouter)
-  app.use('/api', claimRouter)
-  app.use('/api', characterRouter)
-  app.use('/api', createActionRouter(world))
-
   const httpServer = createServer(app)
 
   // Socket.io
@@ -100,6 +95,17 @@ async function main() {
 
   // Expose io to route handlers (for character appearance broadcasts)
   app.set('io', io)
+
+  // ChatRelay (must be created after io)
+  const chatRelay = new ChatRelay(
+    world.agentManager, world.eventBus, io, pool, () => world.clock,
+  )
+
+  // Auth routes (public — no Bearer required)
+  app.use('/api', registryRouter)
+  app.use('/api', claimRouter)
+  app.use('/api', characterRouter)
+  app.use('/api', createActionRouter(world, chatRelay))
 
   // REST endpoints
   app.get('/api/state', (_req, res) => {
@@ -141,6 +147,35 @@ async function main() {
 
   io.on('connection', (socket) => {
     console.log(`[Socket] Client connected: ${socket.id}`)
+
+    // Default: join spectator room (browser clients)
+    socket.join('spectator')
+
+    // Bot WebSocket authentication (API key → agent room)
+    socket.on('auth:agent', async (data: { apiKey: string }) => {
+      try {
+        const result = await pool.query<{ id: string; status: string }>(
+          'SELECT id, status FROM agents WHERE api_key_hash = crypt($1, api_key_hash)',
+          [data.apiKey],
+        )
+        if (result.rows.length === 0) {
+          socket.emit('auth:error', { error: 'Invalid API key' })
+          return
+        }
+        const agent = result.rows[0]
+        if (agent.status !== 'active') {
+          socket.emit('auth:error', { error: `Agent status: ${agent.status}` })
+          return
+        }
+        socket.leave('spectator')
+        socket.join(`agent:${agent.id}`)
+        socket.data.agentId = agent.id
+        socket.emit('auth:success', { agentId: agent.id })
+        console.log(`[Socket] Bot authenticated: ${agent.id} (socket ${socket.id})`)
+      } catch {
+        socket.emit('auth:error', { error: 'Authentication failed' })
+      }
+    })
 
     // Send initial state immediately
     socket.emit('world:state', world.getState())
