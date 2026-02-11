@@ -1,7 +1,19 @@
-import type { Agent } from '@botworld/shared'
+import type { Agent, CharacterAppearance, CharacterClass, Race } from '@botworld/shared'
 import { getCompoundEmotions } from '@botworld/shared'
+import { RACE_ICONS, CLASS_ICONS } from './constants.js'
 
-export function AgentInspector({ agent }: { agent: Agent | null }) {
+interface CharacterData {
+  appearance: CharacterAppearance
+  race: Race
+  characterClass?: CharacterClass
+  persona_reasoning?: string
+  spriteHash: string
+}
+
+export function AgentInspector({ agent, characterData }: {
+  agent: Agent | null
+  characterData?: CharacterData
+}) {
   if (!agent) {
     return (
       <div style={styles.container}>
@@ -26,6 +38,32 @@ export function AgentInspector({ agent }: { agent: Agent | null }) {
     <div style={styles.container}>
       <h3 style={styles.title}>{agent.name}</h3>
       <p style={styles.bio}>{agent.bio}</p>
+
+      {characterData && (
+        <div style={styles.section}>
+          <h4 style={styles.sectionTitle}>Character</h4>
+          <div style={styles.badgeRow}>
+            <span style={styles.raceBadge}>
+              {RACE_ICONS[characterData.race] ?? ''} {characterData.race}
+            </span>
+            {characterData.characterClass && (
+              <span style={styles.classBadge}>
+                {CLASS_ICONS[characterData.characterClass] ?? ''} {characterData.characterClass}
+              </span>
+            )}
+          </div>
+          <div style={styles.detail}>Armor: {characterData.appearance.armor}</div>
+          {characterData.appearance.headgear && characterData.appearance.headgear !== 'none' && (
+            <div style={styles.detail}>Headgear: {characterData.appearance.headgear}</div>
+          )}
+          {characterData.appearance.cape && characterData.appearance.cape !== 'none' && (
+            <div style={styles.detail}>Cape: {characterData.appearance.cape}</div>
+          )}
+          {characterData.persona_reasoning && (
+            <p style={styles.reasoning}>"{characterData.persona_reasoning}"</p>
+          )}
+        </div>
+      )}
 
       <div style={styles.section}>
         <h4 style={styles.sectionTitle}>Stats</h4>
@@ -158,6 +196,35 @@ const styles: Record<string, React.CSSProperties> = {
     fontSize: 11,
     color: '#ccddee',
     marginBottom: 2,
+  },
+  badgeRow: {
+    display: 'flex',
+    gap: 6,
+    marginBottom: 6,
+    flexWrap: 'wrap' as const,
+  },
+  raceBadge: {
+    fontSize: 11,
+    color: '#e2b714',
+    background: '#0d1117',
+    borderRadius: 4,
+    padding: '2px 8px',
+    textTransform: 'capitalize' as const,
+  },
+  classBadge: {
+    fontSize: 11,
+    color: '#9ae6b4',
+    background: '#0d1117',
+    borderRadius: 4,
+    padding: '2px 8px',
+    textTransform: 'capitalize' as const,
+  },
+  reasoning: {
+    fontSize: 10,
+    color: '#667788',
+    margin: '4px 0 0 0',
+    fontStyle: 'italic',
+    lineHeight: 1.4,
   },
   emotion: {
     fontSize: 11,

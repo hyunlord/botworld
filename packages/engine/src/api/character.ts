@@ -278,13 +278,15 @@ characterRouter.post('/characters/create', requireAuth(), async (req, res) => {
     [JSON.stringify(characterData), agent.id],
   )
 
-  // Broadcast appearance to all connected clients
+  // Broadcast appearance to spectator clients
   const io = req.app.get('io')
   if (io) {
-    io.emit('world:character_updated', {
+    io.of('/spectator').emit('world:character_updated', {
       agentId: agent.id,
       appearance: body.appearance,
       race: body.race,
+      characterClass: body.characterClass,
+      persona_reasoning: body.persona_reasoning,
       spriteHash,
     })
   }
@@ -406,13 +408,15 @@ characterRouter.patch('/characters/me/appearance', requireAuth(), async (req, re
     [JSON.stringify(updatedData), agent.id],
   )
 
-  // Broadcast appearance update
+  // Broadcast appearance update to spectator clients
   const io = req.app.get('io')
   if (io) {
-    io.emit('world:character_updated', {
+    io.of('/spectator').emit('world:character_updated', {
       agentId: agent.id,
       appearance: appearance as CharacterAppearance,
       race: creation.race,
+      characterClass: creation.characterClass,
+      persona_reasoning: creation.persona_reasoning,
       spriteHash,
     })
   }
@@ -487,13 +491,15 @@ characterRouter.post('/characters/me/reroll', requireAuth(), async (req, res) =>
     [JSON.stringify(characterData), agent.id],
   )
 
-  // Broadcast appearance update
+  // Broadcast appearance update to spectator clients
   const io = req.app.get('io')
   if (io) {
-    io.emit('world:character_updated', {
+    io.of('/spectator').emit('world:character_updated', {
       agentId: agent.id,
       appearance: body.appearance,
       race: body.race,
+      characterClass: body.characterClass,
+      persona_reasoning: body.persona_reasoning,
       spriteHash,
     })
   }

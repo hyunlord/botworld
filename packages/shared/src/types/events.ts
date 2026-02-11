@@ -1,7 +1,7 @@
 import type { Agent, AgentAction, Memory } from './agent.js'
 import type { Position, WorldClock } from './world.js'
 import type { Item, MarketOrder } from './item.js'
-import type { CharacterAppearance, Race } from './character.js'
+import type { CharacterAppearance, CharacterClass, Race } from './character.js'
 
 /** All event types in the world */
 export type WorldEvent =
@@ -106,6 +106,8 @@ export interface CharacterUpdatedEvent {
   agentId: string
   appearance: CharacterAppearance
   race: Race
+  characterClass?: CharacterClass
+  persona_reasoning?: string
   spriteHash: string
   timestamp: number
 }

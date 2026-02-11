@@ -1,12 +1,15 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, useMemo } from 'react'
 import Phaser from 'phaser'
 import type { Agent, WorldClock, WorldEvent, ChunkData, CharacterAppearanceMap } from '@botworld/shared'
+import { CHUNK_SIZE } from '@botworld/shared'
 import { createGameConfig } from './game/config.js'
 import { WorldScene } from './game/scenes/world-scene.js'
 import { socketClient, type WorldState, type SpeedState } from './network/socket-client.js'
 import { HUD } from './ui/HUD.js'
 import { ChatLog } from './ui/ChatLog.js'
 import { AgentInspector } from './ui/AgentInspector.js'
+import { Minimap } from './ui/Minimap.js'
+import { RACE_ICONS, CLASS_ICONS, ACTION_ICONS } from './ui/constants.js'
 
 export function App() {
   const gameRef = useRef<Phaser.Game | null>(null)
@@ -21,8 +24,26 @@ export function App() {
   const [connected, setConnected] = useState(false)
   const [speedState, setSpeedState] = useState<SpeedState>({ paused: false, speed: 1 })
   const [panelOpen, setPanelOpen] = useState(true)
+  const [characterMap, setCharacterMap] = useState<CharacterAppearanceMap>({})
+  const [spectatorCount, setSpectatorCount] = useState(0)
+  const [chunks, setChunks] = useState<Record<string, ChunkData>>({})
 
   const agentNames = new Map(agents.map(a => [a.id, a.name]))
+
+  const pois = useMemo(() => {
+    const result: { name: string; type: string; x: number; y: number }[] = []
+    for (const chunk of Object.values(chunks)) {
+      if (chunk.poi) {
+        result.push({
+          name: chunk.poi.name,
+          type: chunk.poi.type,
+          x: chunk.cx * CHUNK_SIZE + chunk.poi.localX,
+          y: chunk.cy * CHUNK_SIZE + chunk.poi.localY,
+        })
+      }
+    }
+    return result
+  }, [chunks])
 
   /** Apply full world state to the Phaser scene */
   function applyState(state: WorldState) {
@@ -36,6 +57,7 @@ export function App() {
     scene.updateClock(state.clock)
     setClock(state.clock)
     setAgents(state.agents)
+    setChunks(prev => ({ ...prev, ...state.chunks }))
   }
 
   // Initialize Phaser game
@@ -119,21 +141,36 @@ export function App() {
     })
 
     // New chunks generated on the fly
-    const unsubChunks = socketClient.onChunks((chunks: Record<string, ChunkData>) => {
-      sceneRef.current?.addChunks(chunks)
+    const unsubChunks = socketClient.onChunks((newChunks: Record<string, ChunkData>) => {
+      sceneRef.current?.addChunks(newChunks)
+      setChunks(prev => ({ ...prev, ...newChunks }))
     })
 
     // Character appearances (sent once on connect)
     const unsubChars = socketClient.onCharacters((map: CharacterAppearanceMap) => {
+      setCharacterMap(map)
       sceneRef.current?.setCharacterAppearances(map)
     })
 
     // Individual character appearance updates
     const unsubCharUpdate = socketClient.onCharacterUpdate((update) => {
+      setCharacterMap(prev => ({
+        ...prev,
+        [update.agentId]: {
+          appearance: update.appearance,
+          race: update.race,
+          characterClass: update.characterClass,
+          persona_reasoning: update.persona_reasoning,
+          spriteHash: update.spriteHash,
+        },
+      }))
       sceneRef.current?.updateCharacterAppearance(
         update.agentId, update.appearance, update.race, update.spriteHash,
       )
     })
+
+    // Spectator count
+    const unsubSpectators = socketClient.onSpectatorCount(setSpectatorCount)
 
     return () => {
       unsubState()
@@ -143,14 +180,22 @@ export function App() {
       unsubChunks()
       unsubChars()
       unsubCharUpdate()
+      unsubSpectators()
       socketClient.disconnect()
     }
   }, [])
 
   return (
     <div style={styles.app}>
-      {/* Game canvas */}
-      <div id="game-container" style={styles.game} />
+      {/* Game canvas + minimap overlay */}
+      <div id="game-container" style={styles.game}>
+        <Minimap
+          agents={agents}
+          pois={pois}
+          selectedAgentId={selectedAgent?.id ?? null}
+          onNavigate={(x, y) => sceneRef.current?.centerOnTile(x, y)}
+        />
+      </div>
 
       {/* Panel toggle button */}
       <button
@@ -171,26 +216,42 @@ export function App() {
             </div>
           </div>
 
-          <HUD clock={clock} agentCount={agents.length} speedState={speedState} />
+          <HUD clock={clock} agentCount={agents.length} spectatorCount={spectatorCount} speedState={speedState} />
 
           <div style={styles.agentList}>
             <h3 style={styles.sectionTitle}>Agents</h3>
-            {agents.map(agent => (
-              <div
-                key={agent.id}
-                style={{
-                  ...styles.agentItem,
-                  background: selectedAgent?.id === agent.id ? '#2a3a5e' : 'transparent',
-                }}
-                onClick={() => setSelectedAgent(agent)}
-              >
-                <span style={styles.agentName}>{agent.name}</span>
-                <span style={styles.agentAction}>{agent.currentAction?.type ?? 'idle'}</span>
-              </div>
-            ))}
+            {agents.map(agent => {
+              const charData = characterMap[agent.id]
+              return (
+                <div
+                  key={agent.id}
+                  style={{
+                    ...styles.agentItem,
+                    background: selectedAgent?.id === agent.id ? '#2a3a5e' : 'transparent',
+                  }}
+                  onClick={() => setSelectedAgent(agent)}
+                >
+                  <div style={styles.agentItemRow}>
+                    {charData && (
+                      <span style={styles.agentBadges}>
+                        {RACE_ICONS[charData.race] ?? ''}{charData.characterClass ? CLASS_ICONS[charData.characterClass] ?? '' : ''}
+                      </span>
+                    )}
+                    <span style={styles.agentName}>{agent.name}</span>
+                    <span style={styles.agentLevel}>Lv{agent.level}</span>
+                  </div>
+                  <span style={styles.agentAction}>
+                    {ACTION_ICONS[agent.currentAction?.type ?? 'idle'] ?? ''} {agent.currentAction?.type ?? 'idle'}
+                  </span>
+                </div>
+              )
+            })}
           </div>
 
-          <AgentInspector agent={selectedAgent} />
+          <AgentInspector
+            agent={selectedAgent}
+            characterData={selectedAgent ? characterMap[selectedAgent.id] : undefined}
+          />
           <ChatLog events={events} agentNames={agentNames} />
         </div>
       )}
@@ -210,6 +271,7 @@ const styles: Record<string, React.CSSProperties> = {
     flex: 1,
     minWidth: 0,
     overflow: 'hidden',
+    position: 'relative',
   },
   toggleBtn: {
     position: 'absolute',
@@ -267,20 +329,40 @@ const styles: Record<string, React.CSSProperties> = {
     padding: 10,
   },
   agentItem: {
-    display: 'flex',
-    justifyContent: 'space-between',
     padding: '4px 8px',
     borderRadius: 4,
     cursor: 'pointer',
     marginBottom: 2,
     fontSize: 12,
   },
+  agentItemRow: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 4,
+  },
+  agentBadges: {
+    fontSize: 11,
+    lineHeight: 1,
+  },
   agentName: {
     color: '#ccddee',
     fontWeight: 'bold',
+    flex: 1,
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap' as const,
+  },
+  agentLevel: {
+    fontSize: 9,
+    color: '#e2b714',
+    background: '#0d1117',
+    borderRadius: 3,
+    padding: '0 4px',
+    flexShrink: 0,
   },
   agentAction: {
     color: '#667788',
     fontSize: 11,
+    marginLeft: 19,
   },
 }

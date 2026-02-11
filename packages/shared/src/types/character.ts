@@ -136,5 +136,7 @@ export interface Character {
 export type CharacterAppearanceMap = Record<string, {
   appearance: CharacterAppearance
   race: Race
+  characterClass?: CharacterClass
+  persona_reasoning?: string
   spriteHash: string
 }>

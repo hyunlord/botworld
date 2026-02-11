@@ -604,6 +604,12 @@ export class WorldScene extends Phaser.Scene {
     }
   }
 
+  /** Navigate camera to a tile position (used by minimap) */
+  centerOnTile(tileX: number, tileY: number): void {
+    const pos = this.tileToScreen(tileX, tileY)
+    this.cameras.main.centerOn(pos.x, pos.y)
+  }
+
   /** Convert tile coordinates to isometric screen coordinates */
   private tileToScreen(x: number, y: number): { x: number; y: number } {
     return {

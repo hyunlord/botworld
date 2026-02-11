@@ -41,6 +41,7 @@ export class WsManager {
   private setupSpectatorNamespace(): void {
     this.spectatorNs.on('connection', (socket) => {
       console.log(`[WS:spectator] Connected: ${socket.id}`)
+      this.broadcastSpectatorCount()
 
       // Initial state
       socket.emit('world:state', this.world.getState())
@@ -89,6 +90,7 @@ export class WsManager {
 
       socket.on('disconnect', () => {
         console.log(`[WS:spectator] Disconnected: ${socket.id}`)
+        this.broadcastSpectatorCount()
       })
     })
   }
@@ -292,6 +294,12 @@ export class WsManager {
     }
   }
 
+  // ── Spectator count broadcast ───────────────
+
+  private broadcastSpectatorCount(): void {
+    this.spectatorNs.emit('spectator:count', this.spectatorNs.sockets.size)
+  }
+
   // ── Character appearances helper ─────────────
 
   private sendCharacterAppearances(socket: Socket): void {
@@ -308,6 +316,8 @@ export class WsManager {
             characterMap[row.id] = {
               appearance: creation.appearance as any,
               race: creation.race as any,
+              characterClass: creation.characterClass as any,
+              persona_reasoning: creation.persona_reasoning as any,
               spriteHash: (cd?.spriteHash as string) ?? '',
             }
           }

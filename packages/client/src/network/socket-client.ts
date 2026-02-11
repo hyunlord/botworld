@@ -1,5 +1,5 @@
 import { io, Socket } from 'socket.io-client'
-import type { WorldEvent, Agent, WorldClock, ChunkData, CharacterAppearanceMap, CharacterAppearance, Race } from '@botworld/shared'
+import type { WorldEvent, Agent, WorldClock, ChunkData, CharacterAppearanceMap, CharacterAppearance, CharacterClass, Race } from '@botworld/shared'
 
 export interface WorldState {
   clock: WorldClock
@@ -17,6 +17,8 @@ export interface CharacterUpdatePayload {
   agentId: string
   appearance: CharacterAppearance
   race: Race
+  characterClass?: CharacterClass
+  persona_reasoning?: string
   spriteHash: string
 }
 
@@ -37,6 +39,7 @@ class SocketClient {
   private chunksCallbacks: ChunksCallback[] = []
   private charactersCallbacks: CharactersCallback[] = []
   private characterUpdateCallbacks: CharacterUpdateCallback[] = []
+  private spectatorCountCallbacks: ((count: number) => void)[] = []
 
   connect(url?: string): void {
     const base = url ?? window.location.origin
@@ -68,6 +71,10 @@ class SocketClient {
 
     this.socket.on('world:character_updated', (update: CharacterUpdatePayload) => {
       for (const cb of this.characterUpdateCallbacks) cb(update)
+    })
+
+    this.socket.on('spectator:count', (count: number) => {
+      for (const cb of this.spectatorCountCallbacks) cb(count)
     })
 
     this.socket.on('connect', () => {
@@ -120,6 +127,11 @@ class SocketClient {
   onCharacterUpdate(callback: CharacterUpdateCallback): () => void {
     this.characterUpdateCallbacks.push(callback)
     return () => { this.characterUpdateCallbacks = this.characterUpdateCallbacks.filter(cb => cb !== callback) }
+  }
+
+  onSpectatorCount(callback: (count: number) => void): () => void {
+    this.spectatorCountCallbacks.push(callback)
+    return () => { this.spectatorCountCallbacks = this.spectatorCountCallbacks.filter(cb => cb !== callback) }
   }
 
   pause(): void { this.socket?.emit('world:pause') }

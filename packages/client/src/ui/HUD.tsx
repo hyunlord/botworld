@@ -13,9 +13,10 @@ const TIME_ICONS: Record<string, string> = {
 
 const SPEED_OPTIONS = [0.5, 1, 2, 3, 5]
 
-export function HUD({ clock, agentCount, speedState }: {
+export function HUD({ clock, agentCount, spectatorCount, speedState }: {
   clock: WorldClock | null
   agentCount: number
+  spectatorCount: number
   speedState: SpeedState
 }) {
   if (!clock) return null
@@ -39,6 +40,9 @@ export function HUD({ clock, agentCount, speedState }: {
         </div>
         <div style={styles.item}>
           Agents: {agentCount}
+        </div>
+        <div style={styles.item}>
+          {'\uD83D\uDC41'} {spectatorCount}
         </div>
       </div>
       <div style={styles.controls}>
