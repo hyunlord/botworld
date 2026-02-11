@@ -1,6 +1,7 @@
 import { type Router as IRouter, Router } from 'express'
 import { createHash, randomBytes } from 'node:crypto'
 import { pool } from '../db/connection.js'
+import { validateOwnerSession } from '../auth/session.js'
 
 // Simple token store (in production, use Redis or JWT)
 const tokenStore = new Map<string, { agentId: string; expiresAt: number }>()
@@ -344,6 +345,155 @@ authRouter.get('/dashboard/data', async (req, res) => {
       messageCount: Number(row.message_count),
       lastInteraction: row.last_interaction,
     })),
+  })
+})
+
+// ──────────────────────────────────────────────
+// GET /api/dashboard/owner/:agentId — Get dashboard data for owner's agent
+// ──────────────────────────────────────────────
+
+authRouter.get('/dashboard/owner/:agentId', async (req, res) => {
+  const authHeader = req.headers.authorization
+  if (!authHeader?.startsWith('Bearer ')) {
+    res.status(401).json({
+      error: 'UNAUTHORIZED',
+      message: 'Missing or invalid Authorization header.',
+    })
+    return
+  }
+
+  const token = authHeader.slice(7)
+  const validation = validateOwnerSession(token)
+
+  if (!validation.valid) {
+    res.status(401).json({
+      error: 'SESSION_EXPIRED',
+      message: 'Session has expired. Please login again.',
+    })
+    return
+  }
+
+  const { agentId } = req.params
+
+  // Verify agent belongs to this owner
+  const agentResult = await pool.query<{
+    id: string
+    name: string
+    status: string
+    owner_id: string | null
+    character_data: Record<string, unknown> | null
+    created_at: Date
+    last_active_at: Date | null
+  }>(
+    'SELECT id, name, status, owner_id, character_data, created_at, last_active_at FROM agents WHERE id = $1',
+    [agentId]
+  )
+
+  if (agentResult.rows.length === 0) {
+    res.status(404).json({ error: 'AGENT_NOT_FOUND' })
+    return
+  }
+
+  const agent = agentResult.rows[0]
+
+  if (agent.owner_id !== validation.ownerId) {
+    res.status(403).json({ error: 'NOT_YOUR_AGENT', message: 'This agent does not belong to you.' })
+    return
+  }
+
+  const characterData = agent.character_data as Record<string, unknown> | null
+
+  // Get activity log from world events (skip if table doesn't exist)
+  let activityLog: Array<{ type: string; data: Record<string, unknown>; timestamp: Date }> = []
+  try {
+    const activityResult = await pool.query<{
+      event_type: string
+      event_data: Record<string, unknown>
+      created_at: Date
+    }>(
+      `SELECT event_type, event_data, created_at
+       FROM world_events
+       WHERE event_data->>'agentId' = $1 OR event_data->>'fromAgentId' = $1
+       ORDER BY created_at DESC
+       LIMIT 50`,
+      [agentId]
+    )
+    activityLog = activityResult.rows.map(row => ({
+      type: row.event_type,
+      data: row.event_data,
+      timestamp: row.created_at,
+    }))
+  } catch {
+    // Table may not exist yet
+  }
+
+  // Get relationships (skip if table doesn't exist)
+  let relationships: Array<{ agentId: string; agentName: string; messageCount: number; lastInteraction: Date }> = []
+  try {
+    const relationshipsResult = await pool.query<{
+      other_agent_id: string
+      other_agent_name: string
+      message_count: number
+      last_interaction: Date
+    }>(
+      `SELECT
+         CASE WHEN from_agent_id = $1 THEN to_agent_id ELSE from_agent_id END as other_agent_id,
+         a.name as other_agent_name,
+         COUNT(*) as message_count,
+         MAX(ch.created_at) as last_interaction
+       FROM chat_history ch
+       JOIN agents a ON a.id = CASE WHEN ch.from_agent_id = $1 THEN ch.to_agent_id ELSE ch.from_agent_id END
+       WHERE ch.from_agent_id = $1 OR ch.to_agent_id = $1
+       GROUP BY other_agent_id, a.name
+       ORDER BY last_interaction DESC
+       LIMIT 20`,
+      [agentId]
+    )
+    relationships = relationshipsResult.rows.map(row => ({
+      agentId: row.other_agent_id,
+      agentName: row.other_agent_name,
+      messageCount: Number(row.message_count),
+      lastInteraction: row.last_interaction,
+    }))
+  } catch {
+    // Table may not exist yet
+  }
+
+  // Get live agent state from world engine
+  let liveState = null
+  try {
+    const world = req.app.get('world')
+    if (world) {
+      const agentState = world.agentManager.getAgent(agentId)
+      const memory = world.agentManager.getMemoryStream(agentId)
+      liveState = {
+        agent: agentState,
+        recentMemories: memory?.getRecent(20) ?? [],
+      }
+    }
+  } catch {
+    // World not available
+  }
+
+  res.json({
+    agent: {
+      id: agent.id,
+      name: agent.name,
+      status: agent.status,
+      created_at: agent.created_at,
+      last_active_at: agent.last_active_at,
+    },
+    character: characterData?.creation ?? null,
+    characterMeta: {
+      spriteHash: characterData?.spriteHash,
+      starterItems: characterData?.starterItems,
+      raceSkillBonuses: characterData?.raceSkillBonuses,
+      createdAt: characterData?.createdAt,
+      lastRerollAt: characterData?.lastRerollAt,
+    },
+    liveState,
+    activityLog,
+    relationships,
   })
 })
 

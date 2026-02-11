@@ -74,17 +74,27 @@ export function Dashboard() {
   const [data, setData] = useState<DashboardData | null>(null)
   const [activityFilter, setActivityFilter] = useState<'all' | 'chat' | 'combat' | 'trade'>('all')
 
-  // Check for key in URL params
+  // Check for key or session in URL params
   useEffect(() => {
     const keyParam = searchParams.get('key')
+    const sessionParam = searchParams.get('session')
+
+    if (sessionParam) {
+      // Session token from claim page - use directly
+      sessionStorage.setItem('botworld_owner_token', sessionParam)
+      setToken(sessionParam)
+      navigate('/dashboard', { replace: true })
+      return
+    }
+
     if (keyParam) {
       setApiKey(keyParam)
       // Remove key from URL for security
       navigate('/dashboard', { replace: true })
     }
 
-    // Check sessionStorage for existing token
-    const savedToken = sessionStorage.getItem('botworld_token')
+    // Check sessionStorage for existing token (owner token from claim or bot token from login)
+    const savedToken = sessionStorage.getItem('botworld_owner_token') || sessionStorage.getItem('botworld_token')
     if (savedToken) {
       setToken(savedToken)
     }
@@ -138,6 +148,7 @@ export function Dashboard() {
 
   const handleLogout = () => {
     sessionStorage.removeItem('botworld_token')
+    sessionStorage.removeItem('botworld_owner_token')
     setToken(null)
     setData(null)
   }
@@ -146,6 +157,50 @@ export function Dashboard() {
     if (!token) return
 
     try {
+      // First, try owner session endpoint
+      const ownerRes = await fetch(`${API_BASE}/api/owner/session`, {
+        headers: { Authorization: `Bearer ${token}` },
+      })
+
+      if (ownerRes.ok) {
+        // Owner session - get first agent's data
+        const ownerData = await ownerRes.json()
+        if (ownerData.agents && ownerData.agents.length > 0) {
+          const agentId = ownerData.agents[0].id
+          // Fetch dashboard data for this agent
+          const agentRes = await fetch(`${API_BASE}/api/dashboard/owner/${agentId}`, {
+            headers: { Authorization: `Bearer ${token}` },
+          })
+          if (agentRes.ok) {
+            const result = await agentRes.json()
+            setData(result)
+            setError(null)
+            return
+          } else {
+            // Dashboard fetch failed but owner session is valid
+            const errResult = await agentRes.json().catch(() => ({}))
+            setError(errResult.message || 'Failed to load dashboard data')
+            return
+          }
+        } else {
+          // Owner has no agents yet
+          setError('No agents found. Register an agent first.')
+          return
+        }
+      } else if (ownerRes.status === 401) {
+        // Owner session expired - check if it's a bot token instead
+        // Fall through to bot session endpoint
+      } else {
+        // Other error
+        const errResult = await ownerRes.json().catch(() => ({}))
+        if (errResult.error === 'SESSION_EXPIRED') {
+          handleLogout()
+          setError('Session expired. Please login again.')
+          return
+        }
+      }
+
+      // Fall back to bot session endpoint
       const res = await fetch(`${API_BASE}/api/dashboard/data`, {
         headers: { Authorization: `Bearer ${token}` },
       })
@@ -161,9 +216,12 @@ export function Dashboard() {
       if (res.ok) {
         setData(result)
         setError(null)
+      } else {
+        setError(result.message || 'Failed to load dashboard data')
       }
     } catch (err) {
       console.error('Failed to fetch dashboard data:', err)
+      setError('Network error. Please check your connection.')
     }
   }, [token])
 
