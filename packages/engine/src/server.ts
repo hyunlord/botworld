@@ -12,8 +12,8 @@ import { registryRouter, claimRouter } from './auth/index.js'
 import { characterRouter } from './api/character.js'
 import { createActionRouter } from './api/actions.js'
 import { ChatRelay } from './systems/chat-relay.js'
+import { WsManager } from './network/ws-manager.js'
 import { pool } from './db/connection.js'
-import type { CharacterAppearanceMap } from '@botworld/shared'
 
 const PORT = Number(process.env.PORT) || 3001
 
@@ -96,10 +96,13 @@ async function main() {
   // Expose io to route handlers (for character appearance broadcasts)
   app.set('io', io)
 
-  // ChatRelay (must be created after io)
+  // ChatRelay (EventBus only, no io dependency)
   const chatRelay = new ChatRelay(
-    world.agentManager, world.eventBus, io, pool, () => world.clock,
+    world.agentManager, world.eventBus, pool, () => world.clock,
   )
+
+  // WsManager: handles all Socket.IO namespaces (/spectator + /bot)
+  const _wsManager = new WsManager(io, world, chatRelay, pool)
 
   // Auth routes (public — no Bearer required)
   app.use('/api', registryRouter)
@@ -126,111 +129,6 @@ async function main() {
     res.json({
       ...agent,
       recentMemories: memory?.getRecent(20) ?? [],
-    })
-  })
-
-  // WebSocket: stream world updates to clients
-  world.eventBus.onAny((event) => {
-    io.emit('world:event', event)
-
-    // Broadcast full agent state every tick so clients stay in sync
-    if (event.type === 'world:tick') {
-      io.emit('world:agents', world.agentManager.getAllAgents())
-    }
-
-    // Send new chunk data when chunks are generated
-    if (event.type === 'world:chunks_generated') {
-      const chunkData = world.tileMap.getSerializableChunks(event.chunkKeys)
-      io.emit('world:chunks', chunkData)
-    }
-  })
-
-  io.on('connection', (socket) => {
-    console.log(`[Socket] Client connected: ${socket.id}`)
-
-    // Default: join spectator room (browser clients)
-    socket.join('spectator')
-
-    // Bot WebSocket authentication (API key → agent room)
-    socket.on('auth:agent', async (data: { apiKey: string }) => {
-      try {
-        const result = await pool.query<{ id: string; status: string }>(
-          'SELECT id, status FROM agents WHERE api_key_hash = crypt($1, api_key_hash)',
-          [data.apiKey],
-        )
-        if (result.rows.length === 0) {
-          socket.emit('auth:error', { error: 'Invalid API key' })
-          return
-        }
-        const agent = result.rows[0]
-        if (agent.status !== 'active') {
-          socket.emit('auth:error', { error: `Agent status: ${agent.status}` })
-          return
-        }
-        socket.leave('spectator')
-        socket.join(`agent:${agent.id}`)
-        socket.data.agentId = agent.id
-        socket.emit('auth:success', { agentId: agent.id })
-        console.log(`[Socket] Bot authenticated: ${agent.id} (socket ${socket.id})`)
-      } catch {
-        socket.emit('auth:error', { error: 'Authentication failed' })
-      }
-    })
-
-    // Send initial state immediately
-    socket.emit('world:state', world.getState())
-
-    // Send character appearance data (once on connect)
-    pool.query<{ id: string; character_data: Record<string, unknown> | null }>(
-      "SELECT id, character_data FROM agents WHERE character_data IS NOT NULL"
-    ).then(result => {
-      const characterMap: CharacterAppearanceMap = {}
-      for (const row of result.rows) {
-        const cd = row.character_data as Record<string, unknown> | null
-        const creation = cd?.creation as Record<string, unknown> | undefined
-        if (creation?.appearance) {
-          characterMap[row.id] = {
-            appearance: creation.appearance as any,
-            race: creation.race as any,
-            spriteHash: (cd?.spriteHash as string) ?? '',
-          }
-        }
-      }
-      socket.emit('world:characters', characterMap)
-    }).catch(() => {})
-
-    // Client can request state at any time (e.g. after scene is ready)
-    socket.on('request:state', () => {
-      socket.emit('world:state', world.getState())
-    })
-
-    // Client can request specific chunks
-    socket.on('request:chunks', (keys: string[]) => {
-      const chunkData = world.tileMap.getSerializableChunks(keys)
-      socket.emit('world:chunks', chunkData)
-    })
-
-    // Speed controls
-    socket.on('world:pause', () => {
-      world.setPaused(true)
-      io.emit('world:speed', { paused: true, speed: world.getSpeed() })
-    })
-
-    socket.on('world:resume', () => {
-      world.setPaused(false)
-      io.emit('world:speed', { paused: false, speed: world.getSpeed() })
-    })
-
-    socket.on('world:setSpeed', (speed: number) => {
-      world.setSpeed(speed)
-      io.emit('world:speed', { paused: world.isPaused(), speed: world.getSpeed() })
-    })
-
-    // Send current speed state
-    socket.emit('world:speed', { paused: world.isPaused(), speed: world.getSpeed() })
-
-    socket.on('disconnect', () => {
-      console.log(`[Socket] Client disconnected: ${socket.id}`)
     })
   })
 

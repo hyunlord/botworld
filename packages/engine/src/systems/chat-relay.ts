@@ -1,4 +1,3 @@
-import type { Server as SocketServer } from 'socket.io'
 import type pg from 'pg'
 import type { AgentManager } from '../agent/agent-manager.js'
 import type { EventBus } from '../core/event-bus.js'
@@ -47,7 +46,6 @@ export class ChatRelay {
   constructor(
     private agentManager: AgentManager,
     private eventBus: EventBus,
-    private io: SocketServer,
     private pool: pg.Pool,
     private clockGetter: () => { tick: number },
   ) {}
@@ -142,19 +140,19 @@ export class ChatRelay {
     // 3. Save to DB
     await this.saveToLog(agentId, message, 'whisper', targetAgentId, false)
 
-    // 4. Deliver via WebSocket to target + sender only
+    // 4. Emit chat:delivered for WsManager to handle WebSocket delivery
     const tick = this.clockGetter().tick
-    const payload = {
+
+    this.eventBus.emit({
+      type: 'chat:delivered',
       fromAgentId: agentId,
       fromAgentName: agent.name,
       message,
-      messageType: 'whisper' as const,
+      messageType: 'whisper',
+      recipientIds: [targetAgentId],
       position: { x: agent.position.x, y: agent.position.y },
       timestamp: tick,
-    }
-
-    this.io.to(`agent:${targetAgentId}`).emit('chat:message', payload)
-    this.io.to(`agent:${agentId}`).emit('chat:message', payload)
+    })
 
     // 5. Add memories for both agents
     const senderMemory = this.agentManager.getMemoryStream(agentId)
@@ -205,24 +203,7 @@ export class ChatRelay {
     const nearby = this.agentManager.getNearbyAgents(agentId, radius)
     const tick = this.clockGetter().tick
 
-    const payload = {
-      fromAgentId: agentId,
-      fromAgentName: agent.name,
-      message,
-      messageType,
-      position: { x: agent.position.x, y: agent.position.y },
-      timestamp: tick,
-    }
-
-    // Deliver to each nearby agent's socket room
-    for (const other of nearby) {
-      this.io.to(`agent:${other.id}`).emit('chat:message', payload)
-    }
-
-    // Deliver to spectators (browser clients)
-    this.io.to('spectator').emit('chat:message', payload)
-
-    // Emit chat:delivered event
+    // Emit chat:delivered event (WsManager handles WebSocket delivery)
     const recipientIds = nearby.map(a => a.id)
     this.eventBus.emit({
       type: 'chat:delivered',

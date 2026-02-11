@@ -39,7 +39,8 @@ class SocketClient {
   private characterUpdateCallbacks: CharacterUpdateCallback[] = []
 
   connect(url?: string): void {
-    this.socket = io(url ?? window.location.origin)
+    const base = url ?? window.location.origin
+    this.socket = io(`${base}/spectator`)
 
     this.socket.on('world:state', (state: WorldState) => {
       for (const cb of this.stateCallbacks) cb(state)

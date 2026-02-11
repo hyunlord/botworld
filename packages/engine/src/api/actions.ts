@@ -12,7 +12,7 @@ import type { ChatRelay } from '../systems/chat-relay.js'
 // Cooldown system
 // ──────────────────────────────────────────────
 
-const COOLDOWN_TICKS: Partial<Record<ActionType, number>> = {
+export const COOLDOWN_TICKS: Partial<Record<ActionType, number>> = {
   gather: 5,
   craft: 10,
   speak: 3,
@@ -23,11 +23,11 @@ const COOLDOWN_TICKS: Partial<Record<ActionType, number>> = {
 /** agentId → (actionType → nextAvailableTick) */
 const actionCooldowns = new Map<string, Map<ActionType, number>>()
 
-function getCooldown(agentId: string, actionType: ActionType): number {
+export function getCooldown(agentId: string, actionType: ActionType): number {
   return actionCooldowns.get(agentId)?.get(actionType) ?? 0
 }
 
-function setCooldown(agentId: string, actionType: ActionType, tick: number): void {
+export function setCooldown(agentId: string, actionType: ActionType, tick: number): void {
   let agentMap = actionCooldowns.get(agentId)
   if (!agentMap) {
     agentMap = new Map()
