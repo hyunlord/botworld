@@ -22,6 +22,7 @@ export type ActionType =
   | 'craft'
   | 'trade'
   | 'talk'
+  | 'speak'
   | 'rest'
   | 'eat'
   | 'quest'
@@ -71,7 +72,7 @@ export interface Agent {
   currentMood: EmotionState
   organizationId?: string
   rank?: OrgRank
-  llmConfig: AgentLLMConfig
+  llmConfig?: AgentLLMConfig
   currentAction: AgentAction | null
   bio: string
 }

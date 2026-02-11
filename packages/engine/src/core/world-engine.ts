@@ -19,7 +19,7 @@ export class WorldEngine {
   constructor() {
     this.clock = createWorldClock()
     this.tileMap = new TileMap()
-    this.agentManager = new AgentManager(this.eventBus, this.tileMap)
+    this.agentManager = new AgentManager(this.eventBus, this.tileMap, () => this.clock)
   }
 
   start(): void {

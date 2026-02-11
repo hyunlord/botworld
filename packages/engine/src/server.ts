@@ -8,40 +8,16 @@ import express from 'express'
 import { createServer } from 'node:http'
 import { Server as SocketServer } from 'socket.io'
 import { WorldEngine } from './core/world-engine.js'
-import { providerRegistry } from './llm/provider-registry.js'
-import { MockProvider } from './llm/providers/mock.js'
-import { OllamaProvider } from './llm/providers/ollama.js'
-import { OpenRouterProvider } from './llm/providers/openrouter.js'
-import { AnthropicProvider } from './llm/providers/anthropic.js'
-import { OpenAIProvider } from './llm/providers/openai.js'
-import { GeminiProvider } from './llm/providers/gemini.js'
 import { registryRouter, claimRouter } from './auth/index.js'
 import { characterRouter } from './api/character.js'
+import { createActionRouter } from './api/actions.js'
 import { pool } from './db/connection.js'
 import type { CharacterAppearanceMap } from '@botworld/shared'
 
 const PORT = Number(process.env.PORT) || 3001
 
-// Register all LLM providers
-providerRegistry.register(new MockProvider())
-providerRegistry.register(new OllamaProvider())
-providerRegistry.register(new OpenRouterProvider())
-providerRegistry.register(new AnthropicProvider())
-providerRegistry.register(new OpenAIProvider())
-providerRegistry.register(new GeminiProvider())
-
-// Agent configs (positions will be determined dynamically near marketplace POI)
-const agentConfigs = [
-  { name: 'Aria', bio: 'A curious explorer who loves discovering new places and meeting new people.' },
-  { name: 'Bolt', bio: 'A hardworking gatherer who takes pride in collecting the finest resources.' },
-  { name: 'Cleo', bio: 'A skilled crafter with an eye for quality and a love of trading.' },
-  { name: 'Drake', bio: 'A natural leader who dreams of building a great organization.' },
-  { name: 'Echo', bio: 'A quiet observer who remembers everything and shares wisdom when asked.' },
-]
-
 function findSpawnPositions(world: WorldEngine, count: number): { x: number; y: number }[] {
   const market = world.tileMap.pois.find(p => p.type === 'marketplace')
-  // Use first marketplace POI or fallback to origin area
   const center = market?.position ?? { x: 8, y: 8 }
   const positions: { x: number; y: number }[] = []
 
@@ -62,44 +38,58 @@ function findSpawnPositions(world: WorldEngine, count: number): { x: number; y: 
 }
 
 async function main() {
-  // Detect which providers are actually available
-  console.log('[Botworld] Detecting available LLM providers...')
-  await providerRegistry.detectAvailable()
-
-  const realProviders = providerRegistry.getAvailable()
-  if (realProviders.length === 0) {
-    console.warn('[Botworld] No real LLM providers available! Agents will use MockProvider.')
-    console.warn('[Botworld] Set API keys to enable real LLM: OPENROUTER_API_KEY, ANTHROPIC_API_KEY, OPENAI_API_KEY, GEMINI_API_KEY')
-  } else {
-    console.log(`[Botworld] Available real providers: ${realProviders.map(p => p.name).join(', ')}`)
-  }
-
   // Create world
   const world = new WorldEngine()
 
-  // Spawn agents near marketplace with random provider assignment
-  const spawnPositions = findSpawnPositions(world, agentConfigs.length)
-  for (let i = 0; i < agentConfigs.length; i++) {
-    const cfg = agentConfigs[i]
-    const pos = spawnPositions[i] ?? { x: 8, y: 8 }
-    const provider = providerRegistry.getRandomOrMock()
-    world.agentManager.createAgent({
-      name: cfg.name,
-      position: pos,
-      bio: cfg.bio,
-      llmConfig: { provider: provider.id, model: provider.defaultModel },
-    })
-    console.log(`[Botworld] Agent ${cfg.name} → ${provider.name} (${provider.defaultModel}) at (${pos.x}, ${pos.y})`)
+  // Load active agents from DB
+  console.log('[Botworld] Loading agents from database...')
+  try {
+    const agentRows = await pool.query<{
+      id: string
+      name: string
+      status: string
+      character_data: Record<string, unknown> | null
+    }>(
+      "SELECT id, name, status, character_data FROM agents WHERE status = 'active'"
+    )
+
+    const spawnPositions = findSpawnPositions(world, agentRows.rows.length)
+    for (let i = 0; i < agentRows.rows.length; i++) {
+      const row = agentRows.rows[i]
+      const cd = row.character_data
+      const creation = cd?.creation as Record<string, unknown> | undefined
+      const pos = spawnPositions[i] ?? { x: 8, y: 8 }
+
+      world.agentManager.createAgent({
+        name: row.name,
+        position: pos,
+        bio: (creation?.backstory as string) ?? '',
+        personality: (creation?.personality as Record<string, unknown>)?.traits as any,
+      })
+      console.log(`[Botworld] Loaded agent ${row.name} at (${pos.x}, ${pos.y})`)
+    }
+
+    if (agentRows.rows.length === 0) {
+      console.log('[Botworld] No active agents found. Register bots via POST /api/agents/register')
+    } else {
+      console.log(`[Botworld] Loaded ${agentRows.rows.length} agents`)
+    }
+  } catch (err) {
+    console.warn('[Botworld] Could not load agents from DB (may not be initialized yet):', (err as Error).message)
   }
 
   // HTTP server
   const app = express()
   app.use(express.json())
 
+  // Expose world engine to route handlers
+  app.set('world', world)
+
   // Auth routes (public — no Bearer required)
   app.use('/api', registryRouter)
   app.use('/api', claimRouter)
   app.use('/api', characterRouter)
+  app.use('/api', createActionRouter(world))
 
   const httpServer = createServer(app)
 
@@ -131,10 +121,6 @@ async function main() {
       ...agent,
       recentMemories: memory?.getRecent(20) ?? [],
     })
-  })
-
-  app.get('/api/providers', (_req, res) => {
-    res.json(providerRegistry.listAll().map(p => ({ id: p.id, name: p.name })))
   })
 
   // WebSocket: stream world updates to clients
@@ -216,8 +202,7 @@ async function main() {
   // Start
   httpServer.listen(PORT, () => {
     console.log(`[Botworld] Server running on http://localhost:${PORT}`)
-    console.log(`[Botworld] LLM providers: ${providerRegistry.listIds().join(', ')}`)
-    console.log(`[Botworld] Agents: ${world.agentManager.getAllAgents().map(a => a.name).join(', ')}`)
+    console.log(`[Botworld] Agents: ${world.agentManager.getAllAgents().map(a => a.name).join(', ') || '(none)'}`)
     world.start()
   })
 }

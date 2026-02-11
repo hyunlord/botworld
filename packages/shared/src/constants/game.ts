@@ -40,6 +40,7 @@ export const ENERGY_COST = {
   craft: 5,
   trade: 1,
   talk: 1,
+  speak: 1,
   rest: 0,
   eat: 0,
   quest: 2,

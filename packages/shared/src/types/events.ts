@@ -17,6 +17,7 @@ export type WorldEvent =
   | AgentSpawnedEvent
   | ChunksGeneratedEvent
   | CharacterUpdatedEvent
+  | TradeProposedEvent
 
 export interface AgentMovedEvent {
   type: 'agent:moved'
@@ -104,5 +105,15 @@ export interface CharacterUpdatedEvent {
   appearance: CharacterAppearance
   race: Race
   spriteHash: string
+  timestamp: number
+}
+
+export interface TradeProposedEvent {
+  type: 'trade:proposed'
+  proposalId: string
+  fromAgentId: string
+  toAgentId: string
+  offerItemId: string
+  requestItemId: string
   timestamp: number
 }

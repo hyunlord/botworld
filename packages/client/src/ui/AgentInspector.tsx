@@ -39,7 +39,7 @@ export function AgentInspector({ agent }: { agent: Agent | null }) {
         <div style={styles.detail}>XP: {agent.xp}</div>
         <div style={styles.detail}>Position: ({agent.position.x}, {agent.position.y})</div>
         <div style={styles.detail}>Action: {agent.currentAction?.type ?? 'idle'}</div>
-        <div style={styles.detail}>LLM: {agent.llmConfig.provider}{agent.llmConfig.model ? ` (${agent.llmConfig.model})` : ''}</div>
+        {agent.llmConfig && <div style={styles.detail}>LLM: {agent.llmConfig.provider}{agent.llmConfig.model ? ` (${agent.llmConfig.model})` : ''}</div>}
       </div>
 
       <div style={styles.section}>

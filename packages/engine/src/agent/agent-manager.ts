@@ -1,5 +1,5 @@
 import type {
-  Agent, AgentAction, AgentLLMConfig, WorldClock,
+  Agent, AgentAction, WorldClock,
   Position, SkillType, EmotionState, PersonalityTraits,
 } from '@botworld/shared'
 import {
@@ -12,43 +12,28 @@ import { EventBus } from '../core/event-bus.js'
 import { TileMap } from '../world/tile-map.js'
 import { findPath } from '../world/pathfinding.js'
 import { MemoryStream } from './memory/memory-stream.js'
-import { evaluateBehavior } from './behavior-tree.js'
-import { GoalSystem } from './goal-system.js'
-import { DayPlanner } from './day-planner.js'
-import { ConversationManager } from './conversation-manager.js'
-import { DecisionQueue } from '../llm/decision-queue.js'
-import { contentFilter } from '../security/content-filter.js'
-import { processInteraction, personalityCompatibility } from '../systems/social/relationship.js'
+import { processInteraction } from '../systems/social/relationship.js'
 
 interface AgentRuntime {
   agent: Agent
   memory: MemoryStream
-  goals: GoalSystem
   path: Position[]
   pathIndex: number
-  lastPlanDay: number
 }
 
 export class AgentManager {
   private agents = new Map<string, AgentRuntime>()
-  private dayPlanner: DayPlanner
-  private conversationManager: ConversationManager
-  private decisionQueue: DecisionQueue
 
   constructor(
     private eventBus: EventBus,
     private tileMap: TileMap,
-  ) {
-    this.decisionQueue = new DecisionQueue(3)
-    this.dayPlanner = new DayPlanner(this.decisionQueue)
-    this.conversationManager = new ConversationManager(this.decisionQueue, this.eventBus)
-  }
+    private clockGetter: () => WorldClock,
+  ) {}
 
   createAgent(options: {
     name: string
     position: Position
     bio: string
-    llmConfig: AgentLLMConfig
     personality?: PersonalityTraits
   }): Agent {
     const id = generateId('agent')
@@ -77,7 +62,6 @@ export class AgentManager {
       relationships: {},
       personality: options.personality ?? createRandomPersonality(),
       currentMood: createEmotionState(),
-      llmConfig: options.llmConfig,
       currentAction: null,
       bio: options.bio,
     }
@@ -85,10 +69,8 @@ export class AgentManager {
     const runtime: AgentRuntime = {
       agent,
       memory: new MemoryStream(id),
-      goals: new GoalSystem(),
       path: [],
       pathIndex: 0,
-      lastPlanDay: -1,
     }
 
     this.agents.set(id, runtime)
@@ -114,6 +96,51 @@ export class AgentManager {
     return this.agents.get(agentId)?.memory
   }
 
+  getNearbyAgents(agentId: string, radius: number): Agent[] {
+    const runtime = this.agents.get(agentId)
+    if (!runtime) return []
+    const agent = runtime.agent
+    const result: Agent[] = []
+    for (const rt of this.agents.values()) {
+      if (rt.agent.id === agent.id) continue
+      const dx = Math.abs(rt.agent.position.x - agent.position.x)
+      const dy = Math.abs(rt.agent.position.y - agent.position.y)
+      if (dx <= radius && dy <= radius) {
+        result.push(rt.agent)
+      }
+    }
+    return result
+  }
+
+  /** External API entry point: request an action for an agent */
+  requestAction(agentId: string, action: AgentAction): { success: boolean; error?: string } {
+    const runtime = this.agents.get(agentId)
+    if (!runtime) return { success: false, error: 'Agent not found' }
+
+    const { agent } = runtime
+
+    // Check if already performing an action
+    if (agent.currentAction) {
+      const clock = this.clockGetter()
+      const done = clock.tick >= agent.currentAction.startedAt + agent.currentAction.duration
+      if (!done) {
+        return { success: false, error: 'Agent is busy with another action' }
+      }
+      // Complete the current action first
+      this.completeAction(runtime, clock)
+      agent.currentAction = null
+    }
+
+    // Check energy
+    const cost = ENERGY_COST[action.type] ?? 0
+    if (agent.stats.energy < cost) {
+      return { success: false, error: `Not enough energy. Need ${cost}, have ${agent.stats.energy}` }
+    }
+
+    this.startAction(runtime, action)
+    return { success: true }
+  }
+
   updateAll(clock: WorldClock): void {
     for (const runtime of this.agents.values()) {
       this.updateAgent(runtime, clock)
@@ -129,12 +156,6 @@ export class AgentManager {
     // Decay emotions over time
     this.decayEmotions(agent.currentMood)
 
-    // Day planning: trigger at dawn of each new day
-    if (clock.timeOfDay === 'dawn' && runtime.lastPlanDay < clock.day) {
-      runtime.lastPlanDay = clock.day
-      this.triggerDayPlanning(runtime, clock)
-    }
-
     // Check if current action is complete
     if (agent.currentAction) {
       const done = clock.tick >= agent.currentAction.startedAt + agent.currentAction.duration
@@ -143,65 +164,13 @@ export class AgentManager {
         agent.currentAction = null
       } else {
         this.progressAction(runtime, clock)
-        return
       }
     }
-
-    // Get nearby agents for behavior decisions
-    const nearbyAgents = this.getNearbyAgents(agent, 8)
-
-    // Get current goal
-    const currentGoal = runtime.goals.getCurrentGoal()
-
-    // Get next action from behavior tree (now goal-aware)
-    const action = evaluateBehavior(agent, clock, this.tileMap, currentGoal, nearbyAgents)
-    if (action) {
-      this.startAction(runtime, action, clock)
-    }
   }
 
-  private triggerDayPlanning(runtime: AgentRuntime, clock: WorldClock): void {
+  private startAction(runtime: AgentRuntime, action: AgentAction): void {
     const { agent } = runtime
-    const nearbyAgents = this.getNearbyAgents(agent, 15)
-
-    this.dayPlanner.createPlan(agent, clock, runtime.memory, this.tileMap, nearbyAgents)
-      .then(async goals => {
-        runtime.goals.setPlan(goals)
-        const goalDescriptions = goals.map(g => g.description).join(', ')
-        runtime.memory.addPlan(`Today's plan: ${goalDescriptions}`, clock.tick)
-        console.log(`[DayPlanner] ${agent.name}'s plan: ${goalDescriptions}`)
-
-        const planMessage = `[Plan] ${goalDescriptions}`
-        const filterResult = await contentFilter.filterMessage(agent.id, planMessage)
-        if (filterResult.allowed) {
-          this.eventBus.emit({
-            type: 'agent:spoke',
-            agentId: agent.id,
-            message: planMessage,
-            timestamp: clock.tick,
-          })
-        }
-      })
-      .catch(err => {
-        console.warn(`[DayPlanner] Failed for ${agent.name}:`, err)
-      })
-  }
-
-  private getNearbyAgents(agent: Agent, radius: number): Agent[] {
-    const result: Agent[] = []
-    for (const runtime of this.agents.values()) {
-      if (runtime.agent.id === agent.id) continue
-      const dx = Math.abs(runtime.agent.position.x - agent.position.x)
-      const dy = Math.abs(runtime.agent.position.y - agent.position.y)
-      if (dx <= radius && dy <= radius) {
-        result.push(runtime.agent)
-      }
-    }
-    return result
-  }
-
-  private startAction(runtime: AgentRuntime, action: AgentAction, clock: WorldClock): void {
-    const { agent } = runtime
+    const clock = this.clockGetter()
     agent.currentAction = action
 
     // If moving, calculate path
@@ -210,11 +179,6 @@ export class AgentManager {
       runtime.path = path
       runtime.pathIndex = 0
       action.duration = Math.max(path.length * 2, 2)
-    }
-
-    // Handle talk action: trigger conversation via ConversationManager
-    if (action.type === 'talk' && action.targetAgentId) {
-      this.handleTalkAction(runtime, action, clock)
     }
 
     // Deduct energy
@@ -227,37 +191,6 @@ export class AgentManager {
       action,
       timestamp: clock.tick,
     })
-  }
-
-  private handleTalkAction(runtime: AgentRuntime, action: AgentAction, clock: WorldClock): void {
-    const { agent } = runtime
-    const targetRuntime = this.agents.get(action.targetAgentId!)
-    if (!targetRuntime) return
-
-    const targetAgent = targetRuntime.agent
-
-    if (
-      this.conversationManager.canConverse(agent.id, clock.tick) &&
-      this.conversationManager.canConverse(targetAgent.id, clock.tick)
-    ) {
-      const compatibility = personalityCompatibility(agent, targetAgent)
-      this.conversationManager.startConversation(
-        agent, targetAgent, clock, runtime.memory, targetRuntime.memory,
-      ).then(() => {
-        // Update relationships after conversation
-        const positive = compatibility > 0.4
-        const intensity = 0.5 + compatibility * 0.5
-        processInteraction(agent, targetAgent, { type: 'conversation', positive, intensity }, clock.tick)
-        processInteraction(targetAgent, agent, { type: 'conversation', positive, intensity }, clock.tick)
-
-        const currentGoal = runtime.goals.getCurrentGoal()
-        if (currentGoal?.actionType === 'talk') {
-          runtime.goals.completeCurrentGoal()
-        }
-      }).catch(err => {
-        console.warn(`[Conversation] Error:`, err)
-      })
-    }
   }
 
   private progressAction(runtime: AgentRuntime, clock: WorldClock): void {
@@ -322,10 +255,6 @@ export class AgentManager {
             position: agent.position,
             timestamp: clock.tick,
           })
-          const currentGoal = runtime.goals.getCurrentGoal()
-          if (currentGoal?.actionType === 'gather') {
-            runtime.goals.completeCurrentGoal()
-          }
         }
         break
       }
@@ -379,10 +308,6 @@ export class AgentManager {
             item: craftedItem,
             timestamp: clock.tick,
           })
-          const currentGoal = runtime.goals.getCurrentGoal()
-          if (currentGoal?.actionType === 'craft') {
-            runtime.goals.completeCurrentGoal()
-          }
         }
         break
       }
@@ -431,10 +356,6 @@ export class AgentManager {
                 price: 0,
                 timestamp: clock.tick,
               })
-              const currentGoal = runtime.goals.getCurrentGoal()
-              if (currentGoal?.actionType === 'trade') {
-                runtime.goals.completeCurrentGoal()
-              }
             }
           }
         }
@@ -448,13 +369,72 @@ export class AgentManager {
           `Explored area around (${agent.position.x}, ${agent.position.y})`,
           2, clock.tick,
         )
-        const currentGoal = runtime.goals.getCurrentGoal()
-        if (currentGoal?.actionType === 'explore') {
-          runtime.goals.completeCurrentGoal()
-        }
         break
       }
     }
+  }
+
+  /** Execute a trade between two agents with specific items */
+  executeTrade(
+    fromAgentId: string,
+    toAgentId: string,
+    offerItemId: string,
+    requestItemId: string,
+  ): { success: boolean; error?: string; gave?: string; received?: string } {
+    const fromRuntime = this.agents.get(fromAgentId)
+    const toRuntime = this.agents.get(toAgentId)
+    if (!fromRuntime || !toRuntime) return { success: false, error: 'Agent not found' }
+
+    const clock = this.clockGetter()
+    const fromAgent = fromRuntime.agent
+    const toAgent = toRuntime.agent
+
+    const offerItem = fromAgent.inventory.find(i => i.id === offerItemId)
+    const requestItem = toAgent.inventory.find(i => i.id === requestItemId)
+
+    if (!offerItem || offerItem.quantity <= 0) return { success: false, error: 'Offer item not found or depleted' }
+    if (!requestItem || requestItem.quantity <= 0) return { success: false, error: 'Request item not found or depleted' }
+
+    // Execute exchange
+    offerItem.quantity--
+    requestItem.quantity--
+
+    const forThem = { ...offerItem, id: generateId('item'), quantity: 1 }
+    const forMe = { ...requestItem, id: generateId('item'), quantity: 1 }
+
+    toAgent.inventory.push(forThem)
+    fromAgent.inventory.push(forMe)
+
+    fromAgent.inventory = fromAgent.inventory.filter(i => i.quantity > 0)
+    toAgent.inventory = toAgent.inventory.filter(i => i.quantity > 0)
+
+    fromAgent.xp += 5
+    toAgent.xp += 5
+    fromAgent.skills.trading = Math.min(100, fromAgent.skills.trading + 0.2)
+    toAgent.skills.trading = Math.min(100, toAgent.skills.trading + 0.2)
+
+    fromRuntime.memory.add(
+      `Traded ${forThem.name} with ${toAgent.name} for ${forMe.name}`,
+      5, clock.tick, [toAgent.id],
+    )
+    toRuntime.memory.add(
+      `Traded ${forMe.name} with ${fromAgent.name} for ${forThem.name}`,
+      5, clock.tick, [fromAgent.id],
+    )
+
+    processInteraction(fromAgent, toAgent, { type: 'trade', positive: true, intensity: 0.7 }, clock.tick)
+    processInteraction(toAgent, fromAgent, { type: 'trade', positive: true, intensity: 0.7 }, clock.tick)
+
+    this.eventBus.emit({
+      type: 'trade:completed',
+      buyerId: fromAgent.id,
+      sellerId: toAgent.id,
+      item: forMe,
+      price: 0,
+      timestamp: clock.tick,
+    })
+
+    return { success: true, gave: forThem.name, received: forMe.name }
   }
 
   private decayEmotions(mood: EmotionState): void {
