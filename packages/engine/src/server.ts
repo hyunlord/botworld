@@ -13,6 +13,8 @@ import { characterRouter } from './api/character.js'
 import { createActionRouter } from './api/actions.js'
 import { createWorldRouter } from './api/world.js'
 import { ChatRelay } from './systems/chat-relay.js'
+import { Marketplace } from './systems/marketplace.js'
+import { createMarketRouter } from './api/market.js'
 import { WsManager } from './network/ws-manager.js'
 import { pool } from './db/connection.js'
 
@@ -106,6 +108,9 @@ async function main() {
     world.agentManager, world.eventBus, pool, () => world.clock,
   )
 
+  // Marketplace (in-memory, POI-gated)
+  const marketplace = new Marketplace(world.agentManager, world.tileMap)
+
   // WsManager: handles all Socket.IO namespaces (/spectator + /bot)
   const _wsManager = new WsManager(io, world, chatRelay, pool)
 
@@ -115,6 +120,7 @@ async function main() {
   app.use('/api', characterRouter)
   app.use('/api', createActionRouter(world, chatRelay))
   app.use('/api', createWorldRouter(world))
+  app.use('/api', createMarketRouter(marketplace))
 
   // REST endpoints
   app.get('/api/state', (_req, res) => {

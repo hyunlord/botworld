@@ -13,6 +13,7 @@ import { TileMap } from '../world/tile-map.js'
 import { findPath } from '../world/pathfinding.js'
 import { MemoryStream } from './memory/memory-stream.js'
 import { processInteraction } from '../systems/social/relationship.js'
+import { craftingSystem } from '../systems/crafting.js'
 
 interface AgentRuntime {
   agent: Agent
@@ -425,33 +426,53 @@ export class AgentManager {
       }
 
       case 'craft': {
-        if (agent.inventory.length >= 2) {
-          const mat1 = agent.inventory[0]
-          const mat2 = agent.inventory[1]
-          mat1.quantity--
-          mat2.quantity--
-          agent.inventory = agent.inventory.filter(i => i.quantity > 0)
+        const recipeId = action.data?.recipeId as string | undefined
+        if (recipeId) {
+          const result = craftingSystem.executeCraft(agent, recipeId, generateId)
+          if (result.success && result.item) {
+            agent.inventory.push(result.item)
+            agent.xp += result.critical ? 20 : 10
+            agent.skills.crafting = Math.min(100, agent.skills.crafting + (result.critical ? 0.5 : 0.2))
 
-          const craftedItem = {
-            id: generateId('item'),
-            type: 'crafted' as const,
-            name: `${mat1.name}-${mat2.name} tool`,
-            quantity: 1,
+            const critText = result.critical ? ' (Critical Success!)' : ''
+            runtime.memory.add(
+              `I crafted a ${result.item.rarity ?? 'common'} ${result.item.name}${critText}`,
+              result.critical ? 6 : 4, clock.tick,
+            )
+            this.eventBus.emit({
+              type: 'item:crafted',
+              agentId: agent.id,
+              item: result.item,
+              timestamp: clock.tick,
+            })
+          } else if (result.failed) {
+            runtime.memory.add(`Crafting failed: ${result.reason}`, 3, clock.tick)
           }
-          agent.inventory.push(craftedItem)
-          agent.xp += 10
-          agent.skills.crafting = Math.min(100, agent.skills.crafting + 0.2)
-
-          runtime.memory.add(
-            `I crafted a ${craftedItem.name} from ${mat1.name} and ${mat2.name}`,
-            4, clock.tick,
-          )
-          this.eventBus.emit({
-            type: 'item:crafted',
-            agentId: agent.id,
-            item: craftedItem,
-            timestamp: clock.tick,
-          })
+        } else {
+          // Legacy fallback: 2-material → generic tool
+          if (agent.inventory.length >= 2) {
+            const mat1 = agent.inventory[0]
+            const mat2 = agent.inventory[1]
+            mat1.quantity--
+            mat2.quantity--
+            agent.inventory = agent.inventory.filter(i => i.quantity > 0)
+            const craftedItem = {
+              id: generateId('item'),
+              type: 'crafted' as const,
+              name: `${mat1.name}-${mat2.name} tool`,
+              quantity: 1,
+            }
+            agent.inventory.push(craftedItem)
+            agent.xp += 10
+            agent.skills.crafting = Math.min(100, agent.skills.crafting + 0.2)
+            runtime.memory.add(`I crafted a ${craftedItem.name}`, 4, clock.tick)
+            this.eventBus.emit({
+              type: 'item:crafted',
+              agentId: agent.id,
+              item: craftedItem,
+              timestamp: clock.tick,
+            })
+          }
         }
         break
       }

@@ -7,6 +7,8 @@ import { findPath } from '../world/pathfinding.js'
 import { pool } from '../db/connection.js'
 import type { WorldEngine } from '../core/world-engine.js'
 import type { ChatRelay } from '../systems/chat-relay.js'
+import type { CraftingRecipe } from '@botworld/shared'
+import { craftingSystem } from '../systems/crafting.js'
 
 // ──────────────────────────────────────────────
 // Cooldown system
@@ -248,34 +250,56 @@ export function createActionRouter(world: WorldEngine, chatRelay: ChatRelay): IR
     },
   )
 
+  // ── GET /actions/recipes ──
+  router.get('/actions/recipes',
+    requireAuth(),
+    (req: Request, res: Response) => {
+      const agent = world.agentManager.getAgent(req.agent!.id)
+      const recipes = craftingSystem.getRecipes().map(r => ({
+        ...r,
+        canCraft: agent ? craftingSystem.canCraft(agent, r.id).ok : false,
+      }))
+      res.json(recipes)
+    },
+  )
+
   // ── POST /actions/craft ──
   router.post('/actions/craft',
     requireAuth(), requireCharacter(), requireEnergy('craft'), requireNoCooldown('craft'),
     async (req: Request, res: Response) => {
-      const { materialIds } = req.body
-      if (!Array.isArray(materialIds) || materialIds.length !== 2) {
-        res.status(400).json({ error: 'materialIds must be an array of exactly 2 item IDs' })
-        return
-      }
-
+      const { recipeId, materialIds } = req.body
       const agent = world.agentManager.getAgent(req.agent!.id)!
-      const mat1 = agent.inventory.find(i => i.id === materialIds[0])
-      const mat2 = agent.inventory.find(i => i.id === materialIds[1])
 
-      if (!mat1 || mat1.quantity <= 0) {
-        res.status(400).json({ error: `Material ${materialIds[0]} not found or depleted` })
+      let recipe: CraftingRecipe | undefined
+      if (recipeId) {
+        recipe = craftingSystem.getRecipe(recipeId)
+        if (!recipe) {
+          res.status(400).json({ error: 'Recipe not found' })
+          return
+        }
+      } else if (materialIds) {
+        // Backwards compatible: auto-match recipe from inventory
+        recipe = craftingSystem.findMatchingRecipe(agent)
+        if (!recipe) {
+          res.status(400).json({ error: 'No matching recipe found' })
+          return
+        }
+      } else {
+        res.status(400).json({ error: 'recipeId or materialIds required' })
         return
       }
-      if (!mat2 || mat2.quantity <= 0) {
-        res.status(400).json({ error: `Material ${materialIds[1]} not found or depleted` })
+
+      const check = craftingSystem.canCraft(agent, recipe.id)
+      if (!check.ok) {
+        res.status(400).json({ error: check.reason })
         return
       }
 
       const result = world.agentManager.enqueueAction(req.agent!.id, {
         type: 'craft',
-        data: { materialIds },
+        data: { recipeId: recipe.id },
         startedAt: world.clock.tick,
-        duration: 15,
+        duration: recipe.craftTime,
       })
 
       if (!result.success) {
@@ -286,8 +310,9 @@ export function createActionRouter(world: WorldEngine, chatRelay: ChatRelay): IR
       setCooldown(req.agent!.id, 'craft', world.clock.tick)
       res.json({
         action: 'craft',
-        materials: [mat1.name, mat2.name],
-        estimatedTicks: 15,
+        recipe: recipe.name,
+        recipeId: recipe.id,
+        estimatedTicks: recipe.craftTime,
         energyCost: ENERGY_COST.craft,
       })
     },

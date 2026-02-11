@@ -65,3 +65,24 @@ export const XP_PER_LEVEL = 100
 
 /** Emotion decay rate per tick (emotions fade over time) */
 export const EMOTION_DECAY_RATE = 0.001
+
+/** Item rarity weights (for random generation) */
+export const RARITY_WEIGHTS = {
+  common: 60,
+  uncommon: 25,
+  rare: 10,
+  epic: 4,
+  legendary: 1,
+} as const
+
+/** Stat multiplier per rarity tier */
+export const RARITY_STAT_MULTIPLIER: Record<string, number> = {
+  common: 1.0,
+  uncommon: 1.3,
+  rare: 1.6,
+  epic: 2.0,
+  legendary: 3.0,
+}
+
+/** Marketplace transaction fee rate */
+export const MARKET_FEE_RATE = 0.05
