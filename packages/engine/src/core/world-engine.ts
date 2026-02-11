@@ -6,6 +6,7 @@ import { AgentManager } from '../agent/agent-manager.js'
 import { TileMap } from '../world/tile-map.js'
 import { WeatherSystem } from '../systems/weather.js'
 import { NpcManager } from '../systems/npc-manager.js'
+import { QuestManager } from '../systems/quest-manager.js'
 
 export class WorldEngine {
   readonly eventBus = new EventBus()
@@ -13,6 +14,7 @@ export class WorldEngine {
   readonly tileMap: TileMap
   readonly weather: WeatherSystem
   readonly npcManager: NpcManager
+  readonly questManager: QuestManager
   clock: WorldClock
 
   private tickInterval: ReturnType<typeof setInterval> | null = null
@@ -26,6 +28,7 @@ export class WorldEngine {
     this.weather = new WeatherSystem()
     this.npcManager = new NpcManager(this.eventBus, this.tileMap, () => this.clock)
     this.agentManager = new AgentManager(this.eventBus, this.tileMap, () => this.clock)
+    this.questManager = new QuestManager(this.eventBus, this.tileMap, this.npcManager, () => this.clock)
   }
 
   start(): void {
@@ -113,7 +116,10 @@ export class WorldEngine {
     // 7. NPC behaviors (wanderer movement, idle chatter)
     this.npcManager.tick(this.clock)
 
-    // 8. Weather system tick
+    // 8. Quest system tick (refresh pool, expire old quests)
+    this.questManager.tick(this.clock)
+
+    // 9. Weather system tick
     const weatherChanged = this.weather.tick(this.clock)
     if (weatherChanged) {
       this.eventBus.emit({
@@ -123,7 +129,7 @@ export class WorldEngine {
       })
     }
 
-    // 9. Broadcast updated state (all processing complete)
+    // 10. Broadcast updated state (all processing complete)
     this.eventBus.emit({
       type: 'world:state_updated',
       clock: this.clock,
