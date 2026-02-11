@@ -15,6 +15,9 @@ import { createWorldRouter } from './api/world.js'
 import { ChatRelay } from './systems/chat-relay.js'
 import { Marketplace } from './systems/marketplace.js'
 import { createMarketRouter } from './api/market.js'
+import { createAdminRouter } from './api/admin.js'
+import { MetricsCollector } from './monitoring/metrics.js'
+import { createHealthRouter } from './monitoring/health-check.js'
 import { WsManager } from './network/ws-manager.js'
 import { pool } from './db/connection.js'
 
@@ -111,6 +114,9 @@ async function main() {
   // Marketplace (in-memory, POI-gated)
   const marketplace = new Marketplace(world.agentManager, world.tileMap)
 
+  // Metrics collector (subscribes to world:tick events)
+  const metrics = new MetricsCollector(world)
+
   // WsManager: handles all Socket.IO namespaces (/spectator + /bot)
   const _wsManager = new WsManager(io, world, chatRelay, pool)
 
@@ -121,6 +127,12 @@ async function main() {
   app.use('/api', createActionRouter(world, chatRelay))
   app.use('/api', createWorldRouter(world))
   app.use('/api', createMarketRouter(marketplace))
+
+  // Admin routes (X-Admin-Key auth)
+  app.use('/api', createAdminRouter(world, metrics))
+
+  // Health check (public, no auth)
+  app.use(createHealthRouter(world, metrics))
 
   // REST endpoints
   app.get('/api/state', (_req, res) => {
