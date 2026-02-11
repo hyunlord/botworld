@@ -210,14 +210,14 @@ const ROW0 = [
   { src: 'town', n: 24 },   // 4: dirt_1
   { src: 'town', n: 25 },   // 5: dirt_2
   { src: 'town', n: 36 },   // 6: sand_1
-  { src: 'placeholder', r: 212, g: 192, b: 120 }, // 7: sand_2 (placeholder)
+  { src: 'town', n: 37 },   // 7: sand_2 (Kenney sand variant)
   { src: 'town', n: 96 },   // 8: snow_1
   { src: 'town', n: 97 },   // 9: snow_2
   { src: 'town', n: 48 },   // 10: stone_floor (cobblestone)
-  { src: 'placeholder', r: 123, g: 91, b: 53 },  // 11: farmland (placeholder - brown furrows)
+  { src: 'town', n: 12 },   // 11: farmland (Kenney light ground)
   { src: 'placeholder', r: 74, g: 90, b: 58 },   // 12: swamp (placeholder)
   { src: 'town', n: 13 },   // 13: dark_grass (reuse dark grass)
-  { src: 'placeholder', r: 58, g: 53, b: 48 },   // 14: cave_floor (placeholder)
+  { src: 'dungeon', n: 48 }, // 14: cave_floor (Kenney dungeon floor)
   { src: 'transparent' },    // 15: reserved
 ];
 
@@ -244,15 +244,15 @@ const ROW2 = [
   { src: 'town', n: 49 },   // 32: road_dirt_H (stone path variant)
   { src: 'town', n: 49 },   // 33: road_dirt_V (rotated conceptually, same tile)
   { src: 'town', n: 48 },   // 34: road_dirt_cross
-  { src: 'placeholder', r: 139, g: 115, b: 85 }, // 35: road_dirt_turn_NE
-  { src: 'placeholder', r: 139, g: 115, b: 85 }, // 36: road_dirt_turn_NW
-  { src: 'placeholder', r: 139, g: 115, b: 85 }, // 37: road_dirt_turn_SE
-  { src: 'placeholder', r: 139, g: 115, b: 85 }, // 38: road_dirt_turn_SW
+  { src: 'town', n: 48 },   // 35: road_dirt_turn_NE (Kenney cobblestone)
+  { src: 'town', n: 48 },   // 36: road_dirt_turn_NW (Kenney cobblestone)
+  { src: 'town', n: 48 },   // 37: road_dirt_turn_SE (Kenney cobblestone)
+  { src: 'town', n: 48 },   // 38: road_dirt_turn_SW (Kenney cobblestone)
   { src: 'town', n: 48 },   // 39: road_stone_H
   { src: 'town', n: 48 },   // 40: road_stone_V
   { src: 'town', n: 48 },   // 41: road_stone_cross
-  { src: 'placeholder', r: 107, g: 66, b: 38 },  // 42: bridge_H
-  { src: 'placeholder', r: 107, g: 66, b: 38 },  // 43: bridge_V
+  { src: 'town', n: 44 },   // 42: bridge_H (Kenney wood fence horizontal)
+  { src: 'town', n: 47 },   // 43: bridge_V (Kenney wood fence vertical)
   { src: 'transparent' },    // 44
   { src: 'transparent' },    // 45
   { src: 'transparent' },    // 46
@@ -260,14 +260,14 @@ const ROW2 = [
 ];
 
 const ROW3 = [
-  { src: 'placeholder', r: 96, g: 80, b: 64 },   // 48: cliff_N
-  { src: 'placeholder', r: 96, g: 80, b: 64 },   // 49: cliff_S
-  { src: 'placeholder', r: 96, g: 80, b: 64 },   // 50: cliff_E
-  { src: 'placeholder', r: 96, g: 80, b: 64 },   // 51: cliff_W
-  { src: 'placeholder', r: 86, g: 70, b: 54 },   // 52: cliff_NE
-  { src: 'placeholder', r: 86, g: 70, b: 54 },   // 53: cliff_NW
-  { src: 'placeholder', r: 86, g: 70, b: 54 },   // 54: cliff_SE
-  { src: 'placeholder', r: 86, g: 70, b: 54 },   // 55: cliff_SW
+  { src: 'dungeon', n: 36 },  // 48: cliff_N (Kenney stone wall)
+  { src: 'dungeon', n: 37 },  // 49: cliff_S (Kenney stone wall variant)
+  { src: 'dungeon', n: 38 },  // 50: cliff_E (Kenney stone wall variant)
+  { src: 'dungeon', n: 39 },  // 51: cliff_W (Kenney stone wall variant)
+  { src: 'dungeon', n: 40 },  // 52: cliff_NE (Kenney dark stone wall)
+  { src: 'dungeon', n: 40 },  // 53: cliff_NW (Kenney dark stone wall)
+  { src: 'dungeon', n: 36 },  // 54: cliff_SE (Kenney stone wall)
+  { src: 'dungeon', n: 37 },  // 55: cliff_SW (Kenney stone wall variant)
   { src: 'town', n: 50 },   // 56: mountain_top (use stone variant)
   { src: 'town', n: 96 },   // 57: mountain_snow (use snow tile)
   { src: 'transparent' },    // 58-63
@@ -291,10 +291,10 @@ const ROW4 = [
   { src: 'town', n: 21 },   // 73: tree_large_TR
   { src: 'town', n: 22 },   // 74: tree_large_BL
   { src: 'town', n: 23 },   // 75: tree_large_BR
-  { src: 'placeholder', r: 74, g: 128, b: 48, a: 200, shape: 'triangle' }, // 76: bush_green
-  { src: 'placeholder', r: 192, g: 48, b: 48, a: 200, shape: 'triangle' }, // 77: bush_berry
-  { src: 'placeholder', r: 224, g: 128, b: 160, a: 200, shape: 'triangle' }, // 78: bush_flower
-  { src: 'placeholder', r: 107, g: 66, b: 38, a: 200, shape: 'circle' },  // 79: stump
+  { src: 'town', n: 16 },   // 76: bush_green (Kenney green bush)
+  { src: 'town', n: 17 },   // 77: bush_berry (Kenney orange/autumn bush)
+  { src: 'town', n: 19 },   // 78: bush_flower (Kenney bush with dots)
+  { src: 'town', n: 11 },   // 79: stump (Kenney brown tree stump)
 ];
 
 const ROW5 = [
@@ -303,36 +303,36 @@ const ROW5 = [
   { src: 'placeholder', r: 100, g: 120, b: 90, a: 200, shape: 'circle' },  // 82: rock_mossy
   { src: 'placeholder', r: 96, g: 96, b: 112, a: 200, shape: 'circle' },   // 83: ore_iron
   { src: 'placeholder', r: 212, g: 168, b: 32, a: 200, shape: 'circle' },  // 84: ore_gold
-  { src: 'placeholder', r: 128, g: 64, b: 192, a: 200, shape: 'circle' },  // 85: ore_crystal
-  { src: 'placeholder', r: 192, g: 48, b: 48, a: 200, shape: 'circle' },   // 86: mushroom_1
-  { src: 'placeholder', r: 48, g: 96, b: 192, a: 200, shape: 'circle' },   // 87: mushroom_2
-  { src: 'placeholder', r: 74, g: 144, b: 48, a: 200, shape: 'circle' },   // 88: herb_green
-  { src: 'placeholder', r: 96, g: 208, b: 96, a: 200, shape: 'circle' },   // 89: herb_rare
+  { src: 'dungeon', n: 56 },  // 85: ore_crystal (Kenney blue gem)
+  { src: 'dungeon', n: 123 }, // 86: mushroom_1 (Kenney brown mushroom)
+  { src: 'dungeon', n: 124 }, // 87: mushroom_2 (Kenney dark mushroom)
+  { src: 'dungeon', n: 108 }, // 88: herb_green (Kenney green creature/plant)
+  { src: 'dungeon', n: 114 }, // 89: herb_rare (Kenney green potion/herb)
   { src: 'placeholder', r: 208, g: 64, b: 64, a: 200, shape: 'circle' },   // 90: flower_red
   { src: 'placeholder', r: 64, g: 64, b: 208, a: 200, shape: 'circle' },   // 91: flower_blue
   { src: 'placeholder', r: 208, g: 208, b: 64, a: 200, shape: 'circle' },  // 92: flower_yellow
-  { src: 'placeholder', r: 212, g: 176, b: 96, a: 200, shape: 'circle' },  // 93: wheat
-  { src: 'placeholder', r: 74, g: 144, b: 48, a: 200, shape: 'circle' },   // 94: vegetable
+  { src: 'town', n: 34 },     // 93: wheat (Kenney pumpkin/crop)
+  { src: 'town', n: 35 },     // 94: vegetable (Kenney brown vegetable)
   { src: 'placeholder', r: 10, g: 32, b: 64, a: 128, shape: 'circle' },    // 95: fish_spot
 ];
 
 const ROW6 = [
-  { src: 'placeholder', r: 107, g: 142, b: 35, a: 180, shape: 'rectangle' },  // 96: grass_tuft
+  { src: 'town', n: 43 },     // 96: grass_tuft (Kenney flower/grass patch)
   { src: 'placeholder', r: 140, g: 140, b: 140, a: 180, shape: 'rectangle' },  // 97: pebbles
-  { src: 'placeholder', r: 192, g: 96, b: 32, a: 180, shape: 'rectangle' },    // 98: fallen_leaf
-  { src: 'placeholder', r: 64, g: 128, b: 192, a: 140, shape: 'rectangle' },   // 99: puddle
-  { src: 'placeholder', r: 224, g: 216, b: 208, a: 200, shape: 'rectangle' },   // 100: bones
-  { src: 'placeholder', r: 107, g: 66, b: 38, a: 220, shape: 'rectangle' },    // 101: sign_post
-  { src: 'placeholder', r: 107, g: 66, b: 38, a: 220, shape: 'rectangle' },    // 102: fence_H
-  { src: 'placeholder', r: 107, g: 66, b: 38, a: 220, shape: 'rectangle' },    // 103: fence_V
-  { src: 'placeholder', r: 128, g: 128, b: 128, a: 220, shape: 'rectangle' },   // 104: well
-  { src: 'placeholder', r: 208, g: 64, b: 32, a: 220, shape: 'rectangle' },    // 105: campfire
-  { src: 'placeholder', r: 107, g: 66, b: 38, a: 220, shape: 'rectangle' },    // 106: barrel
-  { src: 'placeholder', r: 139, g: 123, b: 96, a: 220, shape: 'rectangle' },   // 107: crate
-  { src: 'placeholder', r: 128, g: 128, b: 128, a: 220, shape: 'rectangle' },   // 108: lantern
-  { src: 'placeholder', r: 112, g: 112, b: 112, a: 220, shape: 'rectangle' },   // 109: gravestone
-  { src: 'placeholder', r: 192, g: 64, b: 64, a: 220, shape: 'rectangle' },    // 110: flag
-  { src: 'transparent' },    // 111: reserved
+  { src: 'town', n: 33 },     // 98: fallen_leaf (Kenney autumn tree/leaf)
+  { src: 'town', n: 109 },    // 99: puddle (Kenney ice/water surface)
+  { src: 'dungeon', n: 121 }, // 100: bones (Kenney skull)
+  { src: 'town', n: 115 },    // 101: sign_post (Kenney signpost/mailbox)
+  { src: 'town', n: 44 },     // 102: fence_H (Kenney wood fence horizontal)
+  { src: 'town', n: 47 },     // 103: fence_V (Kenney wood fence vertical)
+  { src: 'town', n: 125 },    // 104: well (Kenney gray well/box)
+  { src: 'town', n: 3 },      // 105: campfire (Kenney flame/fire)
+  { src: 'town', n: 130 },    // 106: barrel (Kenney brown barrel)
+  { src: 'town', n: 131 },    // 107: crate (Kenney brown crate)
+  { src: 'town', n: 116 },    // 108: lantern (Kenney lamp/lantern)
+  { src: 'dungeon', n: 44 },  // 109: gravestone (Kenney skull marker)
+  { src: 'town', n: 15 },     // 110: flag (Kenney torch/pole)
+  { src: 'transparent' },     // 111: reserved
 ];
 
 // Main assembly
