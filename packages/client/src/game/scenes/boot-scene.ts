@@ -36,6 +36,8 @@ export class BootScene extends Phaser.Scene {
       this.load.image(`tile_new_${name}`, `assets/tiles/${name}.png`)
     }
 
+    // Note: tile_new_water_river is loaded above, fallback generated in generateFallbackTextures()
+
     // ── New POI building sprites (15 types) ──
     const newBuildings = [
       'tavern', 'marketplace', 'blacksmith', 'library', 'temple',
@@ -216,6 +218,7 @@ export class BootScene extends Phaser.Scene {
       farmland:     0x6e9440,
       snow:         0xeaecf4,
       swamp:        0x4e5e3e,
+      river:        0x3a7cbd,
     }
 
     // Tint offsets for v0/v1/v2
@@ -237,6 +240,58 @@ export class BootScene extends Phaser.Scene {
         this.generateDiamondTexture(baseKey, base, 128, 64, 0)
       }
     }
+
+    // Generate new river tile with wave patterns if PNG not loaded
+    if (!this.textures.exists('tile_new_water_river')) {
+      this.generateRiverTexture('tile_new_water_river', 0x3a7cbd, 128, 64)
+    }
+  }
+
+  /** Generate river tile with flowing water appearance and wave patterns */
+  private generateRiverTexture(key: string, baseColor: number, w: number, h: number): void {
+    const g = this.add.graphics()
+    const hw = w / 2, hh = h / 2
+
+    // Base diamond fill (slightly lighter than deep water)
+    g.fillStyle(baseColor, 1)
+    g.beginPath()
+    g.moveTo(hw, 0); g.lineTo(w, hh); g.lineTo(hw, h); g.lineTo(0, hh)
+    g.closePath(); g.fillPath()
+
+    // Subtle face shading for depth
+    g.fillStyle(0xffffff, 0.06)
+    g.beginPath()
+    g.moveTo(hw, 0); g.lineTo(0, hh); g.lineTo(hw, hh)
+    g.closePath(); g.fillPath()
+
+    g.fillStyle(0x000000, 0.04)
+    g.beginPath()
+    g.moveTo(w, hh); g.lineTo(hw, h); g.lineTo(hw, hh)
+    g.closePath(); g.fillPath()
+
+    // Wave patterns - lighter streaks to suggest flowing water
+    g.fillStyle(0xffffff, 0.15)
+    // Horizontal wave streaks
+    for (let i = 0; i < 3; i++) {
+      const yOffset = (i - 1) * 12
+      g.fillEllipse(hw - 20, hh + yOffset, 30, 4)
+      g.fillEllipse(hw + 15, hh + yOffset - 6, 25, 3)
+    }
+
+    // Additional lighter highlights for movement effect
+    g.fillStyle(0xffffff, 0.10)
+    g.fillEllipse(hw - 10, hh - 10, 20, 6)
+    g.fillEllipse(hw + 10, hh + 8, 18, 5)
+
+    // Soft edge lines
+    g.lineStyle(1, 0xffffff, 0.08)
+    g.beginPath(); g.moveTo(hw, 1); g.lineTo(1, hh); g.strokePath()
+
+    g.lineStyle(1, 0x000000, 0.06)
+    g.beginPath(); g.moveTo(w - 1, hh); g.lineTo(hw, h - 1); g.strokePath()
+
+    g.generateTexture(key, w, h)
+    g.destroy()
   }
 
   /** POI building fallbacks: larger colored structures on diamond base */

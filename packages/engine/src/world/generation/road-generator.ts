@@ -7,6 +7,7 @@
 import type { Tile, Position } from '@botworld/shared'
 import { MOVEMENT_COSTS } from '@botworld/shared'
 import type { PointOfInterest } from './types.js'
+import { SimplexNoise2D, fbm } from './noise.js'
 
 interface AStarNode {
   x: number
@@ -133,26 +134,35 @@ export function generateRoads(
   pois: PointOfInterest[],
   width: number,
   height: number,
+  seed: number = 12345,
 ): void {
   if (pois.length < 2) return
 
-  // Build cost grid - use high but finite cost for impassable terrain
-  // so roads can cut through mountains if needed
+  const curveNoise = new SimplexNoise2D(seed + 8888)
+
+  // Build cost grid with noise-based curve deviation
   const costGrid = new Float32Array(width * height)
   for (let y = 0; y < height; y++) {
     for (let x = 0; x < width; x++) {
       const tile = tiles[y][x]
       const baseCost = MOVEMENT_COSTS[tile.type] ?? 1.0
       // Make impassable terrain very expensive but not impossible for roads
-      costGrid[y * width + x] = baseCost <= 0 ? 50.0 : baseCost
+      const terrainCost = baseCost <= 0 ? 50.0 : baseCost
+
+      // Add noise-based cost variation (±20%)
+      const noiseVal = fbm(curveNoise, x * 0.08, y * 0.08, { octaves: 2, scale: 1.0 })
+      const costVariation = 1.0 + noiseVal * 0.2 // 0.8 to 1.2 multiplier
+
+      costGrid[y * width + x] = terrainCost * costVariation
     }
   }
 
   // MST edges + 1-2 extra connections for redundancy
-  const edges = buildMST(pois)
+  const mstEdges = buildMST(pois)
+  const edges: Array<[number, number, boolean]> = mstEdges.map(e => [...e, true]) // true = main road
 
-  // Add 1-2 extra edges between closest non-connected pairs
-  const connected = new Set(edges.map(([a, b]) => `${Math.min(a, b)},${Math.max(a, b)}`))
+  // Add 1-2 extra edges between closest non-connected pairs (secondary roads)
+  const connected = new Set(mstEdges.map(([a, b]) => `${Math.min(a, b)},${Math.max(a, b)}`))
   let extras = 0
   const maxExtras = Math.min(2, Math.floor(pois.length / 3))
 
@@ -164,15 +174,18 @@ export function generateRoads(
       const dy = pois[i].position.y - pois[j].position.y
       const dist = Math.sqrt(dx * dx + dy * dy)
       if (dist < 25) { // Only add short extra connections
-        edges.push([i, j])
+        edges.push([i, j, false]) // false = secondary road
         connected.add(key)
         extras++
       }
     }
   }
 
+  // Track road tiles for width expansion and roadside decoration
+  const roadTiles = new Set<string>()
+
   // Generate roads along each edge
-  for (const [ai, bi] of edges) {
+  for (const [ai, bi, isMain] of edges) {
     const path = aStarOnCostGrid(costGrid, width, height, pois[ai].position, pois[bi].position)
 
     for (const pos of path) {
@@ -181,9 +194,68 @@ export function generateRoads(
         tile.type = 'road'
         tile.walkable = true
         tile.biome = tile.biome ?? 'road'
+        roadTiles.add(`${pos.x},${pos.y}`)
       }
       // Reduce cost for future paths - creates natural trunk roads
       costGrid[pos.y * width + pos.x] *= 0.3
     }
+
+    // Main roads: widen by 1 tile (mark one adjacent tile as road)
+    if (isMain) {
+      for (const pos of path) {
+        // Pick one perpendicular direction based on path direction
+        const idx = path.indexOf(pos)
+        if (idx < path.length - 1) {
+          const next = path[idx + 1]
+          const dx = next.x - pos.x
+          const dy = next.y - pos.y
+
+          // Perpendicular direction
+          const perpX = -dy
+          const perpY = dx
+
+          const adjX = pos.x + perpX
+          const adjY = pos.y + perpY
+
+          if (adjX >= 0 && adjX < width && adjY >= 0 && adjY < height) {
+            const adjTile = tiles[adjY][adjX]
+            if (adjTile.type !== 'building' && adjTile.type !== 'road') {
+              adjTile.type = 'road'
+              adjTile.walkable = true
+              adjTile.biome = adjTile.biome ?? 'road'
+              roadTiles.add(`${adjX},${adjY}`)
+            }
+          }
+        }
+      }
+    }
+  }
+
+  // Roadside trees: 15% chance for grass/forest neighbors
+  const rng = seededRandom(seed + 9000)
+  for (const key of roadTiles) {
+    const [x, y] = key.split(',').map(Number)
+    const cardinalDirs = [{ dx: 0, dy: -1 }, { dx: 1, dy: 0 }, { dx: 0, dy: 1 }, { dx: -1, dy: 0 }]
+
+    for (const { dx, dy } of cardinalDirs) {
+      const nx = x + dx, ny = y + dy
+      if (nx >= 0 && nx < width && ny >= 0 && ny < height) {
+        const neighbor = tiles[ny][nx]
+        if ((neighbor.type === 'grass' || neighbor.type === 'forest') &&
+            !neighbor.decoration && !neighbor.resource) {
+          if (rng() < 0.15) {
+            neighbor.decoration = 'tree_roadside'
+          }
+        }
+      }
+    }
+  }
+}
+
+function seededRandom(seed: number): () => number {
+  let s = seed | 0 || 1
+  return () => {
+    s = (s * 1103515245 + 12345) & 0x7FFFFFFF
+    return s / 0x7FFFFFFF
   }
 }

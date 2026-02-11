@@ -171,7 +171,7 @@ export function placePOIs(
   const pois: PointOfInterest[] = []
   const usedTypes = new Set<PointOfInterest['type']>()
 
-  // First pass: assign types based on biome affinity, ensuring each required type exists
+  // First pass: assign types based on biome affinity with scoring bonuses
   for (const pos of points) {
     const biome = biomeGrid[pos.y]?.[pos.x] ?? 'grassland'
     const affinities = POI_BIOME_AFFINITY[biome] ?? ['marketplace', 'tavern']
@@ -198,9 +198,62 @@ export function placePOIs(
       }
     }
 
-    // After all types guaranteed, use biome affinity
+    // After all types guaranteed, use biome affinity with scoring
     if (!chosenType) {
-      chosenType = affinities[Math.floor(rng() * affinities.length)]
+      const scores = affinities.map(type => {
+        let score = 100 // Base score
+
+        // Water proximity bonus for marketplace and tavern
+        if (type === 'marketplace' || type === 'tavern') {
+          let nearWater = false
+          for (let dy = -8; dy <= 8; dy++) {
+            for (let dx = -8; dx <= 8; dx++) {
+              const nx = pos.x + dx, ny = pos.y + dy
+              if (nx >= 0 && nx < width && ny >= 0 && ny < height) {
+                const tileType = tiles[ny][nx].type
+                if (tileType === 'water' || tileType === 'deep_water' || tileType === 'river') {
+                  nearWater = true
+                  break
+                }
+              }
+            }
+            if (nearWater) break
+          }
+          if (nearWater) score += 50
+        }
+
+        // Mountain proximity bonus for mine
+        if (type === 'mine') {
+          let nearMountain = false
+          for (let dy = -5; dy <= 5; dy++) {
+            for (let dx = -5; dx <= 5; dx++) {
+              const nx = pos.x + dx, ny = pos.y + dy
+              if (nx >= 0 && nx < width && ny >= 0 && ny < height) {
+                if (tiles[ny][nx].type === 'mountain') {
+                  nearMountain = true
+                  break
+                }
+              }
+            }
+            if (nearMountain) break
+          }
+          if (nearMountain) score += 50
+        }
+
+        // Farm placement bonus for farmland/grassland
+        if (type === 'farm') {
+          const currentBiome = biomeGrid[pos.y]?.[pos.x]
+          if (currentBiome === 'farmland' || currentBiome === 'grassland') {
+            score += 30
+          }
+        }
+
+        return { type, score }
+      })
+
+      // Choose type with highest score
+      scores.sort((a, b) => b.score - a.score)
+      chosenType = scores[0].type
     }
 
     usedTypes.add(chosenType)
@@ -216,6 +269,53 @@ export function placePOIs(
     tiles[pos.y][pos.x].type = 'building'
     tiles[pos.y][pos.x].walkable = true
     tiles[pos.y][pos.x].biome = biome
+  }
+
+  // Town clustering: try to place tavern near marketplace
+  const marketplaces = pois.filter(p => p.type === 'marketplace')
+  for (const market of marketplaces) {
+    // Check if there's already a tavern within 4-6 tiles
+    const nearbyTavern = pois.some(p => {
+      if (p.type !== 'tavern') return false
+      const dx = p.position.x - market.position.x
+      const dy = p.position.y - market.position.y
+      const dist = Math.sqrt(dx * dx + dy * dy)
+      return dist >= 4 && dist <= 6
+    })
+
+    if (nearbyTavern) continue
+
+    // Try to find a spot 4-6 tiles away for a tavern
+    for (let attempts = 0; attempts < 20; attempts++) {
+      const angle = rng() * Math.PI * 2
+      const dist = 4 + rng() * 2 // 4-6 tiles
+      const tx = Math.floor(market.position.x + Math.cos(angle) * dist)
+      const ty = Math.floor(market.position.y + Math.sin(angle) * dist)
+
+      if (tx < 1 || tx >= width - 1 || ty < 1 || ty >= height - 1) continue
+      if (!tiles[ty][tx].walkable || tiles[ty][tx].type === 'building') continue
+
+      // Check minimum distance from other POIs
+      const tooClose = pois.some(p => {
+        const dx = p.position.x - tx
+        const dy = p.position.y - ty
+        return Math.sqrt(dx * dx + dy * dy) < minDist
+      })
+
+      if (!tooClose) {
+        const biome = biomeGrid[ty]?.[tx] ?? 'grassland'
+        pois.push({
+          name: generateName('tavern', rng),
+          type: 'tavern',
+          position: { x: tx, y: ty },
+          biome,
+        })
+        tiles[ty][tx].type = 'building'
+        tiles[ty][tx].walkable = true
+        tiles[ty][tx].biome = biome
+        break
+      }
+    }
   }
 
   return pois

@@ -90,62 +90,183 @@ export function classifyBiomes(
 }
 
 /**
+ * Flood fill to find connected regions of the same biome
+ */
+function floodFill(
+  tiles: Tile[][],
+  visited: boolean[][],
+  startX: number,
+  startY: number,
+  width: number,
+  height: number,
+  targetBiome: string,
+): { x: number; y: number }[] {
+  const region: { x: number; y: number }[] = []
+  const stack: { x: number; y: number }[] = [{ x: startX, y: startY }]
+
+  while (stack.length > 0) {
+    const pos = stack.pop()!
+    const { x, y } = pos
+
+    if (x < 0 || y < 0 || x >= width || y >= height) continue
+    if (visited[y][x]) continue
+    if (tiles[y][x].biome !== targetBiome) continue
+
+    visited[y][x] = true
+    region.push({ x, y })
+
+    // Add 4-connected neighbors
+    stack.push({ x: x - 1, y })
+    stack.push({ x: x + 1, y })
+    stack.push({ x, y: y - 1 })
+    stack.push({ x, y: y + 1 })
+  }
+
+  return region
+}
+
+/**
+ * Remove small biome fragments (3 or fewer tiles)
+ */
+function removeFragments(
+  tiles: Tile[][],
+  width: number,
+  height: number,
+): void {
+  const visited: boolean[][] = []
+  for (let y = 0; y < height; y++) {
+    visited[y] = new Array(width).fill(false)
+  }
+
+  const fragments: { region: { x: number; y: number }[]; biome: string }[] = []
+
+  // Find all connected regions
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      if (!visited[y][x]) {
+        const biome = tiles[y][x].biome ?? 'grassland'
+        const region = floodFill(tiles, visited, x, y, width, height, biome)
+
+        // Only track small fragments (3 or fewer tiles)
+        if (region.length > 0 && region.length <= 3) {
+          fragments.push({ region, biome })
+        }
+      }
+    }
+  }
+
+  // Absorb fragments into most common neighboring biome
+  for (const fragment of fragments) {
+    const neighborBiomes = new Map<string, number>()
+
+    // Count neighboring biomes
+    for (const { x, y } of fragment.region) {
+      for (let dy = -1; dy <= 1; dy++) {
+        for (let dx = -1; dx <= 1; dx++) {
+          if (dx === 0 && dy === 0) continue
+          const nx = x + dx
+          const ny = y + dy
+          if (nx < 0 || ny < 0 || nx >= width || ny >= height) continue
+
+          const neighborBiome = tiles[ny][nx].biome
+          if (neighborBiome && neighborBiome !== fragment.biome) {
+            neighborBiomes.set(neighborBiome, (neighborBiomes.get(neighborBiome) ?? 0) + 1)
+          }
+        }
+      }
+    }
+
+    // Find most common neighbor biome
+    let maxBiome = 'grassland'
+    let maxCount = 0
+    for (const [biome, count] of neighborBiomes) {
+      if (count > maxCount) {
+        maxBiome = biome
+        maxCount = count
+      }
+    }
+
+    // Absorb fragment into neighbor biome
+    for (const { x, y } of fragment.region) {
+      const tile = tiles[y][x]
+      tile.biome = maxBiome
+
+      // Update tile type to match new biome (use simple mapping)
+      if (maxBiome.includes('forest')) tile.type = 'forest'
+      else if (maxBiome.includes('grass') || maxBiome === 'highland') tile.type = 'grass'
+      else if (maxBiome === 'desert') tile.type = 'sand'
+      else if (maxBiome === 'swamp') tile.type = 'swamp'
+      else if (maxBiome === 'farmland') tile.type = 'farmland'
+      else if (maxBiome === 'tundra') tile.type = 'grass'
+      else if (maxBiome === 'mountain') tile.type = 'mountain'
+      else if (maxBiome === 'snow_peak') tile.type = 'snow'
+    }
+  }
+}
+
+/**
  * Cellular automata smoothing - remove isolated single-tile biomes.
- * If 6+ of 8 neighbors differ, change to the most common neighbor type.
+ * Runs 3 passes with threshold of 5+ neighbors (instead of 6+).
  */
 export function smoothBiomes(
   tiles: Tile[][],
   width: number,
   height: number,
 ): void {
-  const changes: { x: number; y: number; type: TileType; biome: string; walkable: boolean }[] = []
+  // Run 3 smoothing passes
+  for (let pass = 0; pass < 3; pass++) {
+    const changes: { x: number; y: number; type: TileType; biome: string; walkable: boolean }[] = []
 
-  for (let y = 1; y < height - 1; y++) {
-    for (let x = 1; x < width - 1; x++) {
-      const current = tiles[y][x]
-      // Don't smooth water/deep_water/road/building
-      if (current.type === 'water' || current.type === 'deep_water' ||
-          current.type === 'road' || current.type === 'building') continue
+    for (let y = 1; y < height - 1; y++) {
+      for (let x = 1; x < width - 1; x++) {
+        const current = tiles[y][x]
+        // Don't smooth water/deep_water/river/road/building
+        if (current.type === 'water' || current.type === 'deep_water' ||
+            current.type === 'river' || current.type === 'road' || current.type === 'building') continue
 
-      const counts = new Map<TileType, number>()
-      for (let dy = -1; dy <= 1; dy++) {
-        for (let dx = -1; dx <= 1; dx++) {
-          if (dx === 0 && dy === 0) continue
-          const n = tiles[y + dy][x + dx]
-          counts.set(n.type, (counts.get(n.type) ?? 0) + 1)
-        }
-      }
-
-      // Check if 6+ neighbors are different
-      const sameCount = counts.get(current.type) ?? 0
-      if (sameCount <= 2) {
-        // Find most common neighbor type (excluding water/mountain)
-        let maxType: TileType = current.type
-        let maxCount = 0
-        for (const [type, count] of counts) {
-          if (type === 'water' || type === 'deep_water' || type === 'mountain') continue
-          if (count > maxCount) {
-            maxType = type
-            maxCount = count
+        const counts = new Map<TileType, number>()
+        for (let dy = -1; dy <= 1; dy++) {
+          for (let dx = -1; dx <= 1; dx++) {
+            if (dx === 0 && dy === 0) continue
+            const n = tiles[y + dy][x + dx]
+            counts.set(n.type, (counts.get(n.type) ?? 0) + 1)
           }
         }
-        if (maxType !== current.type) {
-          const neighborBiome = tiles[y + (maxType === tiles[y - 1][x].type ? -1 : 1)]?.[x]?.biome ?? current.biome
-          changes.push({
-            x, y,
-            type: maxType,
-            biome: neighborBiome ?? 'grassland',
-            walkable: true, // water/deep_water/mountain excluded from maxType in loop above
-          })
+
+        // Check if 5+ neighbors are different (lowered threshold from 6)
+        const sameCount = counts.get(current.type) ?? 0
+        if (sameCount < 3) { // 5+ of 8 neighbors differ
+          // Find most common neighbor type (excluding water/mountain)
+          let maxType: TileType = current.type
+          let maxCount = 0
+          for (const [type, count] of counts) {
+            if (type === 'water' || type === 'deep_water' || type === 'river' || type === 'mountain') continue
+            if (count > maxCount) {
+              maxType = type
+              maxCount = count
+            }
+          }
+          if (maxType !== current.type) {
+            const neighborBiome = tiles[y + (maxType === tiles[y - 1][x].type ? -1 : 1)]?.[x]?.biome ?? current.biome
+            changes.push({
+              x, y,
+              type: maxType,
+              biome: neighborBiome ?? 'grassland',
+              walkable: true, // water/deep_water/mountain excluded from maxType in loop above
+            })
+          }
         }
       }
     }
+
+    // Apply changes for this pass
+    for (const c of changes) {
+      tiles[c.y][c.x].type = c.type
+      tiles[c.y][c.x].biome = c.biome
+      tiles[c.y][c.x].walkable = c.walkable
+    }
   }
 
-  // Apply changes
-  for (const c of changes) {
-    tiles[c.y][c.x].type = c.type
-    tiles[c.y][c.x].biome = c.biome
-    tiles[c.y][c.x].walkable = c.walkable
-  }
+  // After 3 smoothing passes, remove small fragments
+  removeFragments(tiles, width, height)
 }

@@ -12,7 +12,7 @@ const TILE_W = 128
 const TILE_H = 64
 
 // Scale factors — slight overscale eliminates diamond-corner gaps
-const TILE_SCALE = 1.06
+const TILE_SCALE = 1.06 * 1.01
 const AGENT_SCALE = 0.6
 const RESOURCE_SCALE = 0.35
 const BUILDING_SCALE = 1.2
@@ -25,6 +25,34 @@ interface RenderedChunk {
 }
 
 // ── Biome-aware tile texture mapping ──
+
+/** Get adjacent tile types that differ from current tile (for biome transitions) */
+function getAdjacentBiomes(tiles: Tile[][], x: number, y: number, width: number, height: number): { up: string | null; down: string | null; left: string | null; right: string | null } {
+  const currentType = tiles[y] && tiles[y][x] ? tiles[y][x].type : null
+  if (!currentType) return { up: null, down: null, left: null, right: null }
+
+  const getType = (ty: number, tx: number): string | null => {
+    if (ty < 0 || ty >= height || tx < 0 || tx >= width) return null
+    return tiles[ty] && tiles[ty][tx] ? tiles[ty][tx].type : null
+  }
+
+  const upType = getType(y - 1, x)
+  const downType = getType(y + 1, x)
+  const leftType = getType(y, x - 1)
+  const rightType = getType(y, x + 1)
+
+  return {
+    up: upType !== currentType ? upType : null,
+    down: downType !== currentType ? downType : null,
+    left: leftType !== currentType ? leftType : null,
+    right: rightType !== currentType ? rightType : null,
+  }
+}
+
+/** Check if a tile type is a natural biome (eligible for transitions) */
+function isNaturalBiome(type: string): boolean {
+  return ['grass', 'forest', 'dense_forest', 'sand', 'snow', 'mountain', 'swamp', 'farmland'].includes(type)
+}
 
 /** Map tile type + biome + variant to the best available new texture key */
 function resolveTileTexture(tile: Tile, textures: Phaser.Textures.TextureManager): string {
@@ -72,6 +100,8 @@ function getNewTileKey(tile: Tile): string | null {
     case 'road':
       // Stone roads near POIs, dirt roads elsewhere
       return tile.poiType ? 'tile_new_road_stone' : 'tile_new_road_dirt'
+    case 'river':
+      return 'tile_new_water_river'
     default:
       return null
   }
@@ -176,6 +206,7 @@ export class WorldScene extends Phaser.Scene {
 
   create(): void {
     this.cameras.main.setZoom(0.25)
+    this.cameras.main.setRoundPixels(true)
 
     // Day-night cycle (tint overlay, stars, building lights, agent torches)
     this.dayNightCycle = new DayNightCycle(this)
@@ -666,6 +697,9 @@ export class WorldScene extends Phaser.Scene {
         const pos = this.tileToScreen(tile.position.x, tile.position.y)
         const depth = tile.position.x + tile.position.y
 
+        // Coordinate-based hash for tile diversity
+        const hash = ((tile.position.x * 73856093) ^ (tile.position.y * 19349663)) >>> 0
+
         // Biome-aware tile texture selection (new assets with legacy fallback)
         const textureKey = resolveTileTexture(tile, this.textures)
 
@@ -673,6 +707,14 @@ export class WorldScene extends Phaser.Scene {
           .setOrigin(0.5, 0.35)
           .setScale(TILE_SCALE)
           .setDepth(depth)
+
+        // Apply subtle tint variation for tile diversity (±5% brightness)
+        const brightness = 0.95 + (hash % 100) / 1000
+        sprite.setTint(Phaser.Display.Color.GetColor(
+          Math.round(255 * brightness),
+          Math.round(255 * brightness),
+          Math.round(255 * brightness)
+        ))
 
         // Water wave animation: gentle oscillation on water tiles
         if (tile.type === 'water' || tile.type === 'deep_water') {
@@ -689,6 +731,65 @@ export class WorldScene extends Phaser.Scene {
         }
 
         tileSprites.push(sprite)
+
+        // Biome transition overlays (alpha-blended adjacent biome textures)
+        const adjacentBiomes = getAdjacentBiomes(chunk.tiles, lx, ly, chunk.tiles[0].length, chunk.tiles.length)
+        const currentType = tile.type
+
+        if (isNaturalBiome(currentType)) {
+          // Check each direction for different biomes
+          if (adjacentBiomes.up && isNaturalBiome(adjacentBiomes.up)) {
+            const adjTile = { ...tile, type: adjacentBiomes.up as any }
+            const adjKey = resolveTileTexture(adjTile, this.textures)
+            if (this.textures.exists(adjKey)) {
+              const overlay = this.add.image(pos.x, pos.y - TILE_H * 0.25, adjKey)
+                .setOrigin(0.5, 0.35)
+                .setScale(TILE_SCALE * 0.5)
+                .setAlpha(0.3)
+                .setDepth(depth + 0.01)
+              tileSprites.push(overlay)
+            }
+          }
+
+          if (adjacentBiomes.down && isNaturalBiome(adjacentBiomes.down)) {
+            const adjTile = { ...tile, type: adjacentBiomes.down as any }
+            const adjKey = resolveTileTexture(adjTile, this.textures)
+            if (this.textures.exists(adjKey)) {
+              const overlay = this.add.image(pos.x, pos.y + TILE_H * 0.25, adjKey)
+                .setOrigin(0.5, 0.35)
+                .setScale(TILE_SCALE * 0.5)
+                .setAlpha(0.3)
+                .setDepth(depth + 0.01)
+              tileSprites.push(overlay)
+            }
+          }
+
+          if (adjacentBiomes.left && isNaturalBiome(adjacentBiomes.left)) {
+            const adjTile = { ...tile, type: adjacentBiomes.left as any }
+            const adjKey = resolveTileTexture(adjTile, this.textures)
+            if (this.textures.exists(adjKey)) {
+              const overlay = this.add.image(pos.x - TILE_W * 0.25, pos.y, adjKey)
+                .setOrigin(0.5, 0.35)
+                .setScale(TILE_SCALE * 0.5)
+                .setAlpha(0.3)
+                .setDepth(depth + 0.01)
+              tileSprites.push(overlay)
+            }
+          }
+
+          if (adjacentBiomes.right && isNaturalBiome(adjacentBiomes.right)) {
+            const adjTile = { ...tile, type: adjacentBiomes.right as any }
+            const adjKey = resolveTileTexture(adjTile, this.textures)
+            if (this.textures.exists(adjKey)) {
+              const overlay = this.add.image(pos.x + TILE_W * 0.25, pos.y, adjKey)
+                .setOrigin(0.5, 0.35)
+                .setScale(TILE_SCALE * 0.5)
+                .setAlpha(0.3)
+                .setDepth(depth + 0.01)
+              tileSprites.push(overlay)
+            }
+          }
+        }
 
         // POI building overlay (rendered above the ground tile)
         if (tile.poiType) {
@@ -714,10 +815,15 @@ export class WorldScene extends Phaser.Scene {
 
         // Decoration overlay
         if (tile.decoration && this.textures.exists(tile.decoration)) {
-          const deco = this.add.image(pos.x, pos.y - 10, tile.decoration)
+          // Position jitter for decorations (±2px based on coordinate hash)
+          const jitterX = ((hash % 5) - 2)
+          const jitterY = (((hash >> 8) % 5) - 2)
+
+          const deco = this.add.image(pos.x + jitterX, pos.y - 10 + jitterY, tile.decoration)
             .setOrigin(0.5, 0.5)
             .setScale(0.5)
             .setDepth(depth + 0.05)
+            .setFlipX((hash % 3) === 0)  // Randomly flip ~33% of decorations
           decoSprites.push(deco)
         }
 
@@ -729,15 +835,20 @@ export class WorldScene extends Phaser.Scene {
           const isIndicator = resKey === 'resource_indicator'
           const scale = isIndicator ? 0.5 : isNewAsset ? RESOURCE_SCALE * 1.2 : RESOURCE_SCALE
 
+          // Position jitter for resources (±2px based on coordinate hash)
+          const jitterX = ((hash % 5) - 2)
+          const jitterY = (((hash >> 8) % 5) - 2)
+
           const resSprite = this.add.image(
-            pos.x,
-            pos.y - TILE_H * 0.4,
+            pos.x + jitterX,
+            pos.y - TILE_H * 0.4 + jitterY,
             resKey,
           )
             .setOrigin(0.5, 0.5)
             .setScale(scale)
             .setDepth(depth + 0.1)
             .setAlpha(0.85)
+            .setFlipX((hash % 3) === 0)  // Randomly flip ~33% of resources
           resourceSprites.push(resSprite)
 
           // Vegetation sway for trees/bushes, bob for ores/minerals
@@ -1149,8 +1260,8 @@ export class WorldScene extends Phaser.Scene {
   /** Convert tile coordinates to isometric screen coordinates */
   private tileToScreen(x: number, y: number): { x: number; y: number } {
     return {
-      x: (x - y) * (TILE_W / 2),
-      y: (x + y) * (TILE_H / 2),
+      x: Math.round((x - y) * (TILE_W / 2)),
+      y: Math.round((x + y) * (TILE_H / 2)),
     }
   }
 

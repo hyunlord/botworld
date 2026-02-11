@@ -7,6 +7,7 @@ export type TileType =
   | 'grass'
   | 'water'
   | 'deep_water'
+  | 'river'
   | 'mountain'
   | 'forest'
   | 'dense_forest'

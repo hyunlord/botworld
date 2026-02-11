@@ -104,6 +104,7 @@ const BIOME_DECORATIONS: Record<string, string[]> = {
   tundra:           ['deco_ice_crystal', 'deco_dead_bush'],
   desert:           ['deco_cactus', 'deco_dry_bush'],
   snow_peak:        ['deco_ice_crystal'],
+  river:            ['ripple'],
 }
 
 // --- Resource tables (from resource-scatter.ts) ---
@@ -118,44 +119,72 @@ interface ResourceDef {
 
 const BIOME_RESOURCES: Record<string, ResourceDef[]> = {
   temperate_forest: [
-    { type: 'wood', density: 0.35, amount: 10, maxAmount: 10, regenRate: 0.01 },
-    { type: 'herb', density: 0.08, amount: 4, maxAmount: 4, regenRate: 0.008 },
+    { type: 'wood', density: 0.21, amount: 10, maxAmount: 10, regenRate: 0.01 },
+    { type: 'herb', density: 0.05, amount: 4, maxAmount: 4, regenRate: 0.008 },
   ],
   alpine_forest: [
-    { type: 'wood', density: 0.25, amount: 8, maxAmount: 8, regenRate: 0.008 },
+    { type: 'wood', density: 0.15, amount: 8, maxAmount: 8, regenRate: 0.008 },
   ],
   dense_forest: [
-    { type: 'wood', density: 0.50, amount: 15, maxAmount: 15, regenRate: 0.012 },
-    { type: 'herb', density: 0.15, amount: 6, maxAmount: 6, regenRate: 0.01 },
+    { type: 'wood', density: 0.30, amount: 15, maxAmount: 15, regenRate: 0.012 },
+    { type: 'herb', density: 0.09, amount: 6, maxAmount: 6, regenRate: 0.01 },
   ],
   grassland: [
-    { type: 'food', density: 0.12, amount: 5, maxAmount: 5, regenRate: 0.02 },
-    { type: 'herb', density: 0.05, amount: 3, maxAmount: 3, regenRate: 0.008 },
+    { type: 'food', density: 0.07, amount: 5, maxAmount: 5, regenRate: 0.02 },
+    { type: 'herb', density: 0.03, amount: 3, maxAmount: 3, regenRate: 0.008 },
   ],
   farmland: [
-    { type: 'food', density: 0.40, amount: 8, maxAmount: 8, regenRate: 0.025 },
+    { type: 'food', density: 0.24, amount: 8, maxAmount: 8, regenRate: 0.025 },
   ],
   highland: [
-    { type: 'stone', density: 0.25, amount: 10, maxAmount: 10, regenRate: 0.005 },
-    { type: 'iron', density: 0.08, amount: 8, maxAmount: 8, regenRate: 0.003 },
+    { type: 'stone', density: 0.15, amount: 10, maxAmount: 10, regenRate: 0.005 },
+    { type: 'iron', density: 0.05, amount: 8, maxAmount: 8, regenRate: 0.003 },
   ],
   swamp: [
-    { type: 'herb', density: 0.20, amount: 6, maxAmount: 6, regenRate: 0.015 },
-    { type: 'food', density: 0.06, amount: 3, maxAmount: 3, regenRate: 0.01 },
+    { type: 'herb', density: 0.12, amount: 6, maxAmount: 6, regenRate: 0.015 },
+    { type: 'food', density: 0.04, amount: 3, maxAmount: 3, regenRate: 0.01 },
   ],
   beach: [
-    { type: 'food', density: 0.05, amount: 3, maxAmount: 3, regenRate: 0.015 },
+    { type: 'food', density: 0.03, amount: 3, maxAmount: 3, regenRate: 0.015 },
   ],
   tundra: [
-    { type: 'stone', density: 0.15, amount: 6, maxAmount: 6, regenRate: 0.004 },
+    { type: 'stone', density: 0.09, amount: 6, maxAmount: 6, regenRate: 0.004 },
   ],
 }
 
 const MOUNTAIN_ADJ_RESOURCES: ResourceDef[] = [
-  { type: 'stone', density: 0.30, amount: 12, maxAmount: 12, regenRate: 0.005 },
-  { type: 'iron', density: 0.12, amount: 10, maxAmount: 10, regenRate: 0.004 },
-  { type: 'gold', density: 0.04, amount: 5, maxAmount: 5, regenRate: 0.002 },
+  { type: 'stone', density: 0.18, amount: 12, maxAmount: 12, regenRate: 0.005 },
+  { type: 'iron', density: 0.07, amount: 10, maxAmount: 10, regenRate: 0.004 },
+  { type: 'gold', density: 0.024, amount: 5, maxAmount: 5, regenRate: 0.002 },
 ]
+
+// --- Elevation sampling (reusable for cross-chunk features like rivers) ---
+
+/** Sample world elevation at a given world coordinate. Deterministic for a given seed. */
+export function getWorldElevation(wx: number, wy: number, seed: number): number {
+  ensureNoise(seed)
+
+  const raw = fbm(noiseElev, wx * 0.035, wy * 0.035, {
+    octaves: 6, persistence: 0.5, lacunarity: 2.0, scale: 1.0,
+  })
+  const warp = domainWarp(noiseWarp, wx, wy, { strength: 3.0, scale: 0.025 })
+  const warped = fbm(noiseElev, (wx + warp.x) * 0.035, (wy + warp.y) * 0.035, {
+    octaves: 6, persistence: 0.5, lacunarity: 2.0, scale: 1.0,
+  })
+  let elev = Math.pow(lerp(raw, warped, 0.4), 1.3)
+
+  // Mountain ridges
+  if (elev > 0.55) {
+    const ridge = ridgedFbm(noiseRidge, wx * 0.05, wy * 0.05, {
+      octaves: 4, persistence: 0.5, lacunarity: 2.1, scale: 1.0,
+    })
+    if (ridge > 0.6) {
+      elev = Math.max(elev, 0.70 + (ridge - 0.6) * 0.75)
+    }
+  }
+
+  return elev
+}
 
 // --- Main chunk generation ---
 
@@ -212,14 +241,14 @@ export function generateChunk(cx: number, cy: number, seed: number): ChunkData {
       // Biome classification
       const rule = classifyBiome(elev, temp, moist)
 
-      // Variant (0/1/2) from noise
-      const varNoise = noiseVariant.sample(wx * 0.2, wy * 0.2)
-      const variant = varNoise < -0.33 ? 0 : varNoise < 0.33 ? 1 : 2
+      // Variant (0/1/2) from coordinate hash for consistency
+      const coordHash = ((wx * 374761393) ^ (wy * 668265263)) >>> 0
+      const variant = coordHash % 3
 
-      // Decoration (biome-specific, noise-gated ~35%)
+      // Decoration (biome-specific, noise-gated ~20%, reduced from ~35%)
       let decoration: string | undefined
       const decoNoise = noiseDeco.sample(wx * 0.15, wy * 0.15)
-      if (decoNoise > 0.3) {
+      if (decoNoise > 0.6) { // Raised threshold from 0.3 to 0.6
         const decos = BIOME_DECORATIONS[rule.biome]
         if (decos && decos.length > 0) {
           const decoIdx = Math.abs(Math.floor((decoNoise * 1000) % decos.length))
@@ -227,12 +256,27 @@ export function generateChunk(cx: number, cy: number, seed: number): ChunkData {
         }
       }
 
-      const cost = MOVEMENT_COSTS[rule.tileType] ?? 1.0
+      // Special handling for river tiles
+      let tileType = rule.tileType
+      let walkable = false
+      let cost = MOVEMENT_COSTS[rule.tileType] ?? 1.0
+
+      if (rule.tileType === 'river') {
+        walkable = false
+        cost = 0
+        // River tiles get ripple decoration at low density
+        if (decoNoise > 0.7) {
+          decoration = 'ripple'
+        }
+      } else {
+        walkable = cost > 0
+      }
+
       const tile: Tile = {
         id: `tile_${wx}_${wy}`,
-        type: rule.tileType,
+        type: tileType,
         position: { x: wx, y: wy },
-        walkable: cost > 0,
+        walkable,
         movementCost: cost,
         biome: rule.biome,
         variant,
@@ -342,7 +386,7 @@ function scatterChunkResources(
 
       for (const res of resources) {
         if (tile.resource) break
-        if (cluster < 0.4) continue
+        if (cluster < 0.55) continue // Raised threshold from 0.4 to 0.55
         if (rng() < res.density) {
           tile.resource = {
             type: res.type,

@@ -23,6 +23,7 @@ export const MOVEMENT_COSTS: Record<string, number> = {
   snow: 1.8,
   swamp: 2.0,
   dense_forest: 2.5,
+  river: 0,
   water: 0,
   deep_water: 0,
   mountain: 0,
