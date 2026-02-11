@@ -8,7 +8,7 @@ import express from 'express'
 import { createServer } from 'node:http'
 import { Server as SocketServer } from 'socket.io'
 import { WorldEngine } from './core/world-engine.js'
-import { registryRouter, claimRouter } from './auth/index.js'
+import { registryRouter, claimRouter, sessionRouter } from './auth/index.js'
 import { characterRouter } from './api/character.js'
 import { createActionRouter } from './api/actions.js'
 import { createWorldRouter } from './api/world.js'
@@ -18,6 +18,8 @@ import { createMarketRouter } from './api/market.js'
 import { createAdminRouter } from './api/admin.js'
 import { createPromptsRouter } from './api/prompts.js'
 import { authRouter } from './api/auth.js'
+import { createNotificationRouter } from './api/notifications.js'
+import { NotificationManager } from './systems/notifications.js'
 import { MetricsCollector } from './monitoring/metrics.js'
 import { createHealthRouter } from './monitoring/health-check.js'
 import { WsManager } from './network/ws-manager.js'
@@ -119,18 +121,23 @@ async function main() {
   // Metrics collector (subscribes to world:tick events)
   const metrics = new MetricsCollector(world)
 
-  // WsManager: handles all Socket.IO namespaces (/spectator + /bot)
-  const _wsManager = new WsManager(io, world, chatRelay, pool)
+  // NotificationManager (subscribes to events and manages notifications)
+  const notifications = new NotificationManager(pool, world.eventBus, world.agentManager)
+
+  // WsManager: handles all Socket.IO namespaces (/spectator + /bot + /dashboard)
+  const _wsManager = new WsManager(io, world, chatRelay, pool, notifications)
 
   // Auth routes (public — no Bearer required)
   app.use('/api', registryRouter)
   app.use('/api', claimRouter)
+  app.use('/api', sessionRouter)
   app.use('/api', authRouter)
   app.use('/api', characterRouter)
   app.use('/api', createActionRouter(world, chatRelay))
   app.use('/api', createWorldRouter(world))
   app.use('/api', createMarketRouter(marketplace))
   app.use('/api', createPromptsRouter())
+  app.use('/api', createNotificationRouter(notifications))
 
   // Admin routes (X-Admin-Key auth)
   app.use('/api', createAdminRouter(world, metrics))

@@ -115,3 +115,25 @@ ALTER TABLE api_key_audit_log ADD CONSTRAINT api_key_audit_log_event_type_check
 -- ============================================================
 ALTER TABLE chat_messages ADD COLUMN IF NOT EXISTS blocked BOOLEAN NOT NULL DEFAULT false;
 CREATE INDEX IF NOT EXISTS idx_chat_blocked ON chat_messages (blocked) WHERE blocked = true;
+
+-- ============================================================
+-- Table: notifications
+-- ============================================================
+CREATE TABLE IF NOT EXISTS notifications (
+    id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    agent_id        UUID NOT NULL REFERENCES agents(id) ON DELETE CASCADE,
+    owner_id        UUID REFERENCES owners(id) ON DELETE CASCADE,
+    type            VARCHAR(30) NOT NULL
+                    CHECK (type IN ('level_up', 'rare_item', 'trade_completed', 'character_ko', 'new_relationship', 'security_warning', 'bot_offline')),
+    title           VARCHAR(100) NOT NULL,
+    message         TEXT NOT NULL,
+    data            JSONB NOT NULL DEFAULT '{}',
+    read            BOOLEAN NOT NULL DEFAULT false,
+    created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_notifications_owner_id ON notifications (owner_id);
+CREATE INDEX IF NOT EXISTS idx_notifications_agent_id ON notifications (agent_id);
+CREATE INDEX IF NOT EXISTS idx_notifications_owner_unread ON notifications (owner_id, read) WHERE read = false;
+CREATE INDEX IF NOT EXISTS idx_notifications_created_at ON notifications (created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_notifications_type ON notifications (type);

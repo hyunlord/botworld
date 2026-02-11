@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { useSearchParams, useNavigate } from 'react-router-dom'
 import type { Agent, CharacterAppearance, Race, CharacterClass, Item } from '@botworld/shared'
 import { RACE_ICONS, CLASS_ICONS, ACTION_ICONS } from '../ui/constants.js'
+import { NotificationBell } from '../ui/NotificationBell.js'
 
 // API calls go to same origin (relative URLs)
 const API_BASE = ''
@@ -236,6 +237,7 @@ export function Dashboard() {
           <span style={styles.headerName}>{agent.name}'s Dashboard</span>
         </div>
         <div style={styles.headerRight}>
+          <NotificationBell token={token} onNavigate={navigate} />
           <button onClick={() => navigate('/world')} style={styles.headerButton}>
             🌍 Watch World
           </button>

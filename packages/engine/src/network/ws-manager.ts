@@ -4,9 +4,11 @@ import type { ActionType, CharacterAppearanceMap, Position } from '@botworld/sha
 import { ENERGY_COST, REST_ENERGY_REGEN } from '@botworld/shared'
 import type { WorldEngine } from '../core/world-engine.js'
 import type { ChatRelay } from '../systems/chat-relay.js'
+import type { NotificationManager, Notification } from '../systems/notifications.js'
 import { contentFilter } from '../security/content-filter.js'
 import { getCooldown, setCooldown, COOLDOWN_TICKS } from '../api/actions.js'
 import { findPath } from '../world/pathfinding.js'
+import { validateOwnerSession } from '../auth/session.js'
 
 // ──────────────────────────────────────────────
 // Constants
@@ -21,19 +23,47 @@ const NEARBY_RADIUS = 10
 export class WsManager {
   private spectatorNs: Namespace
   private botNs: Namespace
+  private dashboardNs: Namespace
+
+  // Map owner_id -> Set of socket ids
+  private ownerSockets: Map<string, Set<string>> = new Map()
 
   constructor(
     private io: SocketServer,
     private world: WorldEngine,
     private chatRelay: ChatRelay,
     private pool: pg.Pool,
+    private notifications?: NotificationManager,
   ) {
     this.spectatorNs = io.of('/spectator')
     this.botNs = io.of('/bot')
+    this.dashboardNs = io.of('/dashboard')
 
     this.setupSpectatorNamespace()
     this.setupBotNamespace()
+    this.setupDashboardNamespace()
     this.setupEventRouting()
+
+    // Set up WebSocket broadcast for notifications
+    if (this.notifications) {
+      this.notifications.setWebSocketBroadcast((ownerId, notification) => {
+        this.broadcastToOwner(ownerId, 'notification:new', notification)
+      })
+    }
+  }
+
+  // ── Broadcast to owner's connected dashboards ──
+
+  private broadcastToOwner(ownerId: string, event: string, data: unknown): void {
+    const sockets = this.ownerSockets.get(ownerId)
+    if (!sockets || sockets.size === 0) return
+
+    for (const socketId of sockets) {
+      const socket = this.dashboardNs.sockets.get(socketId)
+      if (socket) {
+        socket.emit(event, data)
+      }
+    }
   }
 
   // ── /spectator namespace ─────────────────────
@@ -138,6 +168,106 @@ export class WsManager {
 
       socket.on('disconnect', () => {
         console.log(`[WS:bot] Disconnected: ${agentId} (${socket.id})`)
+      })
+    })
+  }
+
+  // ── /dashboard namespace ─────────────────────
+
+  private setupDashboardNamespace(): void {
+    // Auth middleware: owner session token required
+    this.dashboardNs.use((socket, next) => {
+      const token = socket.handshake.auth?.token as string | undefined
+      if (!token) {
+        return next(new Error('Session token required'))
+      }
+
+      const session = validateOwnerSession(token)
+      if (!session) {
+        return next(new Error('Invalid or expired session'))
+      }
+
+      socket.data.ownerId = session.ownerId
+      socket.data.ownerEmail = session.email
+      next()
+    })
+
+    this.dashboardNs.on('connection', (socket) => {
+      const ownerId = socket.data.ownerId as string
+      socket.join(`owner:${ownerId}`)
+
+      // Track socket for this owner
+      if (!this.ownerSockets.has(ownerId)) {
+        this.ownerSockets.set(ownerId, new Set())
+      }
+      this.ownerSockets.get(ownerId)!.add(socket.id)
+
+      socket.emit('auth:success', { ownerId })
+      console.log(`[WS:dashboard] Connected: owner ${ownerId} (${socket.id})`)
+
+      // Send unread notification count on connect
+      if (this.notifications) {
+        this.notifications.getUnreadCount(ownerId).then((count) => {
+          socket.emit('notification:count', { unreadCount: count })
+        })
+      }
+
+      // Handle request for notifications
+      socket.on('notifications:get', async (data: { since?: string }, cb?: (res: unknown) => void) => {
+        if (!this.notifications) {
+          return cb?.({ error: 'Notifications not available' })
+        }
+
+        const since = data?.since ? new Date(data.since) : undefined
+        const notifications = await this.notifications.getNotifications(ownerId, since)
+        const unreadCount = await this.notifications.getUnreadCount(ownerId)
+
+        cb?.({ notifications, unreadCount })
+      })
+
+      // Handle mark as read
+      socket.on('notifications:read', async (data: { ids: string[] }, cb?: (res: unknown) => void) => {
+        if (!this.notifications) {
+          return cb?.({ error: 'Notifications not available' })
+        }
+
+        if (!data?.ids || !Array.isArray(data.ids)) {
+          return cb?.({ error: 'ids array required' })
+        }
+
+        const updated = await this.notifications.markAsRead(ownerId, data.ids)
+        const unreadCount = await this.notifications.getUnreadCount(ownerId)
+
+        cb?.({ updated, unreadCount })
+
+        // Broadcast updated count to all owner's connections
+        this.broadcastToOwner(ownerId, 'notification:count', { unreadCount })
+      })
+
+      // Handle mark all as read
+      socket.on('notifications:read-all', async (cb?: (res: unknown) => void) => {
+        if (!this.notifications) {
+          return cb?.({ error: 'Notifications not available' })
+        }
+
+        const updated = await this.notifications.markAllAsRead(ownerId)
+        cb?.({ updated, unreadCount: 0 })
+
+        // Broadcast updated count to all owner's connections
+        this.broadcastToOwner(ownerId, 'notification:count', { unreadCount: 0 })
+      })
+
+      socket.on('disconnect', () => {
+        console.log(`[WS:dashboard] Disconnected: owner ${ownerId} (${socket.id})`)
+
+        // Remove socket from tracking
+        const sockets = this.ownerSockets.get(ownerId)
+        if (sockets) {
+          sockets.delete(socket.id)
+          if (sockets.size === 0) {
+            this.ownerSockets.delete(ownerId)
+          }
+        }
       })
     })
   }
