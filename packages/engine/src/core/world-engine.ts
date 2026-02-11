@@ -8,6 +8,7 @@ import { WeatherSystem } from '../systems/weather.js'
 import { NpcManager } from '../systems/npc-manager.js'
 import { QuestManager } from '../systems/quest-manager.js'
 import { WorldEventSystem } from '../systems/world-events.js'
+import { CombatSystem } from '../systems/combat.js'
 
 export class WorldEngine {
   readonly eventBus = new EventBus()
@@ -17,6 +18,7 @@ export class WorldEngine {
   readonly npcManager: NpcManager
   readonly questManager: QuestManager
   readonly worldEvents: WorldEventSystem
+  readonly combat: CombatSystem
   clock: WorldClock
 
   private tickInterval: ReturnType<typeof setInterval> | null = null
@@ -32,6 +34,7 @@ export class WorldEngine {
     this.agentManager = new AgentManager(this.eventBus, this.tileMap, () => this.clock)
     this.questManager = new QuestManager(this.eventBus, this.tileMap, this.npcManager, () => this.clock)
     this.worldEvents = new WorldEventSystem(this.eventBus, this.tileMap, () => this.clock)
+    this.combat = new CombatSystem(this.eventBus, this.tileMap, () => this.clock)
   }
 
   start(): void {
@@ -125,7 +128,10 @@ export class WorldEngine {
     // 9. World events tick (spawn/expire events)
     this.worldEvents.tick(this.clock)
 
-    // 10. Weather system tick
+    // 10. Combat system tick (spawn/respawn monsters)
+    this.combat.tick(this.clock)
+
+    // 11. Weather system tick
     const weatherChanged = this.weather.tick(this.clock)
     if (weatherChanged) {
       this.eventBus.emit({
@@ -135,7 +141,7 @@ export class WorldEngine {
       })
     }
 
-    // 11. Broadcast updated state (all processing complete)
+    // 12. Broadcast updated state (all processing complete)
     this.eventBus.emit({
       type: 'world:state_updated',
       clock: this.clock,
@@ -171,6 +177,7 @@ export class WorldEngine {
       agents: [...this.agentManager.getAllAgents(), ...this.npcManager.getAllNpcs()],
       chunks: this.tileMap.getSerializableChunks(),
       worldEvents: this.worldEvents.getActiveEvents(),
+      monsters: this.combat.getAliveMonsters(),
       recentEvents: this.eventBus.getRecentEvents(20),
     }
   }

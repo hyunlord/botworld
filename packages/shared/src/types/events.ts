@@ -3,6 +3,7 @@ import type { Position, WorldClock, WeatherState } from './world.js'
 import type { Item, MarketOrder } from './item.js'
 import type { CharacterAppearance, CharacterClass, Race } from './character.js'
 import type { WorldEventType, WorldEventCategory, WorldEventEffect } from './world-event.js'
+import type { MonsterType, CombatRound, CombatOutcome } from './combat.js'
 
 /** All event types in the world */
 export type WorldEvent =
@@ -24,6 +25,11 @@ export type WorldEvent =
   | WeatherChangedEvent
   | WorldEventStartedEvent
   | WorldEventEndedEvent
+  | CombatStartedEvent
+  | CombatRoundEvent
+  | CombatEndedEvent
+  | MonsterSpawnedEvent
+  | MonsterDiedEvent
 
 export interface AgentMovedEvent {
   type: 'agent:moved'
@@ -169,5 +175,57 @@ export interface WorldEventEndedEvent {
   eventId: string
   eventType: WorldEventType
   title: string
+  timestamp: number
+}
+
+// ── Combat Events ──
+
+export interface CombatStartedEvent {
+  type: 'combat:started'
+  combatId: string
+  agentId: string
+  monsterId: string
+  monsterType: MonsterType
+  monsterName: string
+  position: Position
+  timestamp: number
+}
+
+export interface CombatRoundEvent {
+  type: 'combat:round'
+  combatId: string
+  agentId: string
+  monsterId: string
+  round: CombatRound
+  timestamp: number
+}
+
+export interface CombatEndedEvent {
+  type: 'combat:ended'
+  combatId: string
+  agentId: string
+  monsterId: string
+  outcome: CombatOutcome
+  loot: Item[]
+  xpGained: number
+  timestamp: number
+}
+
+export interface MonsterSpawnedEvent {
+  type: 'monster:spawned'
+  monsterId: string
+  monsterType: MonsterType
+  name: string
+  level: number
+  position: Position
+  timestamp: number
+}
+
+export interface MonsterDiedEvent {
+  type: 'monster:died'
+  monsterId: string
+  monsterType: MonsterType
+  killedBy: string
+  position: Position
   timestamp: number
 }

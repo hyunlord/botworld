@@ -1,7 +1,7 @@
 import type { Agent, NpcRole, Position, WorldClock, Item } from '@botworld/shared'
 import {
   generateId, createEmotionState, createRandomPersonality,
-  DEFAULT_MAX_HP, DEFAULT_MAX_ENERGY, DEFAULT_MAX_HUNGER,
+  DEFAULT_MAX_HP, DEFAULT_MAX_ENERGY, DEFAULT_MAX_HUNGER, DEFAULT_ATTACK, DEFAULT_DEFENSE,
 } from '@botworld/shared'
 import type { PointOfInterest } from '../world/tile-map.js'
 import { EventBus } from '../core/event-bus.js'
@@ -187,6 +187,8 @@ export class NpcManager {
         maxEnergy: DEFAULT_MAX_ENERGY,
         hunger: DEFAULT_MAX_HUNGER,
         maxHunger: DEFAULT_MAX_HUNGER,
+        attack: DEFAULT_ATTACK + (role === 'guard' ? 5 : 0),
+        defense: DEFAULT_DEFENSE + (role === 'guard' ? 3 : 0),
       },
       level: role === 'guild_master' ? 10 : role === 'guard' ? 5 : 3,
       xp: 0,

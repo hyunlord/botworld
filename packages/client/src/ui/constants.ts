@@ -32,6 +32,8 @@ export const ACTION_ICONS: Record<string, string> = {
   eat: '\uD83C\uDF7D\uFE0F',
   explore: '\uD83E\uDDED',
   quest: '\u2757',
+  attack: '\u2694\uFE0F',
+  flee: '\uD83C\uDFC3',
 }
 
 export const POI_COLORS: Record<string, string> = {

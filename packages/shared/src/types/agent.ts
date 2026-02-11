@@ -29,6 +29,8 @@ export type ActionType =
   | 'eat'
   | 'quest'
   | 'explore'
+  | 'attack'
+  | 'flee'
 
 export interface AgentAction {
   type: ActionType
@@ -47,6 +49,8 @@ export interface AgentStats {
   maxEnergy: number
   hunger: number
   maxHunger: number
+  attack: number
+  defense: number
 }
 
 export interface Memory {

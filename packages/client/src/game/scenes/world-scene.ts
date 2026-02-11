@@ -1,5 +1,5 @@
 import Phaser from 'phaser'
-import type { Agent, Tile, WorldEvent, WorldClock, ChunkData, CharacterAppearance, Race, CharacterAppearanceMap, WeatherState, ActiveWorldEvent } from '@botworld/shared'
+import type { Agent, Tile, WorldEvent, WorldClock, ChunkData, CharacterAppearance, Race, CharacterAppearanceMap, WeatherState, ActiveWorldEvent, Monster } from '@botworld/shared'
 import { CHUNK_SIZE } from '@botworld/shared'
 import { composeCharacterSprite } from '../character/sprite-composer.js'
 import { SpriteCache } from '../character/sprite-cache.js'
@@ -153,6 +153,7 @@ export class WorldScene extends Phaser.Scene {
   private agentSprites = new Map<string, Phaser.GameObjects.Container>()
   private actionIndicators = new Map<string, Phaser.GameObjects.Image>()
   private speechBubbles = new Map<string, { container: Phaser.GameObjects.Container; timer: number }>()
+  private monsterSprites = new Map<string, Phaser.GameObjects.Container>()
   private dayNightCycle: DayNightCycle | null = null
   private selectionRing: Phaser.GameObjects.Image | null = null
   private weatherEffects: WeatherEffects | null = null
@@ -867,6 +868,192 @@ export class WorldScene extends Phaser.Scene {
     return {
       x: (x - y) * (TILE_W / 2),
       y: (x + y) * (TILE_H / 2),
+    }
+  }
+
+  // ── Monster rendering ──
+
+  private static MONSTER_COLORS: Record<string, number> = {
+    slime: 0x44CC44,
+    goblin: 0x88AA44,
+    wolf: 0x888888,
+    skeleton: 0xCCCCBB,
+    bandit: 0xAA6644,
+    troll: 0x558844,
+    ghost: 0x8888DD,
+    dragon_whelp: 0xCC4444,
+  }
+
+  updateMonsters(monsters: Monster[]): void {
+    const currentIds = new Set(monsters.map(m => m.id))
+
+    // Remove sprites for dead/removed monsters
+    for (const [id, sprite] of this.monsterSprites) {
+      if (!currentIds.has(id)) {
+        sprite.destroy()
+        this.monsterSprites.delete(id)
+      }
+    }
+
+    for (const monster of monsters) {
+      const screenPos = this.tileToScreen(monster.position.x, monster.position.y)
+      const color = WorldScene.MONSTER_COLORS[monster.type] ?? 0xFF4444
+
+      if (!this.monsterSprites.has(monster.id)) {
+        this.createMonsterSprite(monster, screenPos, color)
+      } else {
+        const container = this.monsterSprites.get(monster.id)!
+        // Smooth movement
+        this.tweens.add({
+          targets: container,
+          x: screenPos.x,
+          y: screenPos.y - TILE_H * 0.4,
+          duration: 400,
+          ease: 'Quad.easeOut',
+        })
+        container.setDepth(490 + monster.position.y)
+
+        // Update HP bar
+        this.updateMonsterHpBar(container, monster)
+      }
+    }
+  }
+
+  private createMonsterSprite(
+    monster: Monster,
+    screenPos: { x: number; y: number },
+    color: number,
+  ): void {
+    // Shadow
+    const shadow = this.add.ellipse(0, 8, 20, 8, 0x000000, 0.3)
+
+    // Monster body (simple diamond shape)
+    const body = this.add.graphics()
+    const size = 10 + monster.level * 1.5
+    body.fillStyle(color, 1)
+    body.fillRoundedRect(-size / 2, -size, size, size, 3)
+    // Eyes
+    body.fillStyle(0xFF0000, 0.9)
+    body.fillCircle(-size * 0.2, -size * 0.7, 2)
+    body.fillCircle(size * 0.2, -size * 0.7, 2)
+
+    // Name label
+    const nameText = this.add.text(0, -size - 14, monster.name, {
+      fontSize: '8px',
+      fontFamily: 'Arial, sans-serif',
+      color: '#ff6666',
+      stroke: '#000000',
+      strokeThickness: 2,
+    }).setOrigin(0.5, 1)
+
+    // HP bar background
+    const hpBarBg = this.add.rectangle(0, -size - 4, 28, 4, 0x333333)
+      .setOrigin(0.5, 0.5)
+
+    // HP bar fill
+    const hpRatio = monster.hp / monster.maxHp
+    const hpBarFill = this.add.rectangle(
+      -14 + (28 * hpRatio) / 2, -size - 4,
+      28 * hpRatio, 4,
+      hpRatio > 0.5 ? 0x44CC44 : hpRatio > 0.25 ? 0xCCAA00 : 0xCC2222,
+    ).setOrigin(0.5, 0.5)
+
+    const container = this.add.container(
+      screenPos.x,
+      screenPos.y - TILE_H * 0.4,
+      [shadow, body, nameText, hpBarBg, hpBarFill],
+    )
+    container.setDepth(490 + monster.position.y)
+
+    // Idle bounce animation
+    this.tweens.add({
+      targets: body,
+      y: body.y - 2,
+      duration: 800 + Math.random() * 400,
+      yoyo: true,
+      repeat: -1,
+      ease: 'Sine.easeInOut',
+    })
+
+    this.monsterSprites.set(monster.id, container)
+  }
+
+  private updateMonsterHpBar(container: Phaser.GameObjects.Container, monster: Monster): void {
+    // HP bar fill is at index 4
+    const hpBarFill = container.list[4] as Phaser.GameObjects.Rectangle | undefined
+    if (!hpBarFill) return
+
+    const hpRatio = monster.hp / monster.maxHp
+    hpBarFill.width = 28 * hpRatio
+    hpBarFill.x = -14 + (28 * hpRatio) / 2
+    hpBarFill.setFillStyle(
+      hpRatio > 0.5 ? 0x44CC44 : hpRatio > 0.25 ? 0xCCAA00 : 0xCC2222,
+    )
+  }
+
+  showDamagePopup(worldX: number, worldY: number, damage: number, isAgentDamage: boolean): void {
+    const screenPos = this.tileToScreen(worldX, worldY)
+    const color = isAgentDamage ? '#ff4444' : '#ffaa00'
+    const prefix = isAgentDamage ? '-' : '-'
+
+    const text = this.add.text(
+      screenPos.x + Phaser.Math.Between(-10, 10),
+      screenPos.y - TILE_H * 0.4 - 20,
+      `${prefix}${damage}`,
+      {
+        fontSize: '14px',
+        fontFamily: 'Arial, sans-serif',
+        color,
+        stroke: '#000000',
+        strokeThickness: 3,
+        fontStyle: 'bold',
+      },
+    ).setOrigin(0.5).setDepth(3000)
+
+    this.tweens.add({
+      targets: text,
+      y: text.y - 30,
+      alpha: 0,
+      duration: 800,
+      ease: 'Quad.easeOut',
+      onComplete: () => text.destroy(),
+    })
+  }
+
+  showCombatEffect(worldX: number, worldY: number): void {
+    const screenPos = this.tileToScreen(worldX, worldY)
+
+    // Flash ring
+    const ring = this.add.circle(screenPos.x, screenPos.y - TILE_H * 0.3, 8, 0xFF4444, 0.6)
+      .setDepth(3000)
+
+    this.tweens.add({
+      targets: ring,
+      scale: 3,
+      alpha: 0,
+      duration: 500,
+      ease: 'Quad.easeOut',
+      onComplete: () => ring.destroy(),
+    })
+
+    // Slash lines
+    for (let i = 0; i < 3; i++) {
+      const angle = Math.random() * Math.PI * 2
+      const dist = 5 + Math.random() * 10
+      const spark = this.add.rectangle(
+        screenPos.x + Math.cos(angle) * dist,
+        screenPos.y - TILE_H * 0.3 + Math.sin(angle) * dist,
+        2, 8, 0xFFFFFF, 0.8,
+      ).setDepth(3000).setRotation(angle)
+
+      this.tweens.add({
+        targets: spark,
+        x: spark.x + Math.cos(angle) * 15,
+        y: spark.y + Math.sin(angle) * 15,
+        alpha: 0,
+        duration: 300 + i * 80,
+        onComplete: () => spark.destroy(),
+      })
     }
   }
 

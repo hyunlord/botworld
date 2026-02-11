@@ -343,6 +343,18 @@ export class WsManager {
         })
       }
 
+      // ── Combat events ──
+      if (event.type === 'combat:started' || event.type === 'combat:round' || event.type === 'combat:ended') {
+        this.spectatorNs.emit('combat:event', event)
+        if ('agentId' in event) {
+          this.botNs.to(`agent:${event.agentId}`).emit('combat:event', event)
+        }
+      }
+
+      if (event.type === 'monster:spawned' || event.type === 'monster:died') {
+        this.spectatorNs.emit('monster:event', event)
+      }
+
       // ── Chat delivery ──
       if (event.type === 'chat:delivered') {
         // Spectators get all chat

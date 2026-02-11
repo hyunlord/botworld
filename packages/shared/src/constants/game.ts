@@ -32,6 +32,8 @@ export const MOVEMENT_COSTS: Record<string, number> = {
 export const DEFAULT_MAX_HP = 100
 export const DEFAULT_MAX_ENERGY = 100
 export const DEFAULT_MAX_HUNGER = 100
+export const DEFAULT_ATTACK = 10
+export const DEFAULT_DEFENSE = 5
 
 /** Energy costs per action */
 export const ENERGY_COST = {
@@ -46,6 +48,8 @@ export const ENERGY_COST = {
   quest: 2,
   explore: 2,
   idle: 0,
+  attack: 5,
+  flee: 3,
 } as const
 
 /** Hunger drain per tick */

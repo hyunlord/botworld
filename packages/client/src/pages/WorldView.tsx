@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, useMemo } from 'react'
 import Phaser from 'phaser'
-import type { Agent, WorldClock, WorldEvent, ChunkData, CharacterAppearanceMap, WeatherState, ActiveWorldEvent } from '@botworld/shared'
+import type { Agent, WorldClock, WorldEvent, ChunkData, CharacterAppearanceMap, WeatherState, ActiveWorldEvent, Monster } from '@botworld/shared'
 import { CHUNK_SIZE } from '@botworld/shared'
 import { createGameConfig } from '../game/config.js'
 import { WorldScene } from '../game/scenes/world-scene.js'
@@ -59,6 +59,7 @@ export function WorldView() {
     scene.updateClock(state.clock)
     if (state.weather) scene.setWeather(state.weather)
     if (state.worldEvents) setWorldEvents(state.worldEvents)
+    if (state.monsters) scene.updateMonsters(state.monsters)
     setClock(state.clock)
     setAgents(state.agents)
     setChunks(prev => ({ ...prev, ...state.chunks }))
@@ -197,6 +198,24 @@ export function WorldView() {
     // Spectator count
     const unsubSpectators = socketClient.onSpectatorCount(setSpectatorCount)
 
+    // Combat & monster events
+    const unsubCombat = socketClient.onCombatEvent((event) => {
+      const scene = sceneRef.current
+      if (!scene) return
+      if (event.type === 'combat:started' && 'position' in event) {
+        const pos = event.position as { x: number; y: number }
+        scene.showCombatEffect(pos.x, pos.y)
+      }
+      if (event.type === 'combat:round' && 'round' in event) {
+        const round = event.round as { agentDamage: number; monsterDamage: number }
+        // We don't have position here, but the event is for spectator logging
+      }
+    })
+
+    const unsubMonster = socketClient.onMonsterEvent((event) => {
+      // Monster events logged in ChatLog via world:event
+    })
+
     return () => {
       unsubState()
       unsubAgents()
@@ -209,6 +228,8 @@ export function WorldView() {
       unsubEventStarted()
       unsubEventEnded()
       unsubSpectators()
+      unsubCombat()
+      unsubMonster()
       socketClient.disconnect()
     }
   }, [])

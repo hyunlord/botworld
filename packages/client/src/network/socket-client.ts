@@ -1,5 +1,5 @@
 import { io, Socket } from 'socket.io-client'
-import type { WorldEvent, Agent, WorldClock, ChunkData, CharacterAppearanceMap, CharacterAppearance, CharacterClass, Race, WeatherState, ActiveWorldEvent } from '@botworld/shared'
+import type { WorldEvent, Agent, WorldClock, ChunkData, CharacterAppearanceMap, CharacterAppearance, CharacterClass, Race, WeatherState, ActiveWorldEvent, Monster, CombatState } from '@botworld/shared'
 
 export interface WorldState {
   clock: WorldClock
@@ -8,6 +8,7 @@ export interface WorldState {
   recentEvents: WorldEvent[]
   weather?: WeatherState
   worldEvents?: ActiveWorldEvent[]
+  monsters?: Monster[]
 }
 
 export interface SpeedState {
@@ -34,6 +35,8 @@ type CharacterUpdateCallback = (update: CharacterUpdatePayload) => void
 type WeatherCallback = (weather: WeatherState) => void
 type WorldEventStartedCallback = (event: ActiveWorldEvent) => void
 type WorldEventEndedCallback = (data: { eventId: string; eventType: string; title: string }) => void
+type CombatEventCallback = (event: WorldEvent) => void
+type MonsterEventCallback = (event: WorldEvent) => void
 
 class SocketClient {
   private socket: Socket | null = null
@@ -47,6 +50,8 @@ class SocketClient {
   private weatherCallbacks: WeatherCallback[] = []
   private worldEventStartedCallbacks: WorldEventStartedCallback[] = []
   private worldEventEndedCallbacks: WorldEventEndedCallback[] = []
+  private combatEventCallbacks: CombatEventCallback[] = []
+  private monsterEventCallbacks: MonsterEventCallback[] = []
   private spectatorCountCallbacks: ((count: number) => void)[] = []
 
   connect(url?: string): void {
@@ -91,6 +96,14 @@ class SocketClient {
 
     this.socket.on('world:event_ended', (data: { eventId: string; eventType: string; title: string }) => {
       for (const cb of this.worldEventEndedCallbacks) cb(data)
+    })
+
+    this.socket.on('combat:event', (event: WorldEvent) => {
+      for (const cb of this.combatEventCallbacks) cb(event)
+    })
+
+    this.socket.on('monster:event', (event: WorldEvent) => {
+      for (const cb of this.monsterEventCallbacks) cb(event)
     })
 
     this.socket.on('spectator:count', (count: number) => {
@@ -162,6 +175,16 @@ class SocketClient {
   onWorldEventEnded(callback: WorldEventEndedCallback): () => void {
     this.worldEventEndedCallbacks.push(callback)
     return () => { this.worldEventEndedCallbacks = this.worldEventEndedCallbacks.filter(cb => cb !== callback) }
+  }
+
+  onCombatEvent(callback: CombatEventCallback): () => void {
+    this.combatEventCallbacks.push(callback)
+    return () => { this.combatEventCallbacks = this.combatEventCallbacks.filter(cb => cb !== callback) }
+  }
+
+  onMonsterEvent(callback: MonsterEventCallback): () => void {
+    this.monsterEventCallbacks.push(callback)
+    return () => { this.monsterEventCallbacks = this.monsterEventCallbacks.filter(cb => cb !== callback) }
   }
 
   onSpectatorCount(callback: (count: number) => void): () => void {

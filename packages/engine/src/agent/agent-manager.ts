@@ -4,7 +4,7 @@ import type {
 } from '@botworld/shared'
 import {
   generateId, createEmotionState, createRandomPersonality,
-  DEFAULT_MAX_HP, DEFAULT_MAX_ENERGY, DEFAULT_MAX_HUNGER,
+  DEFAULT_MAX_HP, DEFAULT_MAX_ENERGY, DEFAULT_MAX_HUNGER, DEFAULT_ATTACK, DEFAULT_DEFENSE,
   HUNGER_DRAIN_PER_TICK, REST_ENERGY_REGEN, ENERGY_COST,
   EMOTION_DECAY_RATE,
 } from '@botworld/shared'
@@ -55,6 +55,8 @@ export class AgentManager {
         maxEnergy: DEFAULT_MAX_ENERGY,
         hunger: DEFAULT_MAX_HUNGER,
         maxHunger: DEFAULT_MAX_HUNGER,
+        attack: DEFAULT_ATTACK,
+        defense: DEFAULT_DEFENSE,
       },
       level: 1,
       xp: 0,
@@ -117,6 +119,8 @@ export class AgentManager {
         maxEnergy: DEFAULT_MAX_ENERGY,
         hunger: DEFAULT_MAX_HUNGER,
         maxHunger: DEFAULT_MAX_HUNGER,
+        attack: DEFAULT_ATTACK,
+        defense: DEFAULT_DEFENSE,
       },
       level: 1,
       xp: 0,
