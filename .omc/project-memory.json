@@ -71,6 +71,61 @@
       ]
     }
   },
-  "hotPaths": [],
+  "hotPaths": [
+    {
+      "path": "packages/engine/public/skill.md",
+      "accessCount": 2,
+      "lastAccessed": 1770792610517,
+      "type": "file"
+    },
+    {
+      "path": "packages/engine/src/api/actions.ts",
+      "accessCount": 1,
+      "lastAccessed": 1770792412599,
+      "type": "file"
+    },
+    {
+      "path": "packages/engine/src/api/market.ts",
+      "accessCount": 1,
+      "lastAccessed": 1770792412615,
+      "type": "file"
+    },
+    {
+      "path": "packages/engine/public/heartbeat.md",
+      "accessCount": 1,
+      "lastAccessed": 1770792412625,
+      "type": "file"
+    },
+    {
+      "path": "packages/engine/src/api/character.ts",
+      "accessCount": 1,
+      "lastAccessed": 1770792412628,
+      "type": "file"
+    },
+    {
+      "path": "packages/engine/src/api/world.ts",
+      "accessCount": 1,
+      "lastAccessed": 1770792418479,
+      "type": "file"
+    },
+    {
+      "path": "packages/engine/src",
+      "accessCount": 1,
+      "lastAccessed": 1770792418827,
+      "type": "directory"
+    },
+    {
+      "path": "packages/engine/src/auth/claim.ts",
+      "accessCount": 1,
+      "lastAccessed": 1770792422461,
+      "type": "file"
+    },
+    {
+      "path": "packages/engine/src/auth/agent-registry.ts",
+      "accessCount": 1,
+      "lastAccessed": 1770792422473,
+      "type": "file"
+    }
+  ],
   "userDirectives": []
 }
