@@ -19,6 +19,7 @@ export type WorldEvent =
   | CharacterUpdatedEvent
   | TradeProposedEvent
   | ChatDeliveredEvent
+  | StateUpdatedEvent
 
 export interface AgentMovedEvent {
   type: 'agent:moved'
@@ -127,5 +128,11 @@ export interface ChatDeliveredEvent {
   messageType: 'say' | 'whisper' | 'shout'
   recipientIds: string[]
   position: { x: number; y: number }
+  timestamp: number
+}
+
+export interface StateUpdatedEvent {
+  type: 'world:state_updated'
+  clock: WorldClock
   timestamp: number
 }

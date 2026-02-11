@@ -192,7 +192,7 @@ export function createActionRouter(world: WorldEngine, chatRelay: ChatRelay): IR
       }
 
       const duration = Math.max(path.length * 2, 2)
-      const result = world.agentManager.requestAction(req.agent!.id, {
+      const result = world.agentManager.enqueueAction(req.agent!.id, {
         type: 'move',
         targetPosition: { x, y },
         startedAt: world.clock.tick,
@@ -226,7 +226,7 @@ export function createActionRouter(world: WorldEngine, chatRelay: ChatRelay): IR
         return
       }
 
-      const result = world.agentManager.requestAction(req.agent!.id, {
+      const result = world.agentManager.enqueueAction(req.agent!.id, {
         type: 'gather',
         targetPosition: agent.position,
         startedAt: world.clock.tick,
@@ -271,7 +271,7 @@ export function createActionRouter(world: WorldEngine, chatRelay: ChatRelay): IR
         return
       }
 
-      const result = world.agentManager.requestAction(req.agent!.id, {
+      const result = world.agentManager.enqueueAction(req.agent!.id, {
         type: 'craft',
         data: { materialIds },
         startedAt: world.clock.tick,
@@ -491,7 +491,7 @@ export function createActionRouter(world: WorldEngine, chatRelay: ChatRelay): IR
       const duration = Math.max(10, Math.min(120, req.body.duration ?? 30))
       const agent = world.agentManager.getAgent(req.agent!.id)!
 
-      const result = world.agentManager.requestAction(req.agent!.id, {
+      const result = world.agentManager.enqueueAction(req.agent!.id, {
         type: 'rest',
         startedAt: world.clock.tick,
         duration,
@@ -533,7 +533,7 @@ export function createActionRouter(world: WorldEngine, chatRelay: ChatRelay): IR
         return
       }
 
-      const result = world.agentManager.requestAction(req.agent!.id, {
+      const result = world.agentManager.enqueueAction(req.agent!.id, {
         type: 'eat',
         targetItemId: itemId,
         startedAt: world.clock.tick,
@@ -613,7 +613,7 @@ export function createActionRouter(world: WorldEngine, chatRelay: ChatRelay): IR
       }
 
       const duration = Math.max(path.length * 2, 2)
-      const result = world.agentManager.requestAction(req.agent!.id, {
+      const result = world.agentManager.enqueueAction(req.agent!.id, {
         type: 'explore',
         targetPosition,
         startedAt: world.clock.tick,

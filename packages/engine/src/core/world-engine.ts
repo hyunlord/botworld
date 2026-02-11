@@ -80,7 +80,7 @@ export class WorldEngine {
     // 1. Advance clock
     this.clock = advanceClock(this.clock)
 
-    // 2. Emit tick event
+    // 2. Emit tick event (pre-processing notification)
     this.eventBus.emit({
       type: 'world:tick',
       clock: this.clock,
@@ -90,11 +90,21 @@ export class WorldEngine {
     // 3. Expand world around agents (lazy chunk generation)
     this.expandWorldAroundAgents()
 
-    // 4. Update all agents
-    this.agentManager.updateAll(this.clock)
+    // 4. Process queued actions (complete finished → start queued)
+    this.agentManager.processQueuedActions(this.clock)
 
-    // 5. Regenerate resources
+    // 5. Update passive effects (hunger, emotions, movement, rest)
+    this.agentManager.updatePassiveEffects(this.clock)
+
+    // 6. Regenerate resources
     this.tileMap.tickResources()
+
+    // 7. Broadcast updated state (all processing complete)
+    this.eventBus.emit({
+      type: 'world:state_updated',
+      clock: this.clock,
+      timestamp: this.clock.tick,
+    })
   }
 
   /** Generate new chunks around agents as they explore */

@@ -1,6 +1,6 @@
 import type {
   Agent, AgentAction, WorldClock,
-  Position, SkillType, EmotionState, PersonalityTraits,
+  Position, SkillType, EmotionState, PersonalityTraits, Item,
 } from '@botworld/shared'
 import {
   generateId, createEmotionState, createRandomPersonality,
@@ -23,6 +23,7 @@ interface AgentRuntime {
 
 export class AgentManager {
   private agents = new Map<string, AgentRuntime>()
+  private pendingActions = new Map<string, AgentAction>()
 
   constructor(
     private eventBus: EventBus,
@@ -84,6 +85,68 @@ export class AgentManager {
     return agent
   }
 
+  /** Load an agent from DB, preserving the DB-provided ID */
+  loadAgent(options: {
+    id: string
+    name: string
+    position: Position
+    bio: string
+    personality?: PersonalityTraits
+    skills?: Partial<Record<SkillType, number>>
+    inventory?: Item[]
+  }): Agent {
+    const defaultSkills: Record<SkillType, number> = {
+      gathering: 1, crafting: 1, combat: 1, diplomacy: 1,
+      leadership: 1, trading: 1, farming: 1, cooking: 1,
+    }
+    if (options.skills) {
+      for (const [k, v] of Object.entries(options.skills)) {
+        defaultSkills[k as SkillType] = v
+      }
+    }
+
+    const agent: Agent = {
+      id: options.id,
+      name: options.name,
+      position: { ...options.position },
+      stats: {
+        hp: DEFAULT_MAX_HP,
+        maxHp: DEFAULT_MAX_HP,
+        energy: DEFAULT_MAX_ENERGY,
+        maxEnergy: DEFAULT_MAX_ENERGY,
+        hunger: DEFAULT_MAX_HUNGER,
+        maxHunger: DEFAULT_MAX_HUNGER,
+      },
+      level: 1,
+      xp: 0,
+      skills: defaultSkills,
+      inventory: options.inventory ? [...options.inventory] : [],
+      memories: [],
+      relationships: {},
+      personality: options.personality ?? createRandomPersonality(),
+      currentMood: createEmotionState(),
+      currentAction: null,
+      bio: options.bio,
+    }
+
+    const runtime: AgentRuntime = {
+      agent,
+      memory: new MemoryStream(options.id),
+      path: [],
+      pathIndex: 0,
+    }
+
+    this.agents.set(options.id, runtime)
+
+    this.eventBus.emit({
+      type: 'agent:spawned',
+      agent,
+      timestamp: 0,
+    })
+
+    return agent
+  }
+
   getAgent(id: string): Agent | undefined {
     return this.agents.get(id)?.agent
   }
@@ -112,8 +175,8 @@ export class AgentManager {
     return result
   }
 
-  /** External API entry point: request an action for an agent */
-  requestAction(agentId: string, action: AgentAction): { success: boolean; error?: string } {
+  /** @deprecated Use enqueueAction() for external callers. Kept for internal/AI behavior tree use. */
+  private requestAction(agentId: string, action: AgentAction): { success: boolean; error?: string } {
     const runtime = this.agents.get(agentId)
     if (!runtime) return { success: false, error: 'Agent not found' }
 
@@ -141,12 +204,93 @@ export class AgentManager {
     return { success: true }
   }
 
+  /** Queue an action for tick-boundary processing (replaces requestAction for external callers) */
+  enqueueAction(agentId: string, action: AgentAction): { success: boolean; error?: string } {
+    const runtime = this.agents.get(agentId)
+    if (!runtime) return { success: false, error: 'Agent not found' }
+
+    const { agent } = runtime
+
+    // Reject if currently busy (action not yet completed)
+    if (agent.currentAction) {
+      const clock = this.clockGetter()
+      if (clock.tick < agent.currentAction.startedAt + agent.currentAction.duration) {
+        return { success: false, error: 'Agent is busy with another action' }
+      }
+    }
+
+    // Reject if already queued
+    if (this.pendingActions.has(agentId)) {
+      return { success: false, error: 'Agent already has a pending action queued' }
+    }
+
+    // Energy check
+    const cost = ENERGY_COST[action.type] ?? 0
+    if (agent.stats.energy < cost) {
+      return { success: false, error: `Not enough energy. Need ${cost}, have ${agent.stats.energy}` }
+    }
+
+    this.pendingActions.set(agentId, action)
+    return { success: true }
+  }
+
+  /** Tick step: complete finished actions, then start queued actions */
+  processQueuedActions(clock: WorldClock): void {
+    // 1) Complete finished actions
+    for (const runtime of this.agents.values()) {
+      if (runtime.agent.currentAction) {
+        const done = clock.tick >= runtime.agent.currentAction.startedAt + runtime.agent.currentAction.duration
+        if (done) {
+          this.completeAction(runtime, clock)
+          runtime.agent.currentAction = null
+        }
+      }
+    }
+
+    // 2) Start queued actions
+    for (const [agentId, action] of this.pendingActions) {
+      const runtime = this.agents.get(agentId)
+      if (!runtime) {
+        this.pendingActions.delete(agentId)
+        continue
+      }
+      // Still busy (action didn't finish this tick) — keep in queue for next tick
+      if (runtime.agent.currentAction) continue
+
+      // Re-validate energy (may have changed between enqueue and tick)
+      const cost = ENERGY_COST[action.type] ?? 0
+      if (runtime.agent.stats.energy < cost) {
+        this.pendingActions.delete(agentId)
+        continue
+      }
+
+      // Deterministic timing: action starts at this tick
+      action.startedAt = clock.tick
+      this.startAction(runtime, action)
+      this.pendingActions.delete(agentId)
+    }
+  }
+
+  /** Tick step: passive effects — hunger, emotion decay, action progress */
+  updatePassiveEffects(clock: WorldClock): void {
+    for (const runtime of this.agents.values()) {
+      const { agent } = runtime
+      agent.stats.hunger = Math.max(0, agent.stats.hunger - HUNGER_DRAIN_PER_TICK)
+      this.decayEmotions(agent.currentMood)
+      if (agent.currentAction) {
+        this.progressAction(runtime, clock)
+      }
+    }
+  }
+
+  /** @deprecated Use processQueuedActions + updatePassiveEffects instead */
   updateAll(clock: WorldClock): void {
     for (const runtime of this.agents.values()) {
       this.updateAgent(runtime, clock)
     }
   }
 
+  /** @deprecated Use processQueuedActions + updatePassiveEffects instead */
   private updateAgent(runtime: AgentRuntime, clock: WorldClock): void {
     const { agent } = runtime
 

@@ -148,13 +148,16 @@ export class WsManager {
       this.spectatorNs.emit('world:event', event)
 
       if (event.type === 'world:tick') {
-        this.spectatorNs.emit('world:agents', this.world.agentManager.getAllAgents())
-
-        // Bot: tick + nearby
+        // Bot: tick notification (state not yet updated)
         this.botNs.emit('world:tick', {
           clock: event.clock,
           timestamp: event.timestamp,
         })
+      }
+
+      if (event.type === 'world:state_updated') {
+        // All processing complete — broadcast fresh state
+        this.spectatorNs.emit('world:agents', this.world.agentManager.getAllAgents())
         this.sendNearbyUpdates()
       }
 
@@ -388,7 +391,7 @@ export class WsManager {
         }
 
         const duration = Math.max(path.length * 2, 2)
-        const result = this.world.agentManager.requestAction(agentId, {
+        const result = this.world.agentManager.enqueueAction(agentId, {
           type: 'move',
           targetPosition: { x, y },
           startedAt: this.world.clock.tick,
@@ -526,7 +529,7 @@ export class WsManager {
           return cb?.({ error: 'No resource at current position' })
         }
 
-        const result = this.world.agentManager.requestAction(agentId, {
+        const result = this.world.agentManager.enqueueAction(agentId, {
           type: 'gather',
           targetPosition: agent.position,
           startedAt: this.world.clock.tick,
@@ -580,7 +583,7 @@ export class WsManager {
           })
         }
 
-        const result = this.world.agentManager.requestAction(agentId, {
+        const result = this.world.agentManager.enqueueAction(agentId, {
           type: 'craft',
           data: { materialIds },
           startedAt: this.world.clock.tick,
@@ -615,7 +618,7 @@ export class WsManager {
 
         const duration = Math.max(10, Math.min(120, data?.duration ?? 30))
 
-        const result = this.world.agentManager.requestAction(agentId, {
+        const result = this.world.agentManager.enqueueAction(agentId, {
           type: 'rest',
           startedAt: this.world.clock.tick,
           duration,
@@ -657,7 +660,7 @@ export class WsManager {
           return cb?.({ error: 'Item is not food' })
         }
 
-        const result = this.world.agentManager.requestAction(agentId, {
+        const result = this.world.agentManager.enqueueAction(agentId, {
           type: 'eat',
           targetItemId: data.itemId,
           startedAt: this.world.clock.tick,
@@ -746,7 +749,7 @@ export class WsManager {
         }
 
         const duration = Math.max(path.length * 2, 2)
-        const result = this.world.agentManager.requestAction(agentId, {
+        const result = this.world.agentManager.enqueueAction(agentId, {
           type: 'explore',
           targetPosition,
           startedAt: this.world.clock.tick,

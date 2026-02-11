@@ -62,7 +62,8 @@ async function main() {
       const creation = cd?.creation as Record<string, unknown> | undefined
       const pos = spawnPositions[i] ?? { x: 8, y: 8 }
 
-      world.agentManager.createAgent({
+      world.agentManager.loadAgent({
+        id: row.id,
         name: row.name,
         position: pos,
         bio: (creation?.backstory as string) ?? '',
