@@ -5,6 +5,35 @@ import type { WorldEngine } from '../core/world-engine.js'
 export function createWorldRouter(world: WorldEngine): IRouter {
   const router = Router()
 
+  // ── GET /world/stats — public world statistics (no auth) ──
+  router.get('/world/stats',
+    (_req: Request, res: Response) => {
+      const agents = world.agentManager.getAllAgents()
+      const clock = world.clock
+      res.json({
+        agentCount: agents.length,
+        clock: {
+          day: clock.day,
+          timeOfDay: clock.timeOfDay,
+          dayProgress: clock.dayProgress,
+        },
+      })
+    },
+  )
+
+  // ── GET /world/clock — public clock endpoint (no auth) ──
+  router.get('/world/clock',
+    (_req: Request, res: Response) => {
+      const clock = world.clock
+      res.json({
+        day: clock.day,
+        tick: clock.tick,
+        timeOfDay: clock.timeOfDay,
+        dayProgress: clock.dayProgress,
+      })
+    },
+  )
+
   // ── GET /me — authenticated agent's own state ──
   router.get('/me',
     requireAuth(),
