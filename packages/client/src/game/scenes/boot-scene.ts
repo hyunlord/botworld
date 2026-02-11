@@ -10,7 +10,7 @@ export class BootScene extends Phaser.Scene {
   }
 
   preload(): void {
-    // Base tile sprites (12 types)
+    // ── Legacy tile sprites (12 types) ──
     const tileTypes = ['grass', 'water', 'deep_water', 'forest', 'dense_forest', 'sand', 'mountain', 'road', 'building', 'farmland', 'snow', 'swamp']
     for (const type of tileTypes) {
       this.load.image(`tile_${type}`, `assets/tiles/tile_${type}.png`)
@@ -22,6 +22,86 @@ export class BootScene extends Phaser.Scene {
         this.load.image(`tile_${type}_v${v}`, `assets/tiles/variants/tile_${type}_v${v}.png`)
       }
     }
+
+    // ── New terrain tiles (biome-specific, 20 types) ──
+    const newTiles = [
+      'grass_plains', 'grass_flowers', 'forest_light', 'forest_dense', 'forest_autumn',
+      'mountain_low', 'mountain_high', 'mountain_rocky',
+      'water_shallow', 'water_deep', 'water_river',
+      'desert_sand', 'desert_oasis', 'swamp',
+      'snow_field', 'snow_forest', 'farmland',
+      'road_dirt', 'road_stone', 'beach',
+    ]
+    for (const name of newTiles) {
+      this.load.image(`tile_new_${name}`, `assets/tiles/${name}.png`)
+    }
+
+    // ── New POI building sprites (15 types) ──
+    const newBuildings = [
+      'tavern', 'marketplace', 'blacksmith', 'library', 'temple',
+      'farm', 'mine_entrance', 'fishing_hut', 'watchtower', 'guild_hall',
+      'inn', 'fountain', 'ruins', 'witch_hut', 'port',
+    ]
+    for (const name of newBuildings) {
+      this.load.image(`bldg_${name}`, `assets/buildings/${name}.png`)
+    }
+
+    // ── New resource objects (17 types) ──
+    const newResources = [
+      'tree_oak', 'tree_pine', 'tree_palm',
+      'rock_small', 'rock_large',
+      'bush_berry', 'mushroom',
+      'herb_green', 'herb_rare',
+      'flower_red', 'flower_blue',
+      'wheat', 'vegetable',
+      'fish_spot',
+      'ore_iron', 'ore_gold', 'ore_crystal',
+    ]
+    for (const name of newResources) {
+      this.load.image(`res_${name}`, `assets/resources/${name}.png`)
+    }
+
+    // ── New item icons (26 types) ──
+    const newItems = [
+      'sword', 'axe', 'bow', 'staff', 'dagger',
+      'shield', 'helmet', 'armor_leather', 'armor_plate',
+      'potion_red', 'potion_blue', 'bread', 'meat', 'fish_cooked',
+      'wood', 'stone', 'iron_ingot', 'gold_ingot', 'crystal', 'leather', 'cloth',
+      'gem_red', 'gem_blue', 'scroll', 'key', 'map',
+    ]
+    for (const name of newItems) {
+      this.load.image(`item_${name}`, `assets/items/${name}.png`)
+    }
+
+    // ── New character base sprites (8 races) ──
+    const races = ['human', 'elf', 'dwarf', 'orc', 'beastkin', 'undead', 'fairy', 'dragonkin']
+    for (const race of races) {
+      this.load.image(`char_race_${race}`, `assets/characters/${race}_base.png`)
+    }
+
+    // ── UI elements ──
+    // Minimap POI icons
+    const minimapIcons = ['tavern', 'market', 'blacksmith', 'library', 'temple', 'farm', 'mine', 'port']
+    for (const name of minimapIcons) {
+      this.load.image(`minimap_${name}`, `assets/ui/minimap_icons/${name}.png`)
+    }
+
+    // Emotion bubble icons
+    const emotions = ['happy', 'sad', 'angry', 'surprised', 'scared', 'love', 'thinking', 'sleepy']
+    for (const name of emotions) {
+      this.load.image(`emotion_${name}`, `assets/ui/emotion_bubbles/${name}.png`)
+    }
+
+    // Speech bubble frame
+    this.load.image('speech_bubble_frame', 'assets/ui/speech_bubble.png')
+
+    // Action indicator icons (new set)
+    const newActions = ['gathering', 'crafting', 'fighting', 'resting', 'trading', 'walking', 'eating', 'exploring']
+    for (const name of newActions) {
+      this.load.image(`act_${name}`, `assets/ui/action_icons/${name}.png`)
+    }
+
+    // ── Legacy assets (backward compatibility) ──
 
     // Agent sprites (5 characters — legacy fallback)
     for (let i = 0; i < 5; i++) {
@@ -59,19 +139,19 @@ export class BootScene extends Phaser.Scene {
       }
     }
 
-    // Resource icons (6 types)
+    // Legacy resource icons (6 types)
     const resourceTypes = ['wood', 'stone', 'food', 'iron', 'gold', 'herb']
     for (const type of resourceTypes) {
       this.load.image(`resource_${type}`, `assets/resources/resource_${type}.png`)
     }
 
-    // Action icons (5 types)
+    // Legacy action icons (5 types)
     const actionTypes = ['gather', 'talk', 'craft', 'rest', 'trade']
     for (const type of actionTypes) {
       this.load.image(`action_${type}`, `assets/actions/action_${type}.png`)
     }
 
-    // POI building sprites (6 types)
+    // Legacy POI building sprites (6 types)
     const buildingTypes = ['marketplace', 'tavern', 'workshop', 'library', 'farm', 'mine']
     for (const type of buildingTypes) {
       this.load.image(`building_${type}`, `assets/buildings/building_${type}.png`)

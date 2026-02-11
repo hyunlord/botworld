@@ -12,11 +12,127 @@ const TILE_H = 64
 const TILE_SCALE = 1.0
 const AGENT_SCALE = 0.6
 const RESOURCE_SCALE = 0.35
+const BUILDING_SCALE = 1.2
 
 interface RenderedChunk {
   tileSprites: Phaser.GameObjects.Image[]
   decoSprites: Phaser.GameObjects.Image[]
   resourceSprites: Phaser.GameObjects.Image[]
+  buildingSprites: Phaser.GameObjects.Image[]
+}
+
+// ── Biome-aware tile texture mapping ──
+
+/** Map tile type + biome + variant to the best available new texture key */
+function resolveTileTexture(tile: Tile, textures: Phaser.Textures.TextureManager): string {
+  // Try new biome-specific textures first
+  const newKey = getNewTileKey(tile)
+  if (newKey && textures.exists(newKey)) return newKey
+
+  // Fallback to legacy variant texture
+  const variantKey = `tile_${tile.type}_v${tile.variant ?? 0}`
+  if (textures.exists(variantKey)) return variantKey
+
+  // Fallback to legacy base texture
+  return `tile_${tile.type}`
+}
+
+function getNewTileKey(tile: Tile): string | null {
+  const biome = tile.biome ?? ''
+  const variant = tile.variant ?? 0
+
+  switch (tile.type) {
+    case 'grass':
+      if (tile.decoration?.includes('flower') || variant === 2) return 'tile_new_grass_flowers'
+      return 'tile_new_grass_plains'
+    case 'forest':
+      return variant >= 1 ? 'tile_new_forest_dense' : 'tile_new_forest_light'
+    case 'dense_forest':
+      return biome === 'tundra' ? 'tile_new_snow_forest' : 'tile_new_forest_dense'
+    case 'mountain':
+      if (variant >= 2) return 'tile_new_mountain_high'
+      if (variant === 1) return 'tile_new_mountain_rocky'
+      return 'tile_new_mountain_low'
+    case 'water':
+      return 'tile_new_water_shallow'
+    case 'deep_water':
+      return 'tile_new_water_deep'
+    case 'sand':
+      if (biome === 'beach' || biome === 'coast') return 'tile_new_beach'
+      return 'tile_new_desert_sand'
+    case 'snow':
+      return 'tile_new_snow_field'
+    case 'swamp':
+      return 'tile_new_swamp'
+    case 'farmland':
+      return 'tile_new_farmland'
+    case 'road':
+      // Stone roads near POIs, dirt roads elsewhere
+      return tile.poiType ? 'tile_new_road_stone' : 'tile_new_road_dirt'
+    default:
+      return null
+  }
+}
+
+/** Map POI type to the best available building texture key */
+function resolveBuildingTexture(poiType: string, textures: Phaser.Textures.TextureManager): string {
+  // New building name mapping
+  const poiToBldg: Record<string, string> = {
+    marketplace: 'bldg_marketplace',
+    tavern: 'bldg_tavern',
+    workshop: 'bldg_blacksmith',
+    library: 'bldg_library',
+    farm: 'bldg_farm',
+    mine: 'bldg_mine_entrance',
+    temple: 'bldg_temple',
+    fishing_hut: 'bldg_fishing_hut',
+    watchtower: 'bldg_watchtower',
+    guild_hall: 'bldg_guild_hall',
+    inn: 'bldg_inn',
+    fountain: 'bldg_fountain',
+    ruins: 'bldg_ruins',
+    witch_hut: 'bldg_witch_hut',
+    port: 'bldg_port',
+  }
+
+  const newKey = poiToBldg[poiType]
+  if (newKey && textures.exists(newKey)) return newKey
+
+  // Fallback to legacy building texture
+  const legacyKey = `building_${poiType}`
+  if (textures.exists(legacyKey)) return legacyKey
+
+  return 'tile_building'
+}
+
+/** Map resource type + biome to the best resource overlay sprite */
+function resolveResourceTexture(resourceType: string, biome: string, textures: Phaser.Textures.TextureManager): string {
+  const biomeResourceMap: Record<string, Record<string, string>> = {
+    wood: {
+      desert: 'res_tree_palm',
+      beach: 'res_tree_palm',
+      tundra: 'res_tree_pine',
+      snow: 'res_tree_pine',
+      _default: 'res_tree_oak',
+    },
+    stone: { _default: 'res_rock_large' },
+    food: { _default: 'res_bush_berry' },
+    herb: { _default: 'res_herb_green' },
+    iron: { _default: 'res_ore_iron' },
+    gold: { _default: 'res_ore_gold' },
+  }
+
+  const mapping = biomeResourceMap[resourceType]
+  if (mapping) {
+    const key = mapping[biome] ?? mapping['_default']
+    if (key && textures.exists(key)) return key
+  }
+
+  // Fallback to legacy resource texture
+  const legacyKey = `resource_${resourceType}`
+  if (textures.exists(legacyKey)) return legacyKey
+
+  return 'resource_indicator'
 }
 
 /**
@@ -329,6 +445,7 @@ export class WorldScene extends Phaser.Scene {
     const tileSprites: Phaser.GameObjects.Image[] = []
     const decoSprites: Phaser.GameObjects.Image[] = []
     const resourceSprites: Phaser.GameObjects.Image[] = []
+    const buildingSprites: Phaser.GameObjects.Image[] = []
 
     for (let ly = 0; ly < chunk.tiles.length; ly++) {
       for (let lx = 0; lx < chunk.tiles[ly].length; lx++) {
@@ -336,21 +453,51 @@ export class WorldScene extends Phaser.Scene {
         const pos = this.tileToScreen(tile.position.x, tile.position.y)
         const depth = tile.position.x + tile.position.y
 
-        // Texture selection: POI building > variant > base
-        let textureKey: string
-        if (tile.poiType) {
-          textureKey = `building_${tile.poiType}`
-          if (!this.textures.exists(textureKey)) textureKey = 'tile_building'
-        } else {
-          textureKey = `tile_${tile.type}_v${tile.variant ?? 0}`
-          if (!this.textures.exists(textureKey)) textureKey = `tile_${tile.type}`
-        }
+        // Biome-aware tile texture selection (new assets with legacy fallback)
+        const textureKey = resolveTileTexture(tile, this.textures)
 
         const sprite = this.add.image(pos.x, pos.y, textureKey)
           .setOrigin(0.5, 0.35)
           .setScale(TILE_SCALE)
           .setDepth(depth)
+
+        // Water wave animation: gentle oscillation on water tiles
+        if (tile.type === 'water' || tile.type === 'deep_water') {
+          this.tweens.add({
+            targets: sprite,
+            y: sprite.y + 1.5,
+            duration: 2000 + Math.random() * 800,
+            yoyo: true,
+            repeat: -1,
+            ease: 'Sine.easeInOut',
+            delay: Math.random() * 1000,
+          })
+          sprite.setAlpha(0.92)
+        }
+
         tileSprites.push(sprite)
+
+        // POI building overlay (rendered above the ground tile)
+        if (tile.poiType) {
+          const bldgKey = resolveBuildingTexture(tile.poiType, this.textures)
+          const bldgSprite = this.add.image(pos.x, pos.y - TILE_H * 0.6, bldgKey)
+            .setOrigin(0.5, 0.7)
+            .setScale(BUILDING_SCALE)
+            .setDepth(depth + 0.3)
+          buildingSprites.push(bldgSprite)
+
+          // Tavern warm light flicker
+          if (tile.poiType === 'tavern') {
+            this.tweens.add({
+              targets: bldgSprite,
+              alpha: { from: 1.0, to: 0.88 },
+              duration: 400 + Math.random() * 300,
+              yoyo: true,
+              repeat: -1,
+              ease: 'Sine.easeInOut',
+            })
+          }
+        }
 
         // Decoration overlay
         if (tile.decoration && this.textures.exists(tile.decoration)) {
@@ -361,40 +508,62 @@ export class WorldScene extends Phaser.Scene {
           decoSprites.push(deco)
         }
 
-        // Resource indicator
+        // Resource overlay with biome-aware sprites
         if (tile.resource && tile.resource.amount >= 1) {
-          const resKey = `resource_${tile.resource.type}`
-          const hasTexture = this.textures.exists(resKey)
+          const biome = tile.biome ?? ''
+          const resKey = resolveResourceTexture(tile.resource.type, biome, this.textures)
+          const isNewAsset = resKey.startsWith('res_')
+          const isIndicator = resKey === 'resource_indicator'
+          const scale = isIndicator ? 0.5 : isNewAsset ? RESOURCE_SCALE * 1.2 : RESOURCE_SCALE
+
           const resSprite = this.add.image(
             pos.x,
             pos.y - TILE_H * 0.4,
-            hasTexture ? resKey : 'resource_indicator',
+            resKey,
           )
             .setOrigin(0.5, 0.5)
-            .setScale(hasTexture ? RESOURCE_SCALE : 0.5)
+            .setScale(scale)
             .setDepth(depth + 0.1)
-            .setAlpha(0.75)
+            .setAlpha(0.85)
           resourceSprites.push(resSprite)
 
-          this.tweens.add({
-            targets: resSprite,
-            y: resSprite.y - 2,
-            duration: 1500 + Math.random() * 500,
-            yoyo: true,
-            repeat: -1,
-            ease: 'Sine.easeInOut',
-          })
+          // Vegetation sway for trees/bushes, bob for ores/minerals
+          const isVegetation = ['wood', 'food', 'herb'].includes(tile.resource.type)
+          if (isVegetation) {
+            // Wind sway effect on vegetation
+            this.tweens.add({
+              targets: resSprite,
+              x: resSprite.x + 1,
+              y: resSprite.y - 1.5,
+              duration: 2200 + Math.random() * 800,
+              yoyo: true,
+              repeat: -1,
+              ease: 'Sine.easeInOut',
+              delay: Math.random() * 1500,
+            })
+          } else {
+            // Gentle bob for minerals/ores
+            this.tweens.add({
+              targets: resSprite,
+              y: resSprite.y - 2,
+              duration: 1500 + Math.random() * 500,
+              yoyo: true,
+              repeat: -1,
+              ease: 'Sine.easeInOut',
+            })
+          }
         }
       }
     }
 
-    this.renderedChunks.set(key, { tileSprites, decoSprites, resourceSprites })
+    this.renderedChunks.set(key, { tileSprites, decoSprites, resourceSprites, buildingSprites })
   }
 
   private destroyRenderedChunk(rendered: RenderedChunk): void {
     for (const s of rendered.tileSprites) s.destroy()
     for (const s of rendered.decoSprites) s.destroy()
     for (const s of rendered.resourceSprites) s.destroy()
+    for (const s of rendered.buildingSprites) s.destroy()
   }
 
   // --- Agent rendering ---
@@ -558,12 +727,12 @@ export class WorldScene extends Phaser.Scene {
     if (!this.ambientOverlay) return
 
     const tints: Record<string, { color: number; alpha: number }> = {
-      dawn: { color: 0xFF8844, alpha: 0.08 },
+      dawn: { color: 0xFFE0C0, alpha: 0.1 },
       morning: { color: 0xFFCC88, alpha: 0.03 },
-      noon: { color: 0x000000, alpha: 0 },
+      noon: { color: 0xFFFFFF, alpha: 0 },
       afternoon: { color: 0xFF9944, alpha: 0.04 },
-      evening: { color: 0xFF6622, alpha: 0.1 },
-      night: { color: 0x0000AA, alpha: 0.15 },
+      evening: { color: 0xFFC080, alpha: 0.12 },
+      night: { color: 0x6080B0, alpha: 0.18 },
     }
     const tint = tints[timeOfDay] ?? { color: 0x000000, alpha: 0 }
     this.ambientOverlay.setFillStyle(tint.color, tint.alpha)
