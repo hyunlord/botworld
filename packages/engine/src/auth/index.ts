@@ -1,5 +1,6 @@
 export { registryRouter } from './agent-registry.js'
 export { claimRouter } from './claim.js'
+export { sessionRouter, createOwnerSession, validateOwnerSession } from './session.js'
 export { requireAuth, logAuditEvent, invalidateAgentCache } from './middleware.js'
 export { generateApiKey, hashApiKey, verifyApiKey, isBotworldKey } from './key-generator.js'
 export type { AuthenticatedAgent, RegisterAgentBody, RegisterAgentResponse, ClaimAgentBody } from './types.js'

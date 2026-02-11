@@ -1,6 +1,7 @@
 import { type Router as IRouter, Router } from 'express'
 import { pool } from '../db/connection.js'
 import { logAuditEvent, invalidateAgentCache } from './middleware.js'
+import { createOwnerSession } from './session.js'
 import type { ClaimAgentBody } from './types.js'
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
@@ -14,8 +15,14 @@ export const claimRouter: IRouter = Router()
 claimRouter.get('/agents/claim/:code', async (req, res) => {
   const { code } = req.params
 
-  const result = await pool.query(
-    'SELECT id, name, status, created_at FROM agents WHERE claim_code = $1',
+  const result = await pool.query<{
+    id: string
+    name: string
+    status: string
+    created_at: Date
+    character_data: Record<string, unknown> | null
+  }>(
+    'SELECT id, name, status, created_at, character_data FROM agents WHERE claim_code = $1',
     [code]
   )
 
@@ -28,11 +35,16 @@ claimRouter.get('/agents/claim/:code', async (req, res) => {
 
   if (agent.status !== 'pending_claim') {
     res.status(410).json({
-      error: 'This agent has already been claimed.',
+      error: 'ALREADY_CLAIMED',
+      message: 'This agent has already been claimed.',
       agent: { id: agent.id, name: agent.name, status: agent.status },
     })
     return
   }
+
+  // Extract character info if created
+  const characterData = agent.character_data as Record<string, unknown> | null
+  const creation = characterData?.creation as Record<string, unknown> | undefined
 
   res.json({
     agent: {
@@ -41,6 +53,12 @@ claimRouter.get('/agents/claim/:code', async (req, res) => {
       status: agent.status,
       created_at: agent.created_at,
     },
+    character: creation ? {
+      name: creation.name,
+      race: creation.race,
+      characterClass: creation.characterClass,
+      appearance: creation.appearance,
+    } : null,
     message: 'POST to this URL with { "email": "you@example.com" } to claim this agent.',
   })
 })
@@ -115,6 +133,9 @@ claimRouter.post('/agents/claim/:code', async (req, res) => {
       owner_id: ownerId,
     }).catch(() => {})
 
+    // Create owner session for dashboard access
+    const session = createOwnerSession(ownerId, email)
+
     res.json({
       message: 'Agent claimed successfully.',
       agent: {
@@ -123,6 +144,11 @@ claimRouter.post('/agents/claim/:code', async (req, res) => {
         status: 'active',
         owner_id: ownerId,
       },
+      session: {
+        token: session.token,
+        expiresAt: new Date(session.expiresAt).toISOString(),
+      },
+      redirectUrl: `/dashboard?session=${session.token}`,
     })
   } catch (err) {
     await client.query('ROLLBACK')
