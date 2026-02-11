@@ -1,4 +1,5 @@
 import Phaser from 'phaser'
+import { TILE_SIZE } from '../utils/coordinates.js'
 
 /**
  * Boot scene: loads PNG assets, generates procedural fallbacks
@@ -35,8 +36,6 @@ export class BootScene extends Phaser.Scene {
     for (const name of newTiles) {
       this.load.image(`tile_new_${name}`, `assets/tiles/${name}.png`)
     }
-
-    // Note: tile_new_water_river is loaded above, fallback generated in generateFallbackTextures()
 
     // ── New POI building sprites (15 types) ──
     const newBuildings = [
@@ -181,7 +180,8 @@ export class BootScene extends Phaser.Scene {
 
   private generateFallbackTextures(): void {
     this.generateResourceIndicator()
-    this.generateTileVariants()
+    this.generateTerrainTileset()
+    this.generateTileVariantFallbacks()
     this.generateBuildingFallbacks()
     this.generateDecorationFallbacks()
     this.generateAgentFallbacks()
@@ -201,10 +201,66 @@ export class BootScene extends Phaser.Scene {
   }
 
   /**
-   * For each tile type generate v0/v1/v2 variant textures (if PNG not loaded).
-   * Each variant is a colored isometric diamond with subtle visual differences.
+   * Generate a single spritesheet texture ('terrain-tiles') containing all biome
+   * types as 32x32 flat squares arranged in a row. Used by the Phaser Tilemap
+   * in WorldScene.
+   *
+   * Index mapping:
+   *   0: grass, 1: water, 2: deep_water, 3: river, 4: mountain,
+   *   5: forest, 6: dense_forest, 7: sand, 8: snow, 9: swamp,
+   *   10: road, 11: building, 12: farmland
    */
-  private generateTileVariants(): void {
+  private generateTerrainTileset(): void {
+    const TS = TILE_SIZE
+    const biomes: { name: string; color: number }[] = [
+      { name: 'grass',        color: 0x6b8e23 },
+      { name: 'water',        color: 0x2563a0 },
+      { name: 'deep_water',   color: 0x1a4070 },
+      { name: 'river',        color: 0x3a7cbd },
+      { name: 'mountain',     color: 0x808080 },
+      { name: 'forest',       color: 0x2d5a1e },
+      { name: 'dense_forest', color: 0x1a3a12 },
+      { name: 'sand',         color: 0xd4b86a },
+      { name: 'snow',         color: 0xdde8f0 },
+      { name: 'swamp',        color: 0x4a5a3a },
+      { name: 'road',         color: 0x8b7355 },
+      { name: 'building',     color: 0xa08060 },
+      { name: 'farmland',     color: 0x8b9a4b },
+    ]
+
+    const totalWidth = biomes.length * TS
+    const g = this.add.graphics()
+
+    for (let i = 0; i < biomes.length; i++) {
+      const x = i * TS
+      const { color } = biomes[i]
+
+      // Solid fill
+      g.fillStyle(color, 1)
+      g.fillRect(x, 0, TS, TS)
+
+      // Subtle noise texture: tiny dots at low opacity for visual interest
+      const seed = (color * 73856093) >>> 0
+      for (let d = 0; d < 12; d++) {
+        const s = ((seed + d * 131 + d * d * 17) & 0xFFFF) / 0xFFFF
+        const t = ((seed + d * 97 + d * d * 31) & 0xFFFF) / 0xFFFF
+        const dx = x + Math.floor(s * (TS - 4)) + 2
+        const dy = Math.floor(t * (TS - 4)) + 2
+        const isLight = d % 3 === 0
+        g.fillStyle(isLight ? 0xffffff : 0x000000, 0.06)
+        g.fillCircle(dx, dy, 1)
+      }
+    }
+
+    g.generateTexture('terrain-tiles', totalWidth, TS)
+    g.destroy()
+  }
+
+  /**
+   * Generate legacy tile_TYPE_vN variant textures as flat 32x32 squares
+   * (fallback when PNG not loaded). Also generates plain tile_TYPE keys.
+   */
+  private generateTileVariantFallbacks(): void {
     const baseColors: Record<string, number> = {
       grass:        0x5a9a4a,
       water:        0x2878b0,
@@ -221,80 +277,56 @@ export class BootScene extends Phaser.Scene {
       river:        0x3a7cbd,
     }
 
-    // Tint offsets for v0/v1/v2
     const offsets = [0x000000, 0x0a0a05, -0x050a05]
+    const TS = TILE_SIZE
 
     for (const [type, base] of Object.entries(baseColors)) {
       for (let v = 0; v < 3; v++) {
         const key = `tile_${type}_v${v}`
         if (this.textures.exists(key)) continue
 
-        // Also generate plain key for v0 as fallback alias
         const color = this.clampColor(base + offsets[v])
-        this.generateDiamondTexture(key, color, 128, 64, v)
+        this.generateFlatTileTexture(key, color, TS, v)
       }
 
-      // Ensure plain base key exists (fallback for renderChunk)
+      // Ensure plain base key exists
       const baseKey = `tile_${type}`
       if (!this.textures.exists(baseKey)) {
-        this.generateDiamondTexture(baseKey, base, 128, 64, 0)
+        this.generateFlatTileTexture(baseKey, base, TS, 0)
       }
     }
 
-    // Generate new river tile with wave patterns if PNG not loaded
-    if (!this.textures.exists('tile_new_water_river')) {
-      this.generateRiverTexture('tile_new_water_river', 0x3a7cbd, 128, 64)
+    // Generate new-style tile keys as flat squares if PNG not loaded
+    const newTileColors: Record<string, number> = {
+      tile_new_grass_plains:  0x6b8e23,
+      tile_new_grass_flowers: 0x7a9e33,
+      tile_new_forest_light:  0x3a7840,
+      tile_new_forest_dense:  0x1e5428,
+      tile_new_forest_autumn: 0x8a6a30,
+      tile_new_mountain_low:  0x808080,
+      tile_new_mountain_high: 0x606060,
+      tile_new_mountain_rocky:0x707070,
+      tile_new_water_shallow: 0x2878b0,
+      tile_new_water_deep:    0x0e3868,
+      tile_new_water_river:   0x3a7cbd,
+      tile_new_desert_sand:   0xd8c478,
+      tile_new_desert_oasis:  0x4a9a6a,
+      tile_new_swamp:         0x4e5e3e,
+      tile_new_snow_field:    0xdde8f0,
+      tile_new_snow_forest:   0x4a7a5a,
+      tile_new_farmland:      0x8b9a4b,
+      tile_new_road_dirt:     0x9a8b6e,
+      tile_new_road_stone:    0x8a8a8a,
+      tile_new_beach:         0xd4b86a,
+    }
+
+    for (const [key, color] of Object.entries(newTileColors)) {
+      if (this.textures.exists(key)) continue
+      this.generateFlatTileTexture(key, color, TS, 0)
     }
   }
 
-  /** Generate river tile with flowing water appearance and wave patterns */
-  private generateRiverTexture(key: string, baseColor: number, w: number, h: number): void {
-    const g = this.add.graphics()
-    const hw = w / 2, hh = h / 2
-
-    // Base diamond fill (slightly lighter than deep water)
-    g.fillStyle(baseColor, 1)
-    g.beginPath()
-    g.moveTo(hw, 0); g.lineTo(w, hh); g.lineTo(hw, h); g.lineTo(0, hh)
-    g.closePath(); g.fillPath()
-
-    // Subtle face shading for depth
-    g.fillStyle(0xffffff, 0.06)
-    g.beginPath()
-    g.moveTo(hw, 0); g.lineTo(0, hh); g.lineTo(hw, hh)
-    g.closePath(); g.fillPath()
-
-    g.fillStyle(0x000000, 0.04)
-    g.beginPath()
-    g.moveTo(w, hh); g.lineTo(hw, h); g.lineTo(hw, hh)
-    g.closePath(); g.fillPath()
-
-    // Wave patterns - lighter streaks to suggest flowing water
-    g.fillStyle(0xffffff, 0.15)
-    // Horizontal wave streaks
-    for (let i = 0; i < 3; i++) {
-      const yOffset = (i - 1) * 12
-      g.fillEllipse(hw - 20, hh + yOffset, 30, 4)
-      g.fillEllipse(hw + 15, hh + yOffset - 6, 25, 3)
-    }
-
-    // Additional lighter highlights for movement effect
-    g.fillStyle(0xffffff, 0.10)
-    g.fillEllipse(hw - 10, hh - 10, 20, 6)
-    g.fillEllipse(hw + 10, hh + 8, 18, 5)
-
-    // Soft edge lines
-    g.lineStyle(1, 0xffffff, 0.08)
-    g.beginPath(); g.moveTo(hw, 1); g.lineTo(1, hh); g.strokePath()
-
-    g.lineStyle(1, 0x000000, 0.06)
-    g.beginPath(); g.moveTo(w - 1, hh); g.lineTo(hw, h - 1); g.strokePath()
-
-    g.generateTexture(key, w, h)
-    g.destroy()
-  }
-
-  /** POI building fallbacks: larger colored structures on diamond base */
+  /** POI building fallbacks: colored rectangles at 64x64 */
   private generateBuildingFallbacks(): void {
     const buildings: Record<string, { base: number; roof: number }> = {
       marketplace: { base: 0x8a6a4a, roof: 0xc9a84c },
@@ -310,50 +342,56 @@ export class BootScene extends Phaser.Scene {
       if (this.textures.exists(key)) continue
 
       const g = this.add.graphics()
-      // Ground diamond (base)
+      // Base structure
       g.fillStyle(colors.base, 1)
-      g.beginPath()
-      g.moveTo(64, 8); g.lineTo(120, 32); g.lineTo(64, 56); g.lineTo(8, 32)
-      g.closePath(); g.fillPath()
-
-      // Base highlight (left face)
-      g.fillStyle(0xffffff, 0.08)
-      g.beginPath()
-      g.moveTo(64, 8); g.lineTo(8, 32); g.lineTo(64, 32)
-      g.closePath(); g.fillPath()
-
-      // Base shadow (right-bottom)
-      g.fillStyle(0x000000, 0.10)
-      g.beginPath()
-      g.moveTo(120, 32); g.lineTo(64, 56); g.lineTo(64, 32)
-      g.closePath(); g.fillPath()
-
-      // Roof / structure
+      g.fillRoundedRect(4, 20, 56, 40, 4)
+      // Roof
       g.fillStyle(colors.roof, 1)
-      g.beginPath()
-      g.moveTo(64, 0); g.lineTo(104, 18); g.lineTo(64, 36); g.lineTo(24, 18)
-      g.closePath(); g.fillPath()
-
-      // Roof highlight (left)
+      g.fillRoundedRect(2, 8, 60, 18, 4)
+      // Roof highlight
       g.fillStyle(0xffffff, 0.12)
-      g.beginPath()
-      g.moveTo(64, 0); g.lineTo(24, 18); g.lineTo(64, 18)
-      g.closePath(); g.fillPath()
+      g.fillRect(4, 8, 56, 6)
+      // Door
+      g.fillStyle(0x000000, 0.3)
+      g.fillRoundedRect(24, 40, 16, 20, 3)
 
-      // Roof shadow (right)
-      g.fillStyle(0x000000, 0.10)
-      g.beginPath()
-      g.moveTo(64, 0); g.lineTo(104, 18); g.lineTo(64, 18)
-      g.closePath(); g.fillPath()
+      g.generateTexture(key, 64, 64)
+      g.destroy()
+    }
 
-      // Soft outline
-      g.lineStyle(1, 0xffffff, 0.10)
-      g.beginPath(); g.moveTo(64, 0); g.lineTo(24, 18); g.strokePath()
-      g.lineStyle(1, 0x000000, 0.20)
-      g.beginPath(); g.moveTo(104, 18); g.lineTo(64, 36); g.strokePath()
-      g.beginPath(); g.moveTo(24, 18); g.lineTo(64, 36); g.strokePath()
+    // New building fallbacks at 64x64
+    const newBuildings: Record<string, { base: number; roof: number }> = {
+      bldg_tavern:       { base: 0x6b4a3a, roof: 0xb85c3a },
+      bldg_marketplace:  { base: 0x8a6a4a, roof: 0xc9a84c },
+      bldg_blacksmith:   { base: 0x5a5a5a, roof: 0x7a8a6a },
+      bldg_library:      { base: 0x4a5a7a, roof: 0x6a7aaa },
+      bldg_temple:       { base: 0x8a8aaa, roof: 0xc0c0d0 },
+      bldg_farm:         { base: 0x6b8f3f, roof: 0xaa8844 },
+      bldg_mine_entrance:{ base: 0x5a4a3a, roof: 0x3a3a3a },
+      bldg_fishing_hut:  { base: 0x6a7a8a, roof: 0x4a6a7a },
+      bldg_watchtower:   { base: 0x7a6a5a, roof: 0x5a5a5a },
+      bldg_guild_hall:   { base: 0x6a5a7a, roof: 0x8a7a9a },
+      bldg_inn:          { base: 0x7a5a3a, roof: 0xaa7a4a },
+      bldg_fountain:     { base: 0x6a8aaa, roof: 0x4a7a9a },
+      bldg_ruins:        { base: 0x6a6a6a, roof: 0x5a5a5a },
+      bldg_witch_hut:    { base: 0x3a4a3a, roof: 0x5a3a5a },
+      bldg_port:         { base: 0x5a6a7a, roof: 0x3a5a6a },
+    }
 
-      g.generateTexture(key, 128, 64)
+    for (const [key, colors] of Object.entries(newBuildings)) {
+      if (this.textures.exists(key)) continue
+
+      const g = this.add.graphics()
+      g.fillStyle(colors.base, 1)
+      g.fillRoundedRect(4, 20, 56, 40, 4)
+      g.fillStyle(colors.roof, 1)
+      g.fillRoundedRect(2, 8, 60, 18, 4)
+      g.fillStyle(0xffffff, 0.12)
+      g.fillRect(4, 8, 56, 6)
+      g.fillStyle(0x000000, 0.3)
+      g.fillRoundedRect(24, 40, 16, 20, 3)
+
+      g.generateTexture(key, 64, 64)
       g.destroy()
     }
   }
@@ -567,72 +605,42 @@ export class BootScene extends Phaser.Scene {
 
   /* ───── helpers ───── */
 
-  /** Draw an isometric diamond tile with face shading, edge highlights, and organic texture */
-  private generateDiamondTexture(key: string, color: number, w: number, h: number, variant: number): void {
+  /** Generate a flat 32x32 square tile texture with subtle noise */
+  private generateFlatTileTexture(key: string, color: number, size: number, variant: number): void {
     const g = this.add.graphics()
-    const hw = w / 2, hh = h / 2
 
-    // Base diamond fill
+    // Solid fill — no face shading, no edges, no 3D effects
     g.fillStyle(color, 1)
-    g.beginPath()
-    g.moveTo(hw, 0); g.lineTo(w, hh); g.lineTo(hw, h); g.lineTo(0, hh)
-    g.closePath(); g.fillPath()
+    g.fillRect(0, 0, size, size)
 
-    // Subtle face shading for gentle depth (flat terrain, not raised cubes)
-    g.fillStyle(0xffffff, 0.04)
-    g.beginPath()
-    g.moveTo(hw, 0); g.lineTo(0, hh); g.lineTo(hw, hh)
-    g.closePath(); g.fillPath()
-
-    g.fillStyle(0x000000, 0.04)
-    g.beginPath()
-    g.moveTo(w, hh); g.lineTo(hw, h); g.lineTo(hw, hh)
-    g.closePath(); g.fillPath()
-
-    // Very soft edge lines
-    g.lineStyle(1, 0xffffff, 0.06)
-    g.beginPath(); g.moveTo(hw, 1); g.lineTo(1, hh); g.strokePath()
-
-    g.lineStyle(1, 0x000000, 0.06)
-    g.beginPath(); g.moveTo(w - 1, hh); g.lineTo(hw, h - 1); g.strokePath()
-
-    // Organic texture: scattered semi-transparent marks for natural feel
+    // Subtle noise dots for visual interest
     const seed = (color + variant * 7919) & 0xFFFF
-    for (let i = 0; i < 10 + variant * 4; i++) {
+    for (let i = 0; i < 8 + variant * 3; i++) {
       const s = ((seed + i * 131 + i * i * 17) & 0xFFFF) / 0xFFFF
       const t = ((seed + i * 97 + i * i * 31) & 0xFFFF) / 0xFFFF
-      // Place dots inside diamond using barycentric-like coords
-      const dx = hw + (s - 0.5) * (w * 0.7)
-      const dy = hh + (t - 0.5) * (h * 0.7)
-      // Check inside diamond
-      if (Math.abs(dx - hw) / hw + Math.abs(dy - hh) / hh < 0.82) {
-        const isLight = i % 3 === 0
-        g.fillStyle(isLight ? 0xffffff : 0x000000, 0.03 + (i % 4) * 0.01)
-        g.fillCircle(dx, dy, 1.5 + (i % 3))
-      }
+      const dx = Math.floor(s * (size - 4)) + 2
+      const dy = Math.floor(t * (size - 4)) + 2
+      const isLight = i % 3 === 0
+      g.fillStyle(isLight ? 0xffffff : 0x000000, 0.05)
+      g.fillCircle(dx, dy, 1)
     }
 
-    // Variant-specific character
+    // Variant-specific subtle patches
     if (variant === 1) {
-      // Subtle lighter patches (worn/dry spots)
-      g.fillStyle(0xffffff, 0.05)
-      g.fillCircle(hw - 18, hh - 4, 8)
-      g.fillCircle(hw + 14, hh + 6, 6)
-      g.fillCircle(hw + 4, hh - 10, 5)
+      g.fillStyle(0xffffff, 0.04)
+      g.fillCircle(size * 0.3, size * 0.4, 4)
+      g.fillCircle(size * 0.7, size * 0.6, 3)
     } else if (variant === 2) {
-      // Darker scattered patches (shadow / dirt / moss)
-      g.fillStyle(0x000000, 0.05)
-      g.fillCircle(hw - 14, hh + 2, 7)
-      g.fillCircle(hw + 16, hh - 3, 5)
-      g.fillCircle(hw + 2, hh + 10, 6)
-      g.fillCircle(hw - 8, hh - 8, 4)
+      g.fillStyle(0x000000, 0.04)
+      g.fillCircle(size * 0.4, size * 0.5, 4)
+      g.fillCircle(size * 0.6, size * 0.3, 3)
     }
 
-    g.generateTexture(key, w, h)
+    g.generateTexture(key, size, size)
     g.destroy()
   }
 
-  /** Clamp color to valid 0x000000–0xffffff range */
+  /** Clamp color to valid 0x000000-0xffffff range */
   private clampColor(c: number): number {
     return Math.max(0, Math.min(0xffffff, c))
   }

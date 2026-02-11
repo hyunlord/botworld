@@ -6,67 +6,19 @@ import { SpriteCache } from '../character/sprite-cache.js'
 import { WeatherEffects } from '../effects/weather-effects.js'
 import { DayNightCycle } from '../effects/day-night-cycle.js'
 import { soundManager } from '../audio/sound-manager.js'
+import { TILE_SIZE, worldToScreen, screenToWorld } from '../utils/coordinates.js'
 
-// Grid spacing for isometric projection
-const TILE_W = 128
-const TILE_H = 64
-
-// Scale factors — slight overscale eliminates diamond-corner gaps
-const TILE_SCALE = 1.06 * 1.01
+// Scale factors for sprites placed on the top-down grid
 const AGENT_SCALE = 0.6
 const RESOURCE_SCALE = 0.35
-const BUILDING_SCALE = 1.2
+const BUILDING_SCALE = 1.0
+
 
 interface RenderedChunk {
-  tileSprites: Phaser.GameObjects.Image[]
-  decoSprites: Phaser.GameObjects.Image[]
-  resourceSprites: Phaser.GameObjects.Image[]
-  buildingSprites: Phaser.GameObjects.Image[]
+  objectSprites: Phaser.GameObjects.GameObject[]
 }
 
-// ── Biome-aware tile texture mapping ──
-
-/** Get adjacent tile types that differ from current tile (for biome transitions) */
-function getAdjacentBiomes(tiles: Tile[][], x: number, y: number, width: number, height: number): { up: string | null; down: string | null; left: string | null; right: string | null } {
-  const currentType = tiles[y] && tiles[y][x] ? tiles[y][x].type : null
-  if (!currentType) return { up: null, down: null, left: null, right: null }
-
-  const getType = (ty: number, tx: number): string | null => {
-    if (ty < 0 || ty >= height || tx < 0 || tx >= width) return null
-    return tiles[ty] && tiles[ty][tx] ? tiles[ty][tx].type : null
-  }
-
-  const upType = getType(y - 1, x)
-  const downType = getType(y + 1, x)
-  const leftType = getType(y, x - 1)
-  const rightType = getType(y, x + 1)
-
-  return {
-    up: upType !== currentType ? upType : null,
-    down: downType !== currentType ? downType : null,
-    left: leftType !== currentType ? leftType : null,
-    right: rightType !== currentType ? rightType : null,
-  }
-}
-
-/** Check if a tile type is a natural biome (eligible for transitions) */
-function isNaturalBiome(type: string): boolean {
-  return ['grass', 'forest', 'dense_forest', 'sand', 'snow', 'mountain', 'swamp', 'farmland'].includes(type)
-}
-
-/** Map tile type + biome + variant to the best available new texture key */
-function resolveTileTexture(tile: Tile, textures: Phaser.Textures.TextureManager): string {
-  // Try new biome-specific textures first
-  const newKey = getNewTileKey(tile)
-  if (newKey && textures.exists(newKey)) return newKey
-
-  // Fallback to legacy variant texture
-  const variantKey = `tile_${tile.type}_v${tile.variant ?? 0}`
-  if (textures.exists(variantKey)) return variantKey
-
-  // Fallback to legacy base texture
-  return `tile_${tile.type}`
-}
+// ── Biome-aware tile texture mapping (for object sprites that still use individual textures) ──
 
 function getNewTileKey(tile: Tile): string | null {
   const biome = tile.biome ?? ''
@@ -98,7 +50,6 @@ function getNewTileKey(tile: Tile): string | null {
     case 'farmland':
       return 'tile_new_farmland'
     case 'road':
-      // Stone roads near POIs, dirt roads elsewhere
       return tile.poiType ? 'tile_new_road_stone' : 'tile_new_road_dirt'
     case 'river':
       return 'tile_new_water_river'
@@ -109,7 +60,6 @@ function getNewTileKey(tile: Tile): string | null {
 
 /** Map POI type to the best available building texture key */
 function resolveBuildingTexture(poiType: string, textures: Phaser.Textures.TextureManager): string {
-  // New building name mapping
   const poiToBldg: Record<string, string> = {
     marketplace: 'bldg_marketplace',
     tavern: 'bldg_tavern',
@@ -131,7 +81,6 @@ function resolveBuildingTexture(poiType: string, textures: Phaser.Textures.Textu
   const newKey = poiToBldg[poiType]
   if (newKey && textures.exists(newKey)) return newKey
 
-  // Fallback to legacy building texture
   const legacyKey = `building_${poiType}`
   if (textures.exists(legacyKey)) return legacyKey
 
@@ -161,7 +110,6 @@ function resolveResourceTexture(resourceType: string, biome: string, textures: P
     if (key && textures.exists(key)) return key
   }
 
-  // Fallback to legacy resource texture
   const legacyKey = `resource_${resourceType}`
   if (textures.exists(legacyKey)) return legacyKey
 
@@ -169,16 +117,23 @@ function resolveResourceTexture(resourceType: string, biome: string, textures: P
 }
 
 /**
- * Main isometric world scene with chunk-based rendering.
- * Only renders chunks visible in the camera viewport.
+ * Main top-down world scene with chunk-based rendering.
+ * Renders flat square tiles using a RenderTexture ground layer,
+ * with object sprites (resources, buildings, agents) on top.
  */
 export class WorldScene extends Phaser.Scene {
   // Chunk data received from server
   private chunkDataStore = new Map<string, ChunkData>()
   // Currently rendered chunks (viewport-based)
   private renderedChunks = new Map<string, RenderedChunk>()
-  // Track which chunk keys are currently visible
-  private lastVisibleKeys = new Set<string>()
+  // Ground layer: RenderTexture for painting tiles
+  private groundRT: Phaser.GameObjects.RenderTexture | null = null
+  // Track which chunks have been painted to the ground RT
+  private paintedChunks = new Set<string>()
+  // Ground RT offset: the world-space origin of the RT (in tiles)
+  private groundOriginX = -150
+  private groundOriginY = -150
+  private groundSizeTiles = 300
 
   // Agent rendering
   private agentSprites = new Map<string, Phaser.GameObjects.Container>()
@@ -195,7 +150,6 @@ export class WorldScene extends Phaser.Scene {
   private spriteCache = new SpriteCache()
 
   private agents: Agent[] = []
-  private clock: WorldClock | null = null
   private selectedAgentId: string | null = null
   private followingAgentId: string | null = null
   private hasCentered = false
@@ -205,8 +159,17 @@ export class WorldScene extends Phaser.Scene {
   }
 
   create(): void {
-    this.cameras.main.setZoom(0.25)
+    this.cameras.main.setZoom(1.5)
     this.cameras.main.setRoundPixels(true)
+    this.cameras.main.setBackgroundColor('#1a2e1a')
+
+    // Create the ground RenderTexture — covers a generous area for chunk rendering
+    const rtPixelSize = this.groundSizeTiles * TILE_SIZE
+    const rtOriginPx = this.groundOriginX * TILE_SIZE
+    const rtOriginPyPx = this.groundOriginY * TILE_SIZE
+    this.groundRT = this.add.renderTexture(rtOriginPx, rtOriginPyPx, rtPixelSize, rtPixelSize)
+    this.groundRT.setOrigin(0, 0)
+    this.groundRT.setDepth(-1)
 
     // Day-night cycle (tint overlay, stars, building lights, agent torches)
     this.dayNightCycle = new DayNightCycle(this)
@@ -227,8 +190,8 @@ export class WorldScene extends Phaser.Scene {
       dy: number,
     ) => {
       const cam = this.cameras.main
-      const zoomDelta = -dy * 0.002 * cam.zoom
-      cam.setZoom(Phaser.Math.Clamp(cam.zoom + zoomDelta, 0.3, 3))
+      const newZoom = cam.zoom - dy * 0.001
+      cam.setZoom(Phaser.Math.Clamp(newZoom, 0.5, 4))
     })
 
     // Drag to pan
@@ -247,10 +210,10 @@ export class WorldScene extends Phaser.Scene {
     if (this.followingAgentId) {
       const agent = this.agents.find(a => a.id === this.followingAgentId)
       if (agent) {
-        const pos = this.tileToScreen(agent.position.x, agent.position.y)
+        const pos = worldToScreen(agent.position.x, agent.position.y)
         const cam = this.cameras.main
-        const targetX = pos.x - cam.width / (2 * cam.zoom)
-        const targetY = (pos.y - TILE_H * 0.4) - cam.height / (2 * cam.zoom)
+        const targetX = pos.x + TILE_SIZE / 2 - cam.width / (2 * cam.zoom)
+        const targetY = pos.y + TILE_SIZE / 2 - cam.height / (2 * cam.zoom)
         cam.scrollX += (targetX - cam.scrollX) * 0.08
         cam.scrollY += (targetY - cam.scrollY) * 0.08
       } else {
@@ -271,10 +234,8 @@ export class WorldScene extends Phaser.Scene {
     // Center camera on first data load with cinematic intro
     if (!this.hasCentered && this.chunkDataStore.size > 0) {
       this.hasCentered = true
-      // Start centered on origin
-      const centerScreen = this.tileToScreen(0, 0)
+      const centerScreen = worldToScreen(0, 0)
       this.cameras.main.centerOn(centerScreen.x, centerScreen.y)
-      // Delay intro until agents arrive
       this.time.delayedCall(300, () => this.playCameraIntro())
     }
   }
@@ -285,7 +246,6 @@ export class WorldScene extends Phaser.Scene {
     // Find the most active area (cluster of agents)
     let targetX = 0, targetY = 0
     if (this.agents.length > 0) {
-      // Average position of all agents
       let sumX = 0, sumY = 0
       for (const a of this.agents) {
         sumX += a.position.x
@@ -295,14 +255,14 @@ export class WorldScene extends Phaser.Scene {
       targetY = sumY / this.agents.length
     }
 
-    const targetScreen = this.tileToScreen(targetX, targetY)
+    const targetScreen = worldToScreen(targetX, targetY)
 
     // Pan to active area + zoom in over 1.5s
     this.tweens.add({
       targets: cam,
-      scrollX: targetScreen.x - cam.width / 2,
-      scrollY: targetScreen.y - cam.height / 2,
-      zoom: 0.5,
+      scrollX: targetScreen.x + TILE_SIZE / 2 - cam.width / 2,
+      scrollY: targetScreen.y + TILE_SIZE / 2 - cam.height / 2,
+      zoom: 1.5,
       duration: 1500,
       ease: 'Cubic.easeInOut',
     })
@@ -311,7 +271,6 @@ export class WorldScene extends Phaser.Scene {
   /** Receive full character appearance map (on connect) */
   setCharacterAppearances(map: CharacterAppearanceMap): void {
     this.characterAppearances = map
-    // Recompose any agents whose hash changed
     for (const [agentId, data] of Object.entries(map)) {
       if (this.spriteCache.needsRecompose(agentId, data.spriteHash)) {
         this.recomposeAgentSprite(agentId)
@@ -329,16 +288,18 @@ export class WorldScene extends Phaser.Scene {
     this.agents = agents
 
     for (const agent of agents) {
-      const screenPos = this.tileToScreen(agent.position.x, agent.position.y)
+      const pos = worldToScreen(agent.position.x, agent.position.y)
+      const screenX = pos.x + TILE_SIZE / 2
+      const screenY = pos.y + TILE_SIZE / 2 - 8
 
       if (!this.agentSprites.has(agent.id)) {
-        this.createAgentSprite(agent, screenPos)
+        this.createAgentSprite(agent, { x: screenX, y: screenY })
       } else {
         const container = this.agentSprites.get(agent.id)!
         this.tweens.add({
           targets: container,
-          x: screenPos.x,
-          y: screenPos.y - TILE_H * 0.4,
+          x: screenX,
+          y: screenY,
           duration: 300,
           ease: 'Linear',
         })
@@ -363,21 +324,20 @@ export class WorldScene extends Phaser.Scene {
     // Center on first agent if we haven't centered yet
     if (!this.hasCentered && agents.length > 0) {
       this.hasCentered = true
-      const pos = this.tileToScreen(agents[0].position.x, agents[0].position.y)
-      this.cameras.main.centerOn(pos.x, pos.y)
+      const pos = worldToScreen(agents[0].position.x, agents[0].position.y)
+      this.cameras.main.centerOn(pos.x + TILE_SIZE / 2, pos.y + TILE_SIZE / 2)
     }
   }
 
   updateClock(clock: WorldClock): void {
-    this.clock = clock
     this.dayNightCycle?.update(clock.timeOfDay, clock.dayProgress)
     soundManager.onTimeChange(clock.timeOfDay)
 
     // Update agent torch positions
     if (this.dayNightCycle && this.agents.length > 0) {
       const torchPositions = this.agents.map(a => {
-        const pos = this.tileToScreen(a.position.x, a.position.y)
-        return { screenX: pos.x, screenY: pos.y - TILE_H * 0.4 }
+        const pos = worldToScreen(a.position.x, a.position.y)
+        return { screenX: pos.x + TILE_SIZE / 2, screenY: pos.y + TILE_SIZE / 2 - 8 }
       })
       this.dayNightCycle.drawAgentTorches(torchPositions)
     }
@@ -452,11 +412,11 @@ export class WorldScene extends Phaser.Scene {
       case 'agent:moved': {
         const container = this.agentSprites.get(event.agentId)
         if (container) {
-          const pos = this.tileToScreen(event.to.x, event.to.y)
+          const pos = worldToScreen(event.to.x, event.to.y)
           this.tweens.add({
             targets: container,
-            x: pos.x,
-            y: pos.y - TILE_H * 0.4,
+            x: pos.x + TILE_SIZE / 2,
+            y: pos.y + TILE_SIZE / 2 - 8,
             duration: 500,
             ease: 'Linear',
           })
@@ -469,33 +429,32 @@ export class WorldScene extends Phaser.Scene {
         break
       }
       case 'resource:gathered': {
-        const gatherPos = this.tileToScreen(event.position.x, event.position.y)
-        this.showGatherEffect(gatherPos.x, gatherPos.y, event.resourceType)
+        const gatherPos = worldToScreen(event.position.x, event.position.y)
+        this.showGatherEffect(gatherPos.x + TILE_SIZE / 2, gatherPos.y + TILE_SIZE / 2, event.resourceType)
         soundManager.playGather(event.resourceType)
         break
       }
       case 'item:crafted': {
-        // Find the agent's position
         const crafter = this.agents.find(a => a.id === event.agentId)
         if (crafter) {
-          const pos = this.tileToScreen(crafter.position.x, crafter.position.y)
-          this.showCraftEffect(pos.x, pos.y - TILE_H * 0.4, event.item.name)
+          const pos = worldToScreen(crafter.position.x, crafter.position.y)
+          this.showCraftEffect(pos.x + TILE_SIZE / 2, pos.y + TILE_SIZE / 2 - 8, event.item.name)
         }
         break
       }
       case 'trade:completed': {
         const buyer = this.agents.find(a => a.id === event.buyerId)
         if (buyer) {
-          const pos = this.tileToScreen(buyer.position.x, buyer.position.y)
-          this.showTradeEffect(pos.x, pos.y - TILE_H * 0.4)
+          const pos = worldToScreen(buyer.position.x, buyer.position.y)
+          this.showTradeEffect(pos.x + TILE_SIZE / 2, pos.y + TILE_SIZE / 2 - 8)
         }
         break
       }
       case 'agent:action': {
         const actor = this.agents.find(a => a.id === event.agentId)
         if (actor && event.action.type === 'rest') {
-          const pos = this.tileToScreen(actor.position.x, actor.position.y)
-          this.showRestEffect(pos.x, pos.y - TILE_H * 0.4)
+          const pos = worldToScreen(actor.position.x, actor.position.y)
+          this.showRestEffect(pos.x + TILE_SIZE / 2, pos.y + TILE_SIZE / 2 - 8)
         }
         break
       }
@@ -560,8 +519,8 @@ export class WorldScene extends Phaser.Scene {
   }
 
   private createEventMarker(event: ActiveWorldEvent): void {
-    const pos = this.tileToScreen(event.position.x, event.position.y)
-    const container = this.add.container(pos.x, pos.y - TILE_H * 0.5)
+    const pos = worldToScreen(event.position.x, event.position.y)
+    const container = this.add.container(pos.x + TILE_SIZE / 2, pos.y)
     container.setDepth(900)
 
     const CATEGORY_COLORS: Record<string, number> = {
@@ -622,8 +581,6 @@ export class WorldScene extends Phaser.Scene {
       }
     }
 
-    this.lastVisibleKeys = visibleKeys
-
     // Update building lights for day-night cycle
     this.updateBuildingLights()
   }
@@ -637,11 +594,11 @@ export class WorldScene extends Phaser.Scene {
       for (const row of chunk.tiles) {
         for (const tile of row) {
           if (tile.poiType) {
-            const pos = this.tileToScreen(tile.position.x, tile.position.y)
+            const pos = worldToScreen(tile.position.x, tile.position.y)
             buildings.push({
               key: `${tile.position.x},${tile.position.y}`,
-              screenX: pos.x,
-              screenY: pos.y - TILE_H * 0.6,
+              screenX: pos.x + TILE_SIZE / 2,
+              screenY: pos.y,
             })
           }
         }
@@ -656,19 +613,15 @@ export class WorldScene extends Phaser.Scene {
     const wv = cam.worldView
 
     // Convert camera viewport corners to tile coordinates
-    const corners = [
-      this.screenToTile(wv.left, wv.top),
-      this.screenToTile(wv.right, wv.top),
-      this.screenToTile(wv.left, wv.bottom),
-      this.screenToTile(wv.right, wv.bottom),
-    ]
+    const topLeft = screenToWorld(wv.left, wv.top)
+    const bottomRight = screenToWorld(wv.right, wv.bottom)
 
     // Bounding box in tile space with margin
     const margin = CHUNK_SIZE * 2
-    const minTX = Math.min(corners[0].x, corners[1].x, corners[2].x, corners[3].x) - margin
-    const maxTX = Math.max(corners[0].x, corners[1].x, corners[2].x, corners[3].x) + margin
-    const minTY = Math.min(corners[0].y, corners[1].y, corners[2].y, corners[3].y) - margin
-    const maxTY = Math.max(corners[0].y, corners[1].y, corners[2].y, corners[3].y) + margin
+    const minTX = topLeft.x - margin
+    const maxTX = bottomRight.x + margin
+    const minTY = topLeft.y - margin
+    const maxTY = bottomRight.y + margin
 
     // Convert to chunk coords
     const minCX = Math.floor(minTX / CHUNK_SIZE)
@@ -685,120 +638,35 @@ export class WorldScene extends Phaser.Scene {
     return keys
   }
 
+  /** Paint tiles from a chunk onto the ground RenderTexture and create object sprites */
   private renderChunk(key: string, chunk: ChunkData): void {
-    const tileSprites: Phaser.GameObjects.Image[] = []
-    const decoSprites: Phaser.GameObjects.Image[] = []
-    const resourceSprites: Phaser.GameObjects.Image[] = []
-    const buildingSprites: Phaser.GameObjects.Image[] = []
+    const objectSprites: Phaser.GameObjects.GameObject[] = []
 
+    // Paint ground tiles onto the RenderTexture (if not already painted)
+    if (!this.paintedChunks.has(key) && this.groundRT) {
+      this.paintChunkTiles(chunk)
+      this.paintedChunks.add(key)
+    }
+
+    // Create object sprites (resources, decorations, buildings) on top
     for (let ly = 0; ly < chunk.tiles.length; ly++) {
       for (let lx = 0; lx < chunk.tiles[ly].length; lx++) {
         const tile = chunk.tiles[ly][lx]
-        const pos = this.tileToScreen(tile.position.x, tile.position.y)
-        const depth = tile.position.x + tile.position.y
+        const pos = worldToScreen(tile.position.x, tile.position.y)
+        const centerX = pos.x + TILE_SIZE / 2
+        const centerY = pos.y + TILE_SIZE / 2
 
         // Coordinate-based hash for tile diversity
         const hash = ((tile.position.x * 73856093) ^ (tile.position.y * 19349663)) >>> 0
 
-        // Biome-aware tile texture selection (new assets with legacy fallback)
-        const textureKey = resolveTileTexture(tile, this.textures)
-
-        const sprite = this.add.image(pos.x, pos.y, textureKey)
-          .setOrigin(0.5, 0.35)
-          .setScale(TILE_SCALE)
-          .setDepth(depth)
-
-        // Apply subtle tint variation for tile diversity (±5% brightness)
-        const brightness = 0.95 + (hash % 100) / 1000
-        sprite.setTint(Phaser.Display.Color.GetColor(
-          Math.round(255 * brightness),
-          Math.round(255 * brightness),
-          Math.round(255 * brightness)
-        ))
-
-        // Water wave animation: gentle oscillation on water tiles
-        if (tile.type === 'water' || tile.type === 'deep_water') {
-          this.tweens.add({
-            targets: sprite,
-            y: sprite.y + 1.5,
-            duration: 2000 + Math.random() * 800,
-            yoyo: true,
-            repeat: -1,
-            ease: 'Sine.easeInOut',
-            delay: Math.random() * 1000,
-          })
-          sprite.setAlpha(0.92)
-        }
-
-        tileSprites.push(sprite)
-
-        // Biome transition overlays (alpha-blended adjacent biome textures)
-        const adjacentBiomes = getAdjacentBiomes(chunk.tiles, lx, ly, chunk.tiles[0].length, chunk.tiles.length)
-        const currentType = tile.type
-
-        if (isNaturalBiome(currentType)) {
-          // Check each direction for different biomes
-          if (adjacentBiomes.up && isNaturalBiome(adjacentBiomes.up)) {
-            const adjTile = { ...tile, type: adjacentBiomes.up as any }
-            const adjKey = resolveTileTexture(adjTile, this.textures)
-            if (this.textures.exists(adjKey)) {
-              const overlay = this.add.image(pos.x, pos.y - TILE_H * 0.25, adjKey)
-                .setOrigin(0.5, 0.35)
-                .setScale(TILE_SCALE * 0.5)
-                .setAlpha(0.3)
-                .setDepth(depth + 0.01)
-              tileSprites.push(overlay)
-            }
-          }
-
-          if (adjacentBiomes.down && isNaturalBiome(adjacentBiomes.down)) {
-            const adjTile = { ...tile, type: adjacentBiomes.down as any }
-            const adjKey = resolveTileTexture(adjTile, this.textures)
-            if (this.textures.exists(adjKey)) {
-              const overlay = this.add.image(pos.x, pos.y + TILE_H * 0.25, adjKey)
-                .setOrigin(0.5, 0.35)
-                .setScale(TILE_SCALE * 0.5)
-                .setAlpha(0.3)
-                .setDepth(depth + 0.01)
-              tileSprites.push(overlay)
-            }
-          }
-
-          if (adjacentBiomes.left && isNaturalBiome(adjacentBiomes.left)) {
-            const adjTile = { ...tile, type: adjacentBiomes.left as any }
-            const adjKey = resolveTileTexture(adjTile, this.textures)
-            if (this.textures.exists(adjKey)) {
-              const overlay = this.add.image(pos.x - TILE_W * 0.25, pos.y, adjKey)
-                .setOrigin(0.5, 0.35)
-                .setScale(TILE_SCALE * 0.5)
-                .setAlpha(0.3)
-                .setDepth(depth + 0.01)
-              tileSprites.push(overlay)
-            }
-          }
-
-          if (adjacentBiomes.right && isNaturalBiome(adjacentBiomes.right)) {
-            const adjTile = { ...tile, type: adjacentBiomes.right as any }
-            const adjKey = resolveTileTexture(adjTile, this.textures)
-            if (this.textures.exists(adjKey)) {
-              const overlay = this.add.image(pos.x + TILE_W * 0.25, pos.y, adjKey)
-                .setOrigin(0.5, 0.35)
-                .setScale(TILE_SCALE * 0.5)
-                .setAlpha(0.3)
-                .setDepth(depth + 0.01)
-              tileSprites.push(overlay)
-            }
-          }
-        }
-
-        // POI building overlay (rendered above the ground tile)
+        // POI building overlay
         if (tile.poiType) {
           const bldgKey = resolveBuildingTexture(tile.poiType, this.textures)
-          const bldgSprite = this.add.image(pos.x, pos.y - TILE_H * 0.6, bldgKey)
-            .setOrigin(0.5, 0.7)
+          const bldgSprite = this.add.image(centerX, pos.y + TILE_SIZE, bldgKey)
+            .setOrigin(0.5, 1.0)
             .setScale(BUILDING_SCALE)
-            .setDepth(depth + 0.3)
-          buildingSprites.push(bldgSprite)
+            .setDepth(tile.position.y + 0.3)
+          objectSprites.push(bldgSprite)
 
           // Tavern warm light flicker
           if (tile.poiType === 'tavern') {
@@ -815,16 +683,15 @@ export class WorldScene extends Phaser.Scene {
 
         // Decoration overlay
         if (tile.decoration && this.textures.exists(tile.decoration)) {
-          // Position jitter for decorations (±2px based on coordinate hash)
           const jitterX = ((hash % 5) - 2)
           const jitterY = (((hash >> 8) % 5) - 2)
 
-          const deco = this.add.image(pos.x + jitterX, pos.y - 10 + jitterY, tile.decoration)
+          const deco = this.add.image(centerX + jitterX, centerY - 4 + jitterY, tile.decoration)
             .setOrigin(0.5, 0.5)
             .setScale(0.5)
-            .setDepth(depth + 0.05)
-            .setFlipX((hash % 3) === 0)  // Randomly flip ~33% of decorations
-          decoSprites.push(deco)
+            .setDepth(tile.position.y + 0.05)
+            .setFlipX((hash % 3) === 0)
+          objectSprites.push(deco)
         }
 
         // Resource overlay with biome-aware sprites
@@ -835,26 +702,24 @@ export class WorldScene extends Phaser.Scene {
           const isIndicator = resKey === 'resource_indicator'
           const scale = isIndicator ? 0.5 : isNewAsset ? RESOURCE_SCALE * 1.2 : RESOURCE_SCALE
 
-          // Position jitter for resources (±2px based on coordinate hash)
           const jitterX = ((hash % 5) - 2)
           const jitterY = (((hash >> 8) % 5) - 2)
 
           const resSprite = this.add.image(
-            pos.x + jitterX,
-            pos.y - TILE_H * 0.4 + jitterY,
+            centerX + jitterX,
+            centerY - 4 + jitterY,
             resKey,
           )
             .setOrigin(0.5, 0.5)
             .setScale(scale)
-            .setDepth(depth + 0.1)
+            .setDepth(tile.position.y + 0.1)
             .setAlpha(0.85)
-            .setFlipX((hash % 3) === 0)  // Randomly flip ~33% of resources
-          resourceSprites.push(resSprite)
+            .setFlipX((hash % 3) === 0)
+          objectSprites.push(resSprite)
 
           // Vegetation sway for trees/bushes, bob for ores/minerals
           const isVegetation = ['wood', 'food', 'herb'].includes(tile.resource.type)
           if (isVegetation) {
-            // Wind sway effect on vegetation
             this.tweens.add({
               targets: resSprite,
               x: resSprite.x + 1,
@@ -866,7 +731,6 @@ export class WorldScene extends Phaser.Scene {
               delay: Math.random() * 1500,
             })
           } else {
-            // Gentle bob for minerals/ores
             this.tweens.add({
               targets: resSprite,
               y: resSprite.y - 2,
@@ -880,14 +744,53 @@ export class WorldScene extends Phaser.Scene {
       }
     }
 
-    this.renderedChunks.set(key, { tileSprites, decoSprites, resourceSprites, buildingSprites })
+    this.renderedChunks.set(key, { objectSprites })
+  }
+
+  /** Paint a chunk's ground tiles onto the RenderTexture */
+  private paintChunkTiles(chunk: ChunkData): void {
+    if (!this.groundRT) return
+
+    const rtOriginPx = this.groundOriginX * TILE_SIZE
+    const rtOriginPy = this.groundOriginY * TILE_SIZE
+
+    for (let ly = 0; ly < chunk.tiles.length; ly++) {
+      for (let lx = 0; lx < chunk.tiles[ly].length; lx++) {
+        const tile = chunk.tiles[ly][lx]
+
+        // Screen position of this tile relative to the RT origin
+        const drawX = tile.position.x * TILE_SIZE - rtOriginPx
+        const drawY = tile.position.y * TILE_SIZE - rtOriginPy
+
+        // Skip tiles outside the RT bounds
+        if (drawX < 0 || drawY < 0 ||
+            drawX + TILE_SIZE > this.groundSizeTiles * TILE_SIZE ||
+            drawY + TILE_SIZE > this.groundSizeTiles * TILE_SIZE) {
+          continue
+        }
+
+        // Draw the per-tile flat texture (generated in boot-scene as 32x32 squares)
+        const tileTexKey = this.resolveFlatTileTexture(tile)
+        if (this.textures.exists(tileTexKey)) {
+          this.groundRT.draw(tileTexKey, drawX, drawY)
+        }
+      }
+    }
+  }
+
+  /** Resolve the best flat tile texture key for a tile */
+  private resolveFlatTileTexture(tile: Tile): string {
+    const newKey = getNewTileKey(tile)
+    if (newKey && this.textures.exists(newKey)) return newKey
+
+    const variantKey = `tile_${tile.type}_v${tile.variant ?? 0}`
+    if (this.textures.exists(variantKey)) return variantKey
+
+    return `tile_${tile.type}`
   }
 
   private destroyRenderedChunk(rendered: RenderedChunk): void {
-    for (const s of rendered.tileSprites) s.destroy()
-    for (const s of rendered.decoSprites) s.destroy()
-    for (const s of rendered.resourceSprites) s.destroy()
-    for (const s of rendered.buildingSprites) s.destroy()
+    for (const s of rendered.objectSprites) s.destroy()
   }
 
   // --- Agent rendering ---
@@ -901,13 +804,11 @@ export class WorldScene extends Phaser.Scene {
     let spriteOrGroup: Phaser.GameObjects.Image | Phaser.GameObjects.Container
 
     if (charData) {
-      // Layered character sprite
       const { bodyGroup, auraEmitter } = composeCharacterSprite(this, charData.appearance, charData.race)
       bodyGroup.setScale(AGENT_SCALE)
       this.spriteCache.set(agent.id, charData.spriteHash, { bodyGroup, auraEmitter })
       spriteOrGroup = bodyGroup
 
-      // Breathing animation on the body group
       this.tweens.add({
         targets: bodyGroup,
         scaleY: AGENT_SCALE * 1.015,
@@ -917,7 +818,6 @@ export class WorldScene extends Phaser.Scene {
         ease: 'Sine.easeInOut',
       })
     } else {
-      // Legacy single-image fallback
       const index = this.agents.indexOf(agent)
       const textureKey = `agent_${index >= 0 && index < 5 ? index : 'default'}`
       const sprite = this.add.image(0, 0, textureKey)
@@ -955,10 +855,9 @@ export class WorldScene extends Phaser.Scene {
       strokeThickness: 2,
     }).setOrigin(0.5, 0)
 
-    // Container structure: [0: shadow, 1: sprite/bodyGroup, 2: nameText, 3: actionText]
     const container = this.add.container(
       screenPos.x,
-      screenPos.y - TILE_H * 0.4,
+      screenPos.y,
       [shadow, spriteOrGroup, nameText, actionText],
     )
     container.setDepth(500 + agent.position.y)
@@ -982,7 +881,7 @@ export class WorldScene extends Phaser.Scene {
     this.agentSprites.set(agent.id, container)
   }
 
-  /** Recompose an agent's layered sprite at runtime (e.g. after appearance change) */
+  /** Recompose an agent's layered sprite at runtime */
   private recomposeAgentSprite(agentId: string): void {
     const container = this.agentSprites.get(agentId)
     if (!container || !container.list || container.list.length < 2) return
@@ -990,20 +889,16 @@ export class WorldScene extends Phaser.Scene {
     const charData = this.characterAppearances[agentId]
     if (!charData) return
 
-    // Destroy old sprite/group at index 1
     const oldVisual = container.list[1] as Phaser.GameObjects.GameObject
     if (oldVisual) oldVisual.destroy()
     this.spriteCache.remove(agentId)
 
-    // Create new layered sprite
     const { bodyGroup, auraEmitter } = composeCharacterSprite(this, charData.appearance, charData.race)
     bodyGroup.setScale(AGENT_SCALE)
     this.spriteCache.set(agentId, charData.spriteHash, { bodyGroup, auraEmitter })
 
-    // Insert at index 1 (after shadow, before nameText)
     container.addAt(bodyGroup, 1)
 
-    // Breathing animation
     this.tweens.add({
       targets: bodyGroup,
       scaleY: AGENT_SCALE * 1.015,
@@ -1087,7 +982,6 @@ export class WorldScene extends Phaser.Scene {
   }
 
   private showCraftEffect(x: number, y: number, itemName: string): void {
-    // Anvil spark burst
     for (let i = 0; i < 5; i++) {
       const angle = (Math.PI * 2 * i) / 5
       const spark = this.add.rectangle(
@@ -1106,7 +1000,6 @@ export class WorldScene extends Phaser.Scene {
       })
     }
 
-    // Item name popup
     const label = this.add.text(x, y - 20, `+ ${itemName}`, {
       fontSize: '11px',
       fontFamily: 'Arial, sans-serif',
@@ -1127,7 +1020,6 @@ export class WorldScene extends Phaser.Scene {
   }
 
   private showTradeEffect(x: number, y: number): void {
-    // Gold coin particles flying
     for (let i = 0; i < 4; i++) {
       const coin = this.add.circle(
         x + Phaser.Math.Between(-8, 8),
@@ -1146,7 +1038,6 @@ export class WorldScene extends Phaser.Scene {
       })
     }
 
-    // Handshake text
     const text = this.add.text(x, y - 25, 'Trade!', {
       fontSize: '10px',
       fontFamily: 'Arial, sans-serif',
@@ -1165,7 +1056,6 @@ export class WorldScene extends Phaser.Scene {
   }
 
   private showRestEffect(x: number, y: number): void {
-    // Zzz particles rising
     const letters = ['z', 'Z', 'z']
     for (let i = 0; i < 3; i++) {
       this.time.delayedCall(i * 400, () => {
@@ -1202,7 +1092,6 @@ export class WorldScene extends Phaser.Scene {
     const x = container.x
     const y = container.y
 
-    // Golden glow ring
     const glow = this.add.circle(x, y, 5, 0xF1C40F, 0.8).setDepth(3000)
     this.tweens.add({
       targets: glow,
@@ -1213,7 +1102,6 @@ export class WorldScene extends Phaser.Scene {
       onComplete: () => glow.destroy(),
     })
 
-    // Sparkle particles
     for (let i = 0; i < 8; i++) {
       const angle = (Math.PI * 2 * i) / 8
       const sparkle = this.add.rectangle(
@@ -1231,7 +1119,6 @@ export class WorldScene extends Phaser.Scene {
       })
     }
 
-    // Level text popup
     const text = this.add.text(x, y - 30, `Level ${newLevel}!`, {
       fontSize: '14px',
       fontFamily: 'Arial, sans-serif',
@@ -1253,16 +1140,8 @@ export class WorldScene extends Phaser.Scene {
 
   /** Navigate camera to a tile position (used by minimap) */
   centerOnTile(tileX: number, tileY: number): void {
-    const pos = this.tileToScreen(tileX, tileY)
-    this.cameras.main.centerOn(pos.x, pos.y)
-  }
-
-  /** Convert tile coordinates to isometric screen coordinates */
-  private tileToScreen(x: number, y: number): { x: number; y: number } {
-    return {
-      x: Math.round((x - y) * (TILE_W / 2)),
-      y: Math.round((x + y) * (TILE_H / 2)),
-    }
+    const pos = worldToScreen(tileX, tileY)
+    this.cameras.main.centerOn(pos.x + TILE_SIZE / 2, pos.y + TILE_SIZE / 2)
   }
 
   // ── Monster rendering ──
@@ -1290,24 +1169,24 @@ export class WorldScene extends Phaser.Scene {
     }
 
     for (const monster of monsters) {
-      const screenPos = this.tileToScreen(monster.position.x, monster.position.y)
+      const pos = worldToScreen(monster.position.x, monster.position.y)
+      const screenX = pos.x + TILE_SIZE / 2
+      const screenY = pos.y + TILE_SIZE / 2 - 8
       const color = WorldScene.MONSTER_COLORS[monster.type] ?? 0xFF4444
 
       if (!this.monsterSprites.has(monster.id)) {
-        this.createMonsterSprite(monster, screenPos, color)
+        this.createMonsterSprite(monster, { x: screenX, y: screenY }, color)
       } else {
         const container = this.monsterSprites.get(monster.id)!
-        // Smooth movement
         this.tweens.add({
           targets: container,
-          x: screenPos.x,
-          y: screenPos.y - TILE_H * 0.4,
+          x: screenX,
+          y: screenY,
           duration: 400,
           ease: 'Quad.easeOut',
         })
         container.setDepth(490 + monster.position.y)
 
-        // Update HP bar
         this.updateMonsterHpBar(container, monster)
       }
     }
@@ -1318,20 +1197,16 @@ export class WorldScene extends Phaser.Scene {
     screenPos: { x: number; y: number },
     color: number,
   ): void {
-    // Shadow
     const shadow = this.add.ellipse(0, 8, 20, 8, 0x000000, 0.3)
 
-    // Monster body (simple diamond shape)
     const body = this.add.graphics()
     const size = 10 + monster.level * 1.5
     body.fillStyle(color, 1)
     body.fillRoundedRect(-size / 2, -size, size, size, 3)
-    // Eyes
     body.fillStyle(0xFF0000, 0.9)
     body.fillCircle(-size * 0.2, -size * 0.7, 2)
     body.fillCircle(size * 0.2, -size * 0.7, 2)
 
-    // Name label
     const nameText = this.add.text(0, -size - 14, monster.name, {
       fontSize: '8px',
       fontFamily: 'Arial, sans-serif',
@@ -1340,11 +1215,9 @@ export class WorldScene extends Phaser.Scene {
       strokeThickness: 2,
     }).setOrigin(0.5, 1)
 
-    // HP bar background
     const hpBarBg = this.add.rectangle(0, -size - 4, 28, 4, 0x333333)
       .setOrigin(0.5, 0.5)
 
-    // HP bar fill
     const hpRatio = monster.hp / monster.maxHp
     const hpBarFill = this.add.rectangle(
       -14 + (28 * hpRatio) / 2, -size - 4,
@@ -1354,12 +1227,11 @@ export class WorldScene extends Phaser.Scene {
 
     const container = this.add.container(
       screenPos.x,
-      screenPos.y - TILE_H * 0.4,
+      screenPos.y,
       [shadow, body, nameText, hpBarBg, hpBarFill],
     )
     container.setDepth(490 + monster.position.y)
 
-    // Idle bounce animation
     this.tweens.add({
       targets: body,
       y: body.y - 2,
@@ -1373,7 +1245,6 @@ export class WorldScene extends Phaser.Scene {
   }
 
   private updateMonsterHpBar(container: Phaser.GameObjects.Container, monster: Monster): void {
-    // HP bar fill is at index 4
     const hpBarFill = container.list[4] as Phaser.GameObjects.Rectangle | undefined
     if (!hpBarFill) return
 
@@ -1386,13 +1257,13 @@ export class WorldScene extends Phaser.Scene {
   }
 
   showDamagePopup(worldX: number, worldY: number, damage: number, isAgentDamage: boolean): void {
-    const screenPos = this.tileToScreen(worldX, worldY)
+    const pos = worldToScreen(worldX, worldY)
     const color = isAgentDamage ? '#ff4444' : '#ffaa00'
-    const prefix = isAgentDamage ? '-' : '-'
+    const prefix = '-'
 
     const text = this.add.text(
-      screenPos.x + Phaser.Math.Between(-10, 10),
-      screenPos.y - TILE_H * 0.4 - 20,
+      pos.x + TILE_SIZE / 2 + Phaser.Math.Between(-10, 10),
+      pos.y + TILE_SIZE / 2 - 20,
       `${prefix}${damage}`,
       {
         fontSize: '14px',
@@ -1415,10 +1286,11 @@ export class WorldScene extends Phaser.Scene {
   }
 
   showCombatEffect(worldX: number, worldY: number): void {
-    const screenPos = this.tileToScreen(worldX, worldY)
+    const pos = worldToScreen(worldX, worldY)
+    const cx = pos.x + TILE_SIZE / 2
+    const cy = pos.y + TILE_SIZE / 2
 
-    // Flash ring
-    const ring = this.add.circle(screenPos.x, screenPos.y - TILE_H * 0.3, 8, 0xFF4444, 0.6)
+    const ring = this.add.circle(cx, cy, 8, 0xFF4444, 0.6)
       .setDepth(3000)
 
     this.tweens.add({
@@ -1430,13 +1302,12 @@ export class WorldScene extends Phaser.Scene {
       onComplete: () => ring.destroy(),
     })
 
-    // Slash lines
     for (let i = 0; i < 3; i++) {
       const angle = Math.random() * Math.PI * 2
       const dist = 5 + Math.random() * 10
       const spark = this.add.rectangle(
-        screenPos.x + Math.cos(angle) * dist,
-        screenPos.y - TILE_H * 0.3 + Math.sin(angle) * dist,
+        cx + Math.cos(angle) * dist,
+        cy + Math.sin(angle) * dist,
         2, 8, 0xFFFFFF, 0.8,
       ).setDepth(3000).setRotation(angle)
 
@@ -1461,13 +1332,5 @@ export class WorldScene extends Phaser.Scene {
     const ly = y - cy * CHUNK_SIZE
     if (ly < 0 || ly >= chunk.tiles.length || lx < 0 || lx >= chunk.tiles[ly].length) return null
     return chunk.tiles[ly][lx]
-  }
-
-  /** Convert screen coordinates to tile coordinates (inverse isometric) */
-  private screenToTile(screenX: number, screenY: number): { x: number; y: number } {
-    return {
-      x: (screenX / (TILE_W / 2) + screenY / (TILE_H / 2)) / 2,
-      y: (screenY / (TILE_H / 2) - screenX / (TILE_W / 2)) / 2,
-    }
   }
 }
