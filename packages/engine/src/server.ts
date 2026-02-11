@@ -17,6 +17,8 @@ import { OpenAIProvider } from './llm/providers/openai.js'
 import { GeminiProvider } from './llm/providers/gemini.js'
 import { registryRouter, claimRouter } from './auth/index.js'
 import { characterRouter } from './api/character.js'
+import { pool } from './db/connection.js'
+import type { CharacterAppearanceMap } from '@botworld/shared'
 
 const PORT = Number(process.env.PORT) || 3001
 
@@ -106,6 +108,9 @@ async function main() {
     cors: { origin: '*' },
   })
 
+  // Expose io to route handlers (for character appearance broadcasts)
+  app.set('io', io)
+
   // REST endpoints
   app.get('/api/state', (_req, res) => {
     res.json(world.getState())
@@ -153,6 +158,25 @@ async function main() {
 
     // Send initial state immediately
     socket.emit('world:state', world.getState())
+
+    // Send character appearance data (once on connect)
+    pool.query<{ id: string; character_data: Record<string, unknown> | null }>(
+      "SELECT id, character_data FROM agents WHERE character_data IS NOT NULL"
+    ).then(result => {
+      const characterMap: CharacterAppearanceMap = {}
+      for (const row of result.rows) {
+        const cd = row.character_data as Record<string, unknown> | null
+        const creation = cd?.creation as Record<string, unknown> | undefined
+        if (creation?.appearance) {
+          characterMap[row.id] = {
+            appearance: creation.appearance as any,
+            race: creation.race as any,
+            spriteHash: (cd?.spriteHash as string) ?? '',
+          }
+        }
+      }
+      socket.emit('world:characters', characterMap)
+    }).catch(() => {})
 
     // Client can request state at any time (e.g. after scene is ready)
     socket.on('request:state', () => {

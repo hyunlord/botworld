@@ -1,6 +1,7 @@
 import type { Agent, AgentAction, Memory } from './agent.js'
 import type { Position, WorldClock } from './world.js'
 import type { Item, MarketOrder } from './item.js'
+import type { CharacterAppearance, Race } from './character.js'
 
 /** All event types in the world */
 export type WorldEvent =
@@ -15,6 +16,7 @@ export type WorldEvent =
   | TickEvent
   | AgentSpawnedEvent
   | ChunksGeneratedEvent
+  | CharacterUpdatedEvent
 
 export interface AgentMovedEvent {
   type: 'agent:moved'
@@ -93,5 +95,14 @@ export interface AgentSpawnedEvent {
 export interface ChunksGeneratedEvent {
   type: 'world:chunks_generated'
   chunkKeys: string[]
+  timestamp: number
+}
+
+export interface CharacterUpdatedEvent {
+  type: 'character:updated'
+  agentId: string
+  appearance: CharacterAppearance
+  race: Race
+  spriteHash: string
   timestamp: number
 }

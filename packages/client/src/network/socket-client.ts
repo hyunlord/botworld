@@ -1,5 +1,5 @@
 import { io, Socket } from 'socket.io-client'
-import type { WorldEvent, Agent, WorldClock, ChunkData } from '@botworld/shared'
+import type { WorldEvent, Agent, WorldClock, ChunkData, CharacterAppearanceMap, CharacterAppearance, Race } from '@botworld/shared'
 
 export interface WorldState {
   clock: WorldClock
@@ -13,11 +13,20 @@ export interface SpeedState {
   speed: number
 }
 
+export interface CharacterUpdatePayload {
+  agentId: string
+  appearance: CharacterAppearance
+  race: Race
+  spriteHash: string
+}
+
 type StateCallback = (state: WorldState) => void
 type EventCallback = (event: WorldEvent) => void
 type AgentsCallback = (agents: Agent[]) => void
 type SpeedCallback = (state: SpeedState) => void
 type ChunksCallback = (chunks: Record<string, ChunkData>) => void
+type CharactersCallback = (map: CharacterAppearanceMap) => void
+type CharacterUpdateCallback = (update: CharacterUpdatePayload) => void
 
 class SocketClient {
   private socket: Socket | null = null
@@ -26,6 +35,8 @@ class SocketClient {
   private agentsCallbacks: AgentsCallback[] = []
   private speedCallbacks: SpeedCallback[] = []
   private chunksCallbacks: ChunksCallback[] = []
+  private charactersCallbacks: CharactersCallback[] = []
+  private characterUpdateCallbacks: CharacterUpdateCallback[] = []
 
   connect(url?: string): void {
     this.socket = io(url ?? window.location.origin)
@@ -48,6 +59,14 @@ class SocketClient {
 
     this.socket.on('world:chunks', (chunks: Record<string, ChunkData>) => {
       for (const cb of this.chunksCallbacks) cb(chunks)
+    })
+
+    this.socket.on('world:characters', (map: CharacterAppearanceMap) => {
+      for (const cb of this.charactersCallbacks) cb(map)
+    })
+
+    this.socket.on('world:character_updated', (update: CharacterUpdatePayload) => {
+      for (const cb of this.characterUpdateCallbacks) cb(update)
     })
 
     this.socket.on('connect', () => {
@@ -90,6 +109,16 @@ class SocketClient {
   onChunks(callback: ChunksCallback): () => void {
     this.chunksCallbacks.push(callback)
     return () => { this.chunksCallbacks = this.chunksCallbacks.filter(cb => cb !== callback) }
+  }
+
+  onCharacters(callback: CharactersCallback): () => void {
+    this.charactersCallbacks.push(callback)
+    return () => { this.charactersCallbacks = this.charactersCallbacks.filter(cb => cb !== callback) }
+  }
+
+  onCharacterUpdate(callback: CharacterUpdateCallback): () => void {
+    this.characterUpdateCallbacks.push(callback)
+    return () => { this.characterUpdateCallbacks = this.characterUpdateCallbacks.filter(cb => cb !== callback) }
   }
 
   pause(): void { this.socket?.emit('world:pause') }

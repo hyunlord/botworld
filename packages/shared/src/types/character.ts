@@ -127,3 +127,14 @@ export interface Character {
   createdAt: number
   lastActiveAt: number
 }
+
+// ──────────────────────────────────────────────
+// Client rendering map (sent via socket)
+// ──────────────────────────────────────────────
+
+/** agentId → appearance data for client-side layered sprite rendering */
+export type CharacterAppearanceMap = Record<string, {
+  appearance: CharacterAppearance
+  race: Race
+  spriteHash: string
+}>

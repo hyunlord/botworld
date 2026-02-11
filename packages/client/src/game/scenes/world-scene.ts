@@ -1,6 +1,8 @@
 import Phaser from 'phaser'
-import type { Agent, Tile, WorldEvent, WorldClock, ChunkData } from '@botworld/shared'
+import type { Agent, Tile, WorldEvent, WorldClock, ChunkData, CharacterAppearance, Race, CharacterAppearanceMap } from '@botworld/shared'
 import { CHUNK_SIZE } from '@botworld/shared'
+import { composeCharacterSprite } from '../character/sprite-composer.js'
+import { SpriteCache } from '../character/sprite-cache.js'
 
 // Grid spacing for isometric projection
 const TILE_W = 128
@@ -35,6 +37,10 @@ export class WorldScene extends Phaser.Scene {
   private speechBubbles = new Map<string, { container: Phaser.GameObjects.Container; timer: number }>()
   private ambientOverlay: Phaser.GameObjects.Rectangle | null = null
   private selectionRing: Phaser.GameObjects.Image | null = null
+
+  // Character appearance (layered sprite) data
+  private characterAppearances: CharacterAppearanceMap = {}
+  private spriteCache = new SpriteCache()
 
   private agents: Agent[] = []
   private clock: WorldClock | null = null
@@ -100,6 +106,23 @@ export class WorldScene extends Phaser.Scene {
     }
   }
 
+  /** Receive full character appearance map (on connect) */
+  setCharacterAppearances(map: CharacterAppearanceMap): void {
+    this.characterAppearances = map
+    // Recompose any agents whose hash changed
+    for (const [agentId, data] of Object.entries(map)) {
+      if (this.spriteCache.needsRecompose(agentId, data.spriteHash)) {
+        this.recomposeAgentSprite(agentId)
+      }
+    }
+  }
+
+  /** Update a single agent's appearance (live change) */
+  updateCharacterAppearance(agentId: string, appearance: CharacterAppearance, race: Race, spriteHash: string): void {
+    this.characterAppearances[agentId] = { appearance, race, spriteHash }
+    this.recomposeAgentSprite(agentId)
+  }
+
   updateAgents(agents: Agent[]): void {
     this.agents = agents
 
@@ -129,6 +152,7 @@ export class WorldScene extends Phaser.Scene {
         this.agentSprites.delete(id)
         this.actionIndicators.get(id)?.destroy()
         this.actionIndicators.delete(id)
+        this.spriteCache.remove(id)
       }
     }
 
@@ -376,25 +400,47 @@ export class WorldScene extends Phaser.Scene {
   // --- Agent rendering ---
 
   private createAgentSprite(agent: Agent, screenPos: { x: number; y: number }): void {
-    const index = this.agents.indexOf(agent)
-    const textureKey = `agent_${index >= 0 && index < 5 ? index : 'default'}`
-
     const shadow = this.add.image(0, 6, 'agent_shadow')
       .setScale(0.7)
       .setAlpha(0.3)
 
-    const sprite = this.add.image(0, 0, textureKey)
-      .setOrigin(0.5, 0.7)
-      .setScale(AGENT_SCALE)
+    const charData = this.characterAppearances[agent.id]
+    let spriteOrGroup: Phaser.GameObjects.Image | Phaser.GameObjects.Container
 
-    this.tweens.add({
-      targets: sprite,
-      scaleY: AGENT_SCALE * 1.015,
-      duration: 1200 + Math.random() * 400,
-      yoyo: true,
-      repeat: -1,
-      ease: 'Sine.easeInOut',
-    })
+    if (charData) {
+      // Layered character sprite
+      const { bodyGroup, auraEmitter } = composeCharacterSprite(this, charData.appearance, charData.race)
+      bodyGroup.setScale(AGENT_SCALE)
+      this.spriteCache.set(agent.id, charData.spriteHash, { bodyGroup, auraEmitter })
+      spriteOrGroup = bodyGroup
+
+      // Breathing animation on the body group
+      this.tweens.add({
+        targets: bodyGroup,
+        scaleY: AGENT_SCALE * 1.015,
+        duration: 1200 + Math.random() * 400,
+        yoyo: true,
+        repeat: -1,
+        ease: 'Sine.easeInOut',
+      })
+    } else {
+      // Legacy single-image fallback
+      const index = this.agents.indexOf(agent)
+      const textureKey = `agent_${index >= 0 && index < 5 ? index : 'default'}`
+      const sprite = this.add.image(0, 0, textureKey)
+        .setOrigin(0.5, 0.7)
+        .setScale(AGENT_SCALE)
+      spriteOrGroup = sprite
+
+      this.tweens.add({
+        targets: sprite,
+        scaleY: AGENT_SCALE * 1.015,
+        duration: 1200 + Math.random() * 400,
+        yoyo: true,
+        repeat: -1,
+        ease: 'Sine.easeInOut',
+      })
+    }
 
     const nameText = this.add.text(0, -22, agent.name, {
       fontSize: '10px',
@@ -412,10 +458,11 @@ export class WorldScene extends Phaser.Scene {
       strokeThickness: 2,
     }).setOrigin(0.5, 0)
 
+    // Container structure: [0: shadow, 1: sprite/bodyGroup, 2: nameText, 3: actionText]
     const container = this.add.container(
       screenPos.x,
       screenPos.y - TILE_H * 0.4,
-      [shadow, sprite, nameText, actionText],
+      [shadow, spriteOrGroup, nameText, actionText],
     )
     container.setDepth(500 + agent.position.y)
     container.setSize(30, 40)
@@ -427,7 +474,7 @@ export class WorldScene extends Phaser.Scene {
       this.updateSelectionRing()
 
       this.tweens.add({
-        targets: sprite,
+        targets: spriteOrGroup,
         scaleX: AGENT_SCALE * 1.15,
         scaleY: AGENT_SCALE * 1.15,
         duration: 100,
@@ -436,6 +483,38 @@ export class WorldScene extends Phaser.Scene {
     })
 
     this.agentSprites.set(agent.id, container)
+  }
+
+  /** Recompose an agent's layered sprite at runtime (e.g. after appearance change) */
+  private recomposeAgentSprite(agentId: string): void {
+    const container = this.agentSprites.get(agentId)
+    if (!container || !container.list || container.list.length < 2) return
+
+    const charData = this.characterAppearances[agentId]
+    if (!charData) return
+
+    // Destroy old sprite/group at index 1
+    const oldVisual = container.list[1] as Phaser.GameObjects.GameObject
+    if (oldVisual) oldVisual.destroy()
+    this.spriteCache.remove(agentId)
+
+    // Create new layered sprite
+    const { bodyGroup, auraEmitter } = composeCharacterSprite(this, charData.appearance, charData.race)
+    bodyGroup.setScale(AGENT_SCALE)
+    this.spriteCache.set(agentId, charData.spriteHash, { bodyGroup, auraEmitter })
+
+    // Insert at index 1 (after shadow, before nameText)
+    container.addAt(bodyGroup, 1)
+
+    // Breathing animation
+    this.tweens.add({
+      targets: bodyGroup,
+      scaleY: AGENT_SCALE * 1.015,
+      duration: 1200 + Math.random() * 400,
+      yoyo: true,
+      repeat: -1,
+      ease: 'Sine.easeInOut',
+    })
   }
 
   private updateActionIndicator(agent: Agent): void {

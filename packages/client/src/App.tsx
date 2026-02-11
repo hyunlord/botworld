@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import Phaser from 'phaser'
-import type { Agent, WorldClock, WorldEvent, ChunkData } from '@botworld/shared'
+import type { Agent, WorldClock, WorldEvent, ChunkData, CharacterAppearanceMap } from '@botworld/shared'
 import { createGameConfig } from './game/config.js'
 import { WorldScene } from './game/scenes/world-scene.js'
 import { socketClient, type WorldState, type SpeedState } from './network/socket-client.js'
@@ -123,12 +123,26 @@ export function App() {
       sceneRef.current?.addChunks(chunks)
     })
 
+    // Character appearances (sent once on connect)
+    const unsubChars = socketClient.onCharacters((map: CharacterAppearanceMap) => {
+      sceneRef.current?.setCharacterAppearances(map)
+    })
+
+    // Individual character appearance updates
+    const unsubCharUpdate = socketClient.onCharacterUpdate((update) => {
+      sceneRef.current?.updateCharacterAppearance(
+        update.agentId, update.appearance, update.race, update.spriteHash,
+      )
+    })
+
     return () => {
       unsubState()
       unsubAgents()
       unsubEvent()
       unsubSpeed()
       unsubChunks()
+      unsubChars()
+      unsubCharUpdate()
       socketClient.disconnect()
     }
   }, [])

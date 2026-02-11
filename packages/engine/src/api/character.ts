@@ -278,6 +278,17 @@ characterRouter.post('/characters/create', requireAuth(), async (req, res) => {
     [JSON.stringify(characterData), agent.id],
   )
 
+  // Broadcast appearance to all connected clients
+  const io = req.app.get('io')
+  if (io) {
+    io.emit('world:character_updated', {
+      agentId: agent.id,
+      appearance: body.appearance,
+      race: body.race,
+      spriteHash,
+    })
+  }
+
   res.status(201).json({
     id: agent.id,
     agentId: agent.id,
@@ -395,6 +406,17 @@ characterRouter.patch('/characters/me/appearance', requireAuth(), async (req, re
     [JSON.stringify(updatedData), agent.id],
   )
 
+  // Broadcast appearance update
+  const io = req.app.get('io')
+  if (io) {
+    io.emit('world:character_updated', {
+      agentId: agent.id,
+      appearance: appearance as CharacterAppearance,
+      race: creation.race,
+      spriteHash,
+    })
+  }
+
   res.json({
     id: agent.id,
     agentId: agent.id,
@@ -464,6 +486,17 @@ characterRouter.post('/characters/me/reroll', requireAuth(), async (req, res) =>
     'UPDATE agents SET character_data = $1 WHERE id = $2',
     [JSON.stringify(characterData), agent.id],
   )
+
+  // Broadcast appearance update
+  const io = req.app.get('io')
+  if (io) {
+    io.emit('world:character_updated', {
+      agentId: agent.id,
+      appearance: body.appearance,
+      race: body.race,
+      spriteHash,
+    })
+  }
 
   res.json({
     id: agent.id,
