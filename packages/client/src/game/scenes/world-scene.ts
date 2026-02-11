@@ -1,8 +1,9 @@
 import Phaser from 'phaser'
-import type { Agent, Tile, WorldEvent, WorldClock, ChunkData, CharacterAppearance, Race, CharacterAppearanceMap } from '@botworld/shared'
+import type { Agent, Tile, WorldEvent, WorldClock, ChunkData, CharacterAppearance, Race, CharacterAppearanceMap, WeatherState } from '@botworld/shared'
 import { CHUNK_SIZE } from '@botworld/shared'
 import { composeCharacterSprite } from '../character/sprite-composer.js'
 import { SpriteCache } from '../character/sprite-cache.js'
+import { WeatherEffects } from '../effects/weather-effects.js'
 
 // Grid spacing for isometric projection
 const TILE_W = 128
@@ -153,6 +154,7 @@ export class WorldScene extends Phaser.Scene {
   private speechBubbles = new Map<string, { container: Phaser.GameObjects.Container; timer: number }>()
   private ambientOverlay: Phaser.GameObjects.Rectangle | null = null
   private selectionRing: Phaser.GameObjects.Image | null = null
+  private weatherEffects: WeatherEffects | null = null
 
   // Character appearance (layered sprite) data
   private characterAppearances: CharacterAppearanceMap = {}
@@ -179,6 +181,9 @@ export class WorldScene extends Phaser.Scene {
     )
       .setScrollFactor(0)
       .setDepth(1500)
+
+    // Weather visual effects layer
+    this.weatherEffects = new WeatherEffects(this)
 
     // Scroll wheel zoom
     this.input.on('wheel', (
@@ -294,6 +299,10 @@ export class WorldScene extends Phaser.Scene {
     }
     this.cameras.main.setBackgroundColor(bgColors[clock.timeOfDay] ?? '#1a1a2e')
     this.updateAmbientOverlay(clock.timeOfDay)
+  }
+
+  setWeather(weather: WeatherState): void {
+    this.weatherEffects?.setWeather(weather)
   }
 
   showSpeechBubble(agentId: string, message: string): void {

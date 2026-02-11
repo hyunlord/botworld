@@ -4,11 +4,13 @@ import { EventBus } from './event-bus.js'
 import { createWorldClock, advanceClock } from './world-clock.js'
 import { AgentManager } from '../agent/agent-manager.js'
 import { TileMap } from '../world/tile-map.js'
+import { WeatherSystem } from '../systems/weather.js'
 
 export class WorldEngine {
   readonly eventBus = new EventBus()
   readonly agentManager: AgentManager
   readonly tileMap: TileMap
+  readonly weather: WeatherSystem
   clock: WorldClock
 
   private tickInterval: ReturnType<typeof setInterval> | null = null
@@ -19,6 +21,7 @@ export class WorldEngine {
   constructor() {
     this.clock = createWorldClock()
     this.tileMap = new TileMap()
+    this.weather = new WeatherSystem()
     this.agentManager = new AgentManager(this.eventBus, this.tileMap, () => this.clock)
   }
 
@@ -99,7 +102,17 @@ export class WorldEngine {
     // 6. Regenerate resources
     this.tileMap.tickResources()
 
-    // 7. Broadcast updated state (all processing complete)
+    // 7. Weather system tick
+    const weatherChanged = this.weather.tick(this.clock)
+    if (weatherChanged) {
+      this.eventBus.emit({
+        type: 'weather:changed',
+        weather: this.weather.getState(),
+        timestamp: this.clock.tick,
+      })
+    }
+
+    // 8. Broadcast updated state (all processing complete)
     this.eventBus.emit({
       type: 'world:state_updated',
       clock: this.clock,
@@ -131,6 +144,7 @@ export class WorldEngine {
   getState() {
     return {
       clock: this.clock,
+      weather: this.weather.getState(),
       agents: this.agentManager.getAllAgents(),
       chunks: this.tileMap.getSerializableChunks(),
       recentEvents: this.eventBus.getRecentEvents(20),

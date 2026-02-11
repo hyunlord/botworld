@@ -298,6 +298,10 @@ export class WsManager {
         this.spectatorNs.emit('world:chunks', chunkData)
       }
 
+      if (event.type === 'weather:changed') {
+        this.spectatorNs.emit('world:weather', event.weather)
+      }
+
       // ── Chat delivery ──
       if (event.type === 'chat:delivered') {
         // Spectators get all chat

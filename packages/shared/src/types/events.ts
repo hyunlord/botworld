@@ -1,5 +1,5 @@
 import type { Agent, AgentAction, Memory } from './agent.js'
-import type { Position, WorldClock } from './world.js'
+import type { Position, WorldClock, WeatherState } from './world.js'
 import type { Item, MarketOrder } from './item.js'
 import type { CharacterAppearance, CharacterClass, Race } from './character.js'
 
@@ -20,6 +20,7 @@ export type WorldEvent =
   | TradeProposedEvent
   | ChatDeliveredEvent
   | StateUpdatedEvent
+  | WeatherChangedEvent
 
 export interface AgentMovedEvent {
   type: 'agent:moved'
@@ -136,5 +137,11 @@ export interface ChatDeliveredEvent {
 export interface StateUpdatedEvent {
   type: 'world:state_updated'
   clock: WorldClock
+  timestamp: number
+}
+
+export interface WeatherChangedEvent {
+  type: 'weather:changed'
+  weather: WeatherState
   timestamp: number
 }

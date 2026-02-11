@@ -1,11 +1,12 @@
 import { io, Socket } from 'socket.io-client'
-import type { WorldEvent, Agent, WorldClock, ChunkData, CharacterAppearanceMap, CharacterAppearance, CharacterClass, Race } from '@botworld/shared'
+import type { WorldEvent, Agent, WorldClock, ChunkData, CharacterAppearanceMap, CharacterAppearance, CharacterClass, Race, WeatherState } from '@botworld/shared'
 
 export interface WorldState {
   clock: WorldClock
   agents: Agent[]
   chunks: Record<string, ChunkData>
   recentEvents: WorldEvent[]
+  weather?: WeatherState
 }
 
 export interface SpeedState {
@@ -29,6 +30,7 @@ type SpeedCallback = (state: SpeedState) => void
 type ChunksCallback = (chunks: Record<string, ChunkData>) => void
 type CharactersCallback = (map: CharacterAppearanceMap) => void
 type CharacterUpdateCallback = (update: CharacterUpdatePayload) => void
+type WeatherCallback = (weather: WeatherState) => void
 
 class SocketClient {
   private socket: Socket | null = null
@@ -39,6 +41,7 @@ class SocketClient {
   private chunksCallbacks: ChunksCallback[] = []
   private charactersCallbacks: CharactersCallback[] = []
   private characterUpdateCallbacks: CharacterUpdateCallback[] = []
+  private weatherCallbacks: WeatherCallback[] = []
   private spectatorCountCallbacks: ((count: number) => void)[] = []
 
   connect(url?: string): void {
@@ -71,6 +74,10 @@ class SocketClient {
 
     this.socket.on('world:character_updated', (update: CharacterUpdatePayload) => {
       for (const cb of this.characterUpdateCallbacks) cb(update)
+    })
+
+    this.socket.on('world:weather', (weather: WeatherState) => {
+      for (const cb of this.weatherCallbacks) cb(weather)
     })
 
     this.socket.on('spectator:count', (count: number) => {
@@ -127,6 +134,11 @@ class SocketClient {
   onCharacterUpdate(callback: CharacterUpdateCallback): () => void {
     this.characterUpdateCallbacks.push(callback)
     return () => { this.characterUpdateCallbacks = this.characterUpdateCallbacks.filter(cb => cb !== callback) }
+  }
+
+  onWeather(callback: WeatherCallback): () => void {
+    this.weatherCallbacks.push(callback)
+    return () => { this.weatherCallbacks = this.weatherCallbacks.filter(cb => cb !== callback) }
   }
 
   onSpectatorCount(callback: (count: number) => void): () => void {

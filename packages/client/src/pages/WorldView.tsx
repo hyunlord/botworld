@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, useMemo } from 'react'
 import Phaser from 'phaser'
-import type { Agent, WorldClock, WorldEvent, ChunkData, CharacterAppearanceMap } from '@botworld/shared'
+import type { Agent, WorldClock, WorldEvent, ChunkData, CharacterAppearanceMap, WeatherState } from '@botworld/shared'
 import { CHUNK_SIZE } from '@botworld/shared'
 import { createGameConfig } from '../game/config.js'
 import { WorldScene } from '../game/scenes/world-scene.js'
@@ -55,6 +55,7 @@ export function WorldView() {
     scene.addChunks(state.chunks)
     scene.updateAgents(state.agents)
     scene.updateClock(state.clock)
+    if (state.weather) scene.setWeather(state.weather)
     setClock(state.clock)
     setAgents(state.agents)
     setChunks(prev => ({ ...prev, ...state.chunks }))
@@ -169,6 +170,11 @@ export function WorldView() {
       )
     })
 
+    // Weather changes
+    const unsubWeather = socketClient.onWeather((weather: WeatherState) => {
+      sceneRef.current?.setWeather(weather)
+    })
+
     // Spectator count
     const unsubSpectators = socketClient.onSpectatorCount(setSpectatorCount)
 
@@ -180,6 +186,7 @@ export function WorldView() {
       unsubChunks()
       unsubChars()
       unsubCharUpdate()
+      unsubWeather()
       unsubSpectators()
       socketClient.disconnect()
     }

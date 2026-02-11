@@ -77,6 +77,27 @@ export interface WorldMap {
 
 export type TimeOfDay = 'dawn' | 'morning' | 'noon' | 'afternoon' | 'evening' | 'night'
 
+export type WeatherType = 'clear' | 'cloudy' | 'rain' | 'storm' | 'snow' | 'fog'
+
+export interface WeatherState {
+  current: WeatherType
+  /** Tick when the current weather started */
+  since: number
+  /** Tick when weather will next change */
+  nextChange: number
+  /** Wind intensity 0-1 (affects particle angle) */
+  windIntensity: number
+}
+
+/** Gameplay modifiers applied by weather */
+export interface WeatherModifiers {
+  movementSpeedMultiplier: number
+  gatherSpeedMultiplier: number
+  energyCostMultiplier: number
+  visionRadius: number | null
+  outdoorGatheringBlocked: boolean
+}
+
 export interface WorldClock {
   tick: number
   day: number
