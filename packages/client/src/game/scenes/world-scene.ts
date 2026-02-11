@@ -5,6 +5,7 @@ import { composeCharacterSprite } from '../character/sprite-composer.js'
 import { SpriteCache } from '../character/sprite-cache.js'
 import { WeatherEffects } from '../effects/weather-effects.js'
 import { DayNightCycle } from '../effects/day-night-cycle.js'
+import { soundManager } from '../audio/sound-manager.js'
 
 // Grid spacing for isometric projection
 const TILE_W = 128
@@ -181,6 +182,11 @@ export class WorldScene extends Phaser.Scene {
     // Weather visual effects layer
     this.weatherEffects = new WeatherEffects(this)
 
+    // Initialize audio on first user interaction (Web Audio requirement)
+    this.input.once('pointerdown', () => {
+      soundManager.init()
+    })
+
     // Scroll wheel zoom
     this.input.on('wheel', (
       _pointer: Phaser.Input.Pointer,
@@ -286,6 +292,7 @@ export class WorldScene extends Phaser.Scene {
   updateClock(clock: WorldClock): void {
     this.clock = clock
     this.dayNightCycle?.update(clock.timeOfDay, clock.dayProgress)
+    soundManager.onTimeChange(clock.timeOfDay)
 
     // Update agent torch positions
     if (this.dayNightCycle && this.agents.length > 0) {
@@ -375,11 +382,17 @@ export class WorldScene extends Phaser.Scene {
             ease: 'Linear',
           })
         }
+        // Footstep SFX for selected agent only
+        if (event.agentId === this.selectedAgentId) {
+          const tile = this.getTileAt(event.to.x, event.to.y)
+          if (tile) soundManager.playFootstep(tile.type)
+        }
         break
       }
       case 'resource:gathered': {
         const gatherPos = this.tileToScreen(event.position.x, event.position.y)
         this.showGatherEffect(gatherPos.x, gatherPos.y, event.resourceType)
+        soundManager.playGather(event.resourceType)
         break
       }
     }
@@ -1055,6 +1068,18 @@ export class WorldScene extends Phaser.Scene {
         onComplete: () => spark.destroy(),
       })
     }
+  }
+
+  /** Look up a tile from chunkDataStore by world coordinates */
+  private getTileAt(x: number, y: number): Tile | null {
+    const cx = Math.floor(x / CHUNK_SIZE)
+    const cy = Math.floor(y / CHUNK_SIZE)
+    const chunk = this.chunkDataStore.get(`${cx},${cy}`)
+    if (!chunk) return null
+    const lx = x - cx * CHUNK_SIZE
+    const ly = y - cy * CHUNK_SIZE
+    if (ly < 0 || ly >= chunk.tiles.length || lx < 0 || lx >= chunk.tiles[ly].length) return null
+    return chunk.tiles[ly][lx]
   }
 
   /** Convert screen coordinates to tile coordinates (inverse isometric) */

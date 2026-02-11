@@ -1,6 +1,8 @@
+import { useState } from 'react'
 import type { WorldClock } from '@botworld/shared'
 import type { SpeedState } from '../network/socket-client.js'
 import { socketClient } from '../network/socket-client.js'
+import { soundManager } from '../game/audio/sound-manager.js'
 
 const TIME_ICONS: Record<string, string> = {
   dawn: '🌅',
@@ -19,6 +21,10 @@ export function HUD({ clock, agentCount, spectatorCount, speedState }: {
   spectatorCount: number
   speedState: SpeedState
 }) {
+  const [bgmVol, setBgmVol] = useState(soundManager.getBgmVolume())
+  const [sfxVol, setSfxVol] = useState(soundManager.getSfxVolume())
+  const [muted, setMuted] = useState(soundManager.isMuted())
+
   if (!clock) return null
 
   const togglePause = () => {
@@ -27,6 +33,23 @@ export function HUD({ clock, agentCount, spectatorCount, speedState }: {
     } else {
       socketClient.pause()
     }
+  }
+
+  const handleMute = () => {
+    const nowMuted = soundManager.toggleMute()
+    setMuted(nowMuted)
+  }
+
+  const handleBgmChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const v = Number(e.target.value) / 100
+    soundManager.setBgmVolume(v)
+    setBgmVol(v)
+  }
+
+  const handleSfxChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const v = Number(e.target.value) / 100
+    soundManager.setSfxVolume(v)
+    setSfxVol(v)
   }
 
   return (
@@ -69,6 +92,36 @@ export function HUD({ clock, agentCount, spectatorCount, speedState }: {
               {s}x
             </button>
           ))}
+        </div>
+      </div>
+      {/* Audio Controls */}
+      <div style={styles.audioRow}>
+        <button onClick={handleMute} style={styles.muteBtn} title={muted ? 'Unmute' : 'Mute'}>
+          {muted ? '\uD83D\uDD07' : '\uD83D\uDD0A'}
+        </button>
+        <div style={styles.sliderGroup}>
+          <span style={styles.sliderLabel}>BGM</span>
+          <input
+            type="range"
+            min="0"
+            max="100"
+            value={Math.round(bgmVol * 100)}
+            onChange={handleBgmChange}
+            style={styles.slider}
+            disabled={muted}
+          />
+        </div>
+        <div style={styles.sliderGroup}>
+          <span style={styles.sliderLabel}>SFX</span>
+          <input
+            type="range"
+            min="0"
+            max="100"
+            value={Math.round(sfxVol * 100)}
+            onChange={handleSfxChange}
+            style={styles.slider}
+            disabled={muted}
+          />
         </div>
       </div>
     </div>
@@ -118,5 +171,38 @@ const styles: Record<string, React.CSSProperties> = {
     cursor: 'pointer',
     fontFamily: 'inherit',
     fontWeight: 'bold',
+  },
+  audioRow: {
+    display: 'flex',
+    gap: 8,
+    alignItems: 'center',
+    borderTop: '1px solid #1a2a4a',
+    paddingTop: 6,
+  },
+  muteBtn: {
+    border: 'none',
+    background: 'none',
+    fontSize: 16,
+    cursor: 'pointer',
+    padding: '0 2px',
+    lineHeight: 1,
+  },
+  sliderGroup: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 4,
+    flex: 1,
+  },
+  sliderLabel: {
+    fontSize: 9,
+    color: '#667788',
+    width: 24,
+    flexShrink: 0,
+  },
+  slider: {
+    flex: 1,
+    height: 4,
+    accentColor: '#e2b714',
+    cursor: 'pointer',
   },
 }

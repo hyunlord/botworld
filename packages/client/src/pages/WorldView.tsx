@@ -11,6 +11,7 @@ import { AgentInspector } from '../ui/AgentInspector.js'
 import { Minimap } from '../ui/Minimap.js'
 import { RACE_ICONS, CLASS_ICONS, ACTION_ICONS } from '../ui/constants.js'
 import { EventBanner } from '../ui/EventBanner.js'
+import { soundManager } from '../game/audio/sound-manager.js'
 
 export function WorldView() {
   const gameRef = useRef<Phaser.Game | null>(null)
@@ -174,9 +175,23 @@ export function WorldView() {
       )
     })
 
-    // Weather changes
+    // Weather changes (visuals + ambient audio)
     const unsubWeather = socketClient.onWeather((weather: WeatherState) => {
       sceneRef.current?.setWeather(weather)
+      // Ambient weather sounds
+      if (weather.current === 'rain' || weather.current === 'storm') {
+        soundManager.startRain()
+      } else {
+        soundManager.stopRain()
+      }
+      if (weather.current === 'storm' || weather.windIntensity > 0.5) {
+        soundManager.startWind()
+      } else {
+        soundManager.stopWind()
+      }
+      if (weather.current === 'storm') {
+        soundManager.playThunder()
+      }
     })
 
     // World events
@@ -205,14 +220,22 @@ export function WorldView() {
       if (event.type === 'combat:started' && 'position' in event) {
         const pos = event.position as { x: number; y: number }
         scene.showCombatEffect(pos.x, pos.y)
+        soundManager.setCombat(true)
+        soundManager.playAttack()
       }
       if (event.type === 'combat:round' && 'round' in event) {
-        const round = event.round as { agentDamage: number; monsterDamage: number }
-        // We don't have position here, but the event is for spectator logging
+        soundManager.playAttack()
+        soundManager.playDamageHit()
+      }
+      if (event.type === 'combat:ended') {
+        soundManager.setCombat(false)
+        if ('outcome' in event && event.outcome === 'victory') {
+          soundManager.playMonsterDie()
+        }
       }
     })
 
-    const unsubMonster = socketClient.onMonsterEvent((event) => {
+    const unsubMonster = socketClient.onMonsterEvent((_event) => {
       // Monster events logged in ChatLog via world:event
     })
 
