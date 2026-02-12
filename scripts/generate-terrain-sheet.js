@@ -15,7 +15,7 @@ const OUTPUT = path.join(__dirname, '../packages/client/public/assets/tiles/terr
 const JSON_OUTPUT = path.join(__dirname, '../packages/client/public/assets/tiles/terrain-tiles.json');
 
 // Statistics
-let stats = { kenney: 0, placeholder: 0, transparent: 0 };
+let stats = { kenney: 0, placeholder: 0, transparent: 0, procedural: 0 };
 
 /**
  * Read a 16x16 PNG tile
@@ -154,6 +154,363 @@ function makePlaceholder(r, g, b, a = 255, shape = 'solid') {
 }
 
 /**
+ * Set a pixel in a PNG with bounds checking
+ */
+function setPixel(png, x, y, r, g, b, a = 255) {
+  if (x < 0 || x >= TILE || y < 0 || y >= TILE) return;
+  const idx = (y * TILE + x) * 4;
+  png.data[idx] = r;
+  png.data[idx + 1] = g;
+  png.data[idx + 2] = b;
+  png.data[idx + 3] = a;
+}
+
+/**
+ * Fill a rectangular region
+ */
+function fillRect(png, x1, y1, x2, y2, r, g, b, a = 255) {
+  for (let y = y1; y <= y2; y++) {
+    for (let x = x1; x <= x2; x++) {
+      setPixel(png, x, y, r, g, b, a);
+    }
+  }
+}
+
+/**
+ * Create water corner tile (outer or inner corners)
+ * @param {boolean} isInner - true for inner corners, false for outer
+ * @param {string} corner - 'NE', 'NW', 'SE', 'SW'
+ */
+function makeWaterCorner(isInner, corner) {
+  const png = new PNG({ width: TILE, height: TILE });
+
+  // Initialize to transparent
+  for (let i = 0; i < png.data.length; i += 4) {
+    png.data[i] = 0;
+    png.data[i + 1] = 0;
+    png.data[i + 2] = 0;
+    png.data[i + 3] = 0;
+  }
+
+  // Colors
+  const grass = { r: 109, g: 170, b: 44 };
+  const waterDeep = { r: 37, g: 99, b: 160 };
+  const waterShallow = { r: 58, g: 124, b: 189 };
+  const shore = { r: 85, g: 139, b: 139 };
+
+  if (isInner) {
+    // Inner corner: mostly water with grass peeking in from corner
+    fillRect(png, 0, 0, 31, 31, waterShallow.r, waterShallow.g, waterShallow.b);
+
+    // Add some deep water variation
+    for (let y = 8; y < 24; y++) {
+      for (let x = 8; x < 24; x++) {
+        if ((x + y) % 3 === 0) {
+          setPixel(png, x, y, waterDeep.r, waterDeep.g, waterDeep.b);
+        }
+      }
+    }
+
+    // Grass corner peek
+    const grassSize = 10;
+    if (corner === 'NE') {
+      fillRect(png, 32 - grassSize, 0, 31, grassSize - 1, grass.r, grass.g, grass.b);
+      fillRect(png, 32 - grassSize - 2, grassSize - 2, 31, grassSize, shore.r, shore.g, shore.b);
+    } else if (corner === 'NW') {
+      fillRect(png, 0, 0, grassSize - 1, grassSize - 1, grass.r, grass.g, grass.b);
+      fillRect(png, 0, grassSize - 2, grassSize + 2, grassSize, shore.r, shore.g, shore.b);
+    } else if (corner === 'SE') {
+      fillRect(png, 32 - grassSize, 32 - grassSize, 31, 31, grass.r, grass.g, grass.b);
+      fillRect(png, 32 - grassSize - 2, 32 - grassSize - 2, 31, 32 - grassSize, shore.r, shore.g, shore.b);
+    } else if (corner === 'SW') {
+      fillRect(png, 0, 32 - grassSize, grassSize - 1, 31, grass.r, grass.g, grass.b);
+      fillRect(png, 0, 32 - grassSize - 2, grassSize + 2, 32 - grassSize, shore.r, shore.g, shore.b);
+    }
+  } else {
+    // Outer corner: mostly grass with water filling the corner quadrant
+    fillRect(png, 0, 0, 31, 31, grass.r, grass.g, grass.b);
+
+    // Add grass variation
+    for (let y = 0; y < 32; y++) {
+      for (let x = 0; x < 32; x++) {
+        if ((x * 3 + y * 7) % 13 === 0) {
+          setPixel(png, x, y, grass.r - 10, grass.g - 15, grass.b - 5);
+        }
+      }
+    }
+
+    // Water quadrant
+    if (corner === 'NE') {
+      fillRect(png, 16, 0, 31, 15, waterShallow.r, waterShallow.g, waterShallow.b);
+      fillRect(png, 14, 0, 15, 15, shore.r, shore.g, shore.b);
+    } else if (corner === 'NW') {
+      fillRect(png, 0, 0, 15, 15, waterShallow.r, waterShallow.g, waterShallow.b);
+      fillRect(png, 16, 0, 17, 15, shore.r, shore.g, shore.b);
+    } else if (corner === 'SE') {
+      fillRect(png, 16, 16, 31, 31, waterShallow.r, waterShallow.g, waterShallow.b);
+      fillRect(png, 14, 16, 15, 31, shore.r, shore.g, shore.b);
+    } else if (corner === 'SW') {
+      fillRect(png, 0, 16, 15, 31, waterShallow.r, waterShallow.g, waterShallow.b);
+      fillRect(png, 16, 16, 17, 31, shore.r, shore.g, shore.b);
+    }
+  }
+
+  return png;
+}
+
+/**
+ * Create river tile (horizontal or vertical)
+ * @param {boolean} horizontal - true for horizontal, false for vertical
+ */
+function makeRiverTile(horizontal) {
+  const png = new PNG({ width: TILE, height: TILE });
+
+  for (let i = 0; i < png.data.length; i += 4) {
+    png.data[i] = 0;
+    png.data[i + 1] = 0;
+    png.data[i + 2] = 0;
+    png.data[i + 3] = 0;
+  }
+
+  const grass = { r: 109, g: 170, b: 44 };
+  const waterShallow = { r: 58, g: 124, b: 189 };
+  const shore = { r: 85, g: 139, b: 139 };
+
+  if (horizontal) {
+    // Grass on top and bottom
+    fillRect(png, 0, 0, 31, 9, grass.r, grass.g, grass.b);
+    fillRect(png, 0, 22, 31, 31, grass.r, grass.g, grass.b);
+    // Shore lines
+    fillRect(png, 0, 10, 31, 11, shore.r, shore.g, shore.b);
+    fillRect(png, 0, 20, 31, 21, shore.r, shore.g, shore.b);
+    // Water in middle
+    fillRect(png, 0, 12, 31, 19, waterShallow.r, waterShallow.g, waterShallow.b);
+  } else {
+    // Grass on left and right
+    fillRect(png, 0, 0, 9, 31, grass.r, grass.g, grass.b);
+    fillRect(png, 22, 0, 31, 31, grass.r, grass.g, grass.b);
+    // Shore lines
+    fillRect(png, 10, 0, 11, 31, shore.r, shore.g, shore.b);
+    fillRect(png, 20, 0, 21, 31, shore.r, shore.g, shore.b);
+    // Water in middle
+    fillRect(png, 12, 0, 19, 31, waterShallow.r, waterShallow.g, waterShallow.b);
+  }
+
+  return png;
+}
+
+/**
+ * Create swamp tile
+ */
+function makeSwampTile() {
+  const png = new PNG({ width: TILE, height: TILE });
+
+  for (let i = 0; i < png.data.length; i += 4) {
+    png.data[i] = 0;
+    png.data[i + 1] = 0;
+    png.data[i + 2] = 0;
+    png.data[i + 3] = 0;
+  }
+
+  const mudBase = { r: 60, g: 75, b: 40 };
+  const mudDark = { r: 45, g: 55, b: 30 };
+  const puddle = { r: 50, g: 80, b: 50, a: 180 };
+
+  // Base mud color
+  fillRect(png, 0, 0, 31, 31, mudBase.r, mudBase.g, mudBase.b);
+
+  // Random dark spots
+  for (let y = 0; y < 32; y++) {
+    for (let x = 0; x < 32; x++) {
+      const noise = (x * 7 + y * 13) % 17;
+      if (noise < 5) {
+        setPixel(png, x, y, mudDark.r, mudDark.g, mudDark.b);
+      }
+    }
+  }
+
+  // Small puddles
+  const puddles = [[8, 6], [22, 14], [14, 24], [26, 8]];
+  puddles.forEach(([px, py]) => {
+    for (let dy = -1; dy <= 1; dy++) {
+      for (let dx = -1; dx <= 1; dx++) {
+        if (Math.abs(dx) + Math.abs(dy) <= 1) {
+          setPixel(png, px + dx, py + dy, puddle.r, puddle.g, puddle.b, puddle.a);
+        }
+      }
+    }
+  });
+
+  return png;
+}
+
+/**
+ * Create rock tile
+ * @param {string} size - 'small' or 'large'
+ * @param {string} variant - 'normal', 'mossy', 'iron', 'gold'
+ */
+function makeRockTile(size, variant) {
+  const png = new PNG({ width: TILE, height: TILE });
+
+  for (let i = 0; i < png.data.length; i += 4) {
+    png.data[i] = 0;
+    png.data[i + 1] = 0;
+    png.data[i + 2] = 0;
+    png.data[i + 3] = 0;
+  }
+
+  const centerX = 16;
+  const centerY = 16;
+  const radiusX = size === 'small' ? 4 : 7;
+  const radiusY = size === 'small' ? 3 : 5;
+
+  let baseColor, highlightColor, shadowColor;
+
+  if (variant === 'mossy') {
+    baseColor = { r: 100, g: 120, b: 90 };
+    highlightColor = { r: 120, g: 140, b: 100 };
+    shadowColor = { r: 70, g: 85, b: 65 };
+  } else if (variant === 'iron') {
+    baseColor = { r: 70, g: 70, b: 80 };
+    highlightColor = { r: 140, g: 140, b: 160 };
+    shadowColor = { r: 40, g: 40, b: 50 };
+  } else if (variant === 'gold') {
+    baseColor = { r: 130, g: 130, b: 130 };
+    highlightColor = { r: 212, g: 168, b: 32 };
+    shadowColor = { r: 90, g: 90, b: 90 };
+  } else {
+    baseColor = { r: 130, g: 130, b: 130 };
+    highlightColor = { r: 160, g: 160, b: 160 };
+    shadowColor = { r: 90, g: 90, b: 90 };
+  }
+
+  // Draw ellipse
+  for (let y = 0; y < TILE; y++) {
+    for (let x = 0; x < TILE; x++) {
+      const dx = (x - centerX) / radiusX;
+      const dy = (y - centerY) / radiusY;
+      const dist = dx * dx + dy * dy;
+
+      if (dist <= 1) {
+        // Inside rock
+        if (dx < -0.3 && dy < -0.3) {
+          setPixel(png, x, y, highlightColor.r, highlightColor.g, highlightColor.b, 200);
+        } else if (dx > 0.3 && dy > 0.3) {
+          setPixel(png, x, y, shadowColor.r, shadowColor.g, shadowColor.b, 200);
+        } else {
+          setPixel(png, x, y, baseColor.r, baseColor.g, baseColor.b, 200);
+        }
+
+        // Gold/iron specks
+        if (variant === 'gold' && (x * 11 + y * 7) % 23 === 0) {
+          setPixel(png, x, y, highlightColor.r, highlightColor.g, highlightColor.b, 220);
+        } else if (variant === 'iron' && (x * 13 + y * 5) % 19 === 0) {
+          setPixel(png, x, y, highlightColor.r, highlightColor.g, highlightColor.b, 220);
+        }
+      }
+    }
+  }
+
+  return png;
+}
+
+/**
+ * Create flower tile
+ * @param {number} r - red value
+ * @param {number} g - green value
+ * @param {number} b - blue value
+ */
+function makeFlowerTile(r, g, b) {
+  const png = new PNG({ width: TILE, height: TILE });
+
+  for (let i = 0; i < png.data.length; i += 4) {
+    png.data[i] = 0;
+    png.data[i + 1] = 0;
+    png.data[i + 2] = 0;
+    png.data[i + 3] = 0;
+  }
+
+  const stem = { r: 60, g: 120, b: 40 };
+  const flowers = [[10, 8], [20, 12], [15, 18]];
+
+  flowers.forEach(([fx, fy]) => {
+    // Flower (3x3)
+    for (let dy = -1; dy <= 1; dy++) {
+      for (let dx = -1; dx <= 1; dx++) {
+        if (Math.abs(dx) + Math.abs(dy) <= 1) {
+          setPixel(png, fx + dx, fy + dy, r, g, b, 200);
+        }
+      }
+    }
+    // Stem
+    setPixel(png, fx, fy + 2, stem.r, stem.g, stem.b, 200);
+  });
+
+  return png;
+}
+
+/**
+ * Create fish spot tile (water ripple)
+ */
+function makeFishSpotTile() {
+  const png = new PNG({ width: TILE, height: TILE });
+
+  for (let i = 0; i < png.data.length; i += 4) {
+    png.data[i] = 0;
+    png.data[i + 1] = 0;
+    png.data[i + 2] = 0;
+    png.data[i + 3] = 0;
+  }
+
+  const ripple = { r: 120, g: 160, b: 200, a: 128 };
+  const centerX = 16;
+  const centerY = 16;
+
+  // Concentric ripples
+  [4, 6, 8].forEach(radius => {
+    for (let angle = 0; angle < Math.PI * 2; angle += Math.PI / 8) {
+      const x = Math.round(centerX + Math.cos(angle) * radius);
+      const y = Math.round(centerY + Math.sin(angle) * radius);
+      setPixel(png, x, y, ripple.r, ripple.g, ripple.b, ripple.a);
+    }
+  });
+
+  return png;
+}
+
+/**
+ * Create pebbles tile
+ */
+function makePebblesTile() {
+  const png = new PNG({ width: TILE, height: TILE });
+
+  for (let i = 0; i < png.data.length; i += 4) {
+    png.data[i] = 0;
+    png.data[i + 1] = 0;
+    png.data[i + 2] = 0;
+    png.data[i + 3] = 0;
+  }
+
+  const pebblePositions = [[8, 10], [18, 8], [12, 20], [24, 16], [14, 14], [22, 24]];
+  const grays = [
+    { r: 120, g: 120, b: 120 },
+    { r: 140, g: 140, b: 140 },
+    { r: 100, g: 100, b: 100 }
+  ];
+
+  pebblePositions.forEach(([px, py], i) => {
+    const color = grays[i % grays.length];
+    // 2x2 pebble
+    setPixel(png, px, py, color.r, color.g, color.b, 180);
+    setPixel(png, px + 1, py, color.r, color.g, color.b, 180);
+    setPixel(png, px, py + 1, color.r, color.g, color.b, 180);
+    setPixel(png, px + 1, py + 1, color.r, color.g, color.b, 180);
+  });
+
+  return png;
+}
+
+/**
  * Copy 32x32 tile data into output PNG at grid position
  */
 function placeTile(output, tile, col, row) {
@@ -215,7 +572,7 @@ const ROW0 = [
   { src: 'town', n: 97 },   // 9: snow_2
   { src: 'town', n: 48 },   // 10: stone_floor (cobblestone)
   { src: 'town', n: 12 },   // 11: farmland (Kenney light ground)
-  { src: 'placeholder', r: 74, g: 90, b: 58 },   // 12: swamp (placeholder)
+  { src: 'procedural', fn: 'makeSwampTile' },   // 12: swamp
   { src: 'town', n: 13 },   // 13: dark_grass (reuse dark grass)
   { src: 'dungeon', n: 48 }, // 14: cave_floor (Kenney dungeon floor)
   { src: 'transparent' },    // 15: reserved
@@ -228,16 +585,16 @@ const ROW1 = [
   { src: 'town', n: 29 },   // 19: water_shore_S
   { src: 'town', n: 30 },   // 20: water_shore_E
   { src: 'town', n: 31 },   // 21: water_shore_W
-  { src: 'placeholder', r: 37, g: 99, b: 160 },  // 22: water_shore_NE (placeholder)
-  { src: 'placeholder', r: 37, g: 99, b: 160 },  // 23: water_shore_NW
-  { src: 'placeholder', r: 37, g: 99, b: 160 },  // 24: water_shore_SE
-  { src: 'placeholder', r: 37, g: 99, b: 160 },  // 25: water_shore_SW
-  { src: 'placeholder', r: 30, g: 80, b: 140 },  // 26: water_shore_inner_NE
-  { src: 'placeholder', r: 30, g: 80, b: 140 },  // 27: water_shore_inner_NW
-  { src: 'placeholder', r: 30, g: 80, b: 140 },  // 28: water_shore_inner_SE
-  { src: 'placeholder', r: 30, g: 80, b: 140 },  // 29: water_shore_inner_SW
-  { src: 'placeholder', r: 58, g: 124, b: 189 }, // 30: water_river_H
-  { src: 'placeholder', r: 58, g: 124, b: 189 }, // 31: water_river_V
+  { src: 'procedural', fn: 'makeWaterCorner', args: [false, 'NE'] },  // 22: water_shore_NE
+  { src: 'procedural', fn: 'makeWaterCorner', args: [false, 'NW'] },  // 23: water_shore_NW
+  { src: 'procedural', fn: 'makeWaterCorner', args: [false, 'SE'] },  // 24: water_shore_SE
+  { src: 'procedural', fn: 'makeWaterCorner', args: [false, 'SW'] },  // 25: water_shore_SW
+  { src: 'procedural', fn: 'makeWaterCorner', args: [true, 'NE'] },   // 26: water_shore_inner_NE
+  { src: 'procedural', fn: 'makeWaterCorner', args: [true, 'NW'] },   // 27: water_shore_inner_NW
+  { src: 'procedural', fn: 'makeWaterCorner', args: [true, 'SE'] },   // 28: water_shore_inner_SE
+  { src: 'procedural', fn: 'makeWaterCorner', args: [true, 'SW'] },   // 29: water_shore_inner_SW
+  { src: 'procedural', fn: 'makeRiverTile', args: [true] },   // 30: water_river_H
+  { src: 'procedural', fn: 'makeRiverTile', args: [false] },  // 31: water_river_V
 ];
 
 const ROW2 = [
@@ -298,27 +655,27 @@ const ROW4 = [
 ];
 
 const ROW5 = [
-  { src: 'placeholder', r: 128, g: 128, b: 128, a: 200, shape: 'circle' }, // 80: rock_small
-  { src: 'placeholder', r: 112, g: 112, b: 112, a: 200, shape: 'circle' }, // 81: rock_large
-  { src: 'placeholder', r: 100, g: 120, b: 90, a: 200, shape: 'circle' },  // 82: rock_mossy
-  { src: 'placeholder', r: 96, g: 96, b: 112, a: 200, shape: 'circle' },   // 83: ore_iron
-  { src: 'placeholder', r: 212, g: 168, b: 32, a: 200, shape: 'circle' },  // 84: ore_gold
+  { src: 'procedural', fn: 'makeRockTile', args: ['small', 'normal'] },  // 80: rock_small
+  { src: 'procedural', fn: 'makeRockTile', args: ['large', 'normal'] },  // 81: rock_large
+  { src: 'procedural', fn: 'makeRockTile', args: ['large', 'mossy'] },   // 82: rock_mossy
+  { src: 'procedural', fn: 'makeRockTile', args: ['large', 'iron'] },    // 83: ore_iron
+  { src: 'procedural', fn: 'makeRockTile', args: ['large', 'gold'] },    // 84: ore_gold
   { src: 'dungeon', n: 56 },  // 85: ore_crystal (Kenney blue gem)
   { src: 'dungeon', n: 123 }, // 86: mushroom_1 (Kenney brown mushroom)
   { src: 'dungeon', n: 124 }, // 87: mushroom_2 (Kenney dark mushroom)
   { src: 'dungeon', n: 108 }, // 88: herb_green (Kenney green creature/plant)
   { src: 'dungeon', n: 114 }, // 89: herb_rare (Kenney green potion/herb)
-  { src: 'placeholder', r: 208, g: 64, b: 64, a: 200, shape: 'circle' },   // 90: flower_red
-  { src: 'placeholder', r: 64, g: 64, b: 208, a: 200, shape: 'circle' },   // 91: flower_blue
-  { src: 'placeholder', r: 208, g: 208, b: 64, a: 200, shape: 'circle' },  // 92: flower_yellow
+  { src: 'procedural', fn: 'makeFlowerTile', args: [208, 64, 64] },      // 90: flower_red
+  { src: 'procedural', fn: 'makeFlowerTile', args: [64, 64, 208] },      // 91: flower_blue
+  { src: 'procedural', fn: 'makeFlowerTile', args: [208, 208, 64] },     // 92: flower_yellow
   { src: 'town', n: 34 },     // 93: wheat (Kenney pumpkin/crop)
   { src: 'town', n: 35 },     // 94: vegetable (Kenney brown vegetable)
-  { src: 'placeholder', r: 10, g: 32, b: 64, a: 128, shape: 'circle' },    // 95: fish_spot
+  { src: 'procedural', fn: 'makeFishSpotTile' },                         // 95: fish_spot
 ];
 
 const ROW6 = [
   { src: 'town', n: 43 },     // 96: grass_tuft (Kenney flower/grass patch)
-  { src: 'placeholder', r: 140, g: 140, b: 140, a: 180, shape: 'rectangle' },  // 97: pebbles
+  { src: 'procedural', fn: 'makePebblesTile' },  // 97: pebbles
   { src: 'town', n: 33 },     // 98: fallen_leaf (Kenney autumn tree/leaf)
   { src: 'town', n: 109 },    // 99: puddle (Kenney ice/water surface)
   { src: 'dungeon', n: 121 }, // 100: bones (Kenney skull)
@@ -366,6 +723,30 @@ for (let row = 0; row < ROWS; row++) {
     } else if (def.src === 'placeholder') {
       tile = makePlaceholder(def.r, def.g, def.b, def.a || 255, def.shape || 'solid');
       stats.placeholder++;
+    } else if (def.src === 'procedural') {
+      // Call procedural generation function
+      const fnName = def.fn;
+      const args = def.args || [];
+
+      if (fnName === 'makeWaterCorner') {
+        tile = makeWaterCorner(...args);
+      } else if (fnName === 'makeRiverTile') {
+        tile = makeRiverTile(...args);
+      } else if (fnName === 'makeSwampTile') {
+        tile = makeSwampTile();
+      } else if (fnName === 'makeRockTile') {
+        tile = makeRockTile(...args);
+      } else if (fnName === 'makeFlowerTile') {
+        tile = makeFlowerTile(...args);
+      } else if (fnName === 'makeFishSpotTile') {
+        tile = makeFishSpotTile();
+      } else if (fnName === 'makePebblesTile') {
+        tile = makePebblesTile();
+      } else {
+        console.warn(`Unknown procedural function: ${fnName}`);
+        tile = makePlaceholder(255, 0, 255); // Magenta for errors
+      }
+      stats.procedural++;
     }
 
     placeTile(output, tile, col, row);
@@ -381,9 +762,10 @@ console.log(`\nTerrain sheet written: ${OUTPUT}`);
 console.log(`Dimensions: ${OUTPUT_W}x${OUTPUT_H} (${COLS} cols x ${ROWS} rows, ${TILE}x${TILE} tiles)\n`);
 console.log('Statistics:');
 console.log(`  Kenney tiles: ${stats.kenney}`);
+console.log(`  Procedural tiles: ${stats.procedural}`);
 console.log(`  Placeholder tiles: ${stats.placeholder}`);
 console.log(`  Transparent tiles: ${stats.transparent}`);
-console.log(`  Total: ${stats.kenney + stats.placeholder + stats.transparent}\n`);
+console.log(`  Total: ${stats.kenney + stats.procedural + stats.placeholder + stats.transparent}\n`);
 
 // Generate JSON mapping
 const tilesJson = {

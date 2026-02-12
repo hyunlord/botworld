@@ -1,5 +1,5 @@
 import Phaser from 'phaser'
-import type { Agent, Tile, WorldEvent, WorldClock, ChunkData, CharacterAppearance, Race, CharacterAppearanceMap, WeatherState, ActiveWorldEvent, Monster } from '@botworld/shared'
+import type { Agent, Tile, WorldEvent, WorldClock, ChunkData, CharacterAppearance, Race, CharacterAppearanceMap, WeatherState, ActiveWorldEvent, Monster, EmotionState } from '@botworld/shared'
 import { CHUNK_SIZE } from '@botworld/shared'
 import { composeCharacterSprite } from '../character/sprite-composer.js'
 import { SpriteCache } from '../character/sprite-cache.js'
@@ -161,6 +161,8 @@ export class WorldScene extends Phaser.Scene {
   private agentDirections = new Map<string, string>()  // agentId → 'down'|'left'|'right'|'up'
   private agentMoving = new Map<string, boolean>()      // agentId → currently walking
   private actionIndicators = new Map<string, Phaser.GameObjects.Image>()
+  private agentEmotionIcons = new Map<string, Phaser.GameObjects.Image>()  // agentId → emotion icon
+  private agentActionIcons = new Map<string, Phaser.GameObjects.Image>()   // agentId → action icon
   private speechBubbles = new Map<string, { container: Phaser.GameObjects.Container; timer: number }>()
   private monsterSprites = new Map<string, Phaser.GameObjects.Container>()
   private dayNightCycle: DayNightCycle | null = null
@@ -347,6 +349,10 @@ export class WorldScene extends Phaser.Scene {
         this.agentMoving.delete(id)
         this.actionIndicators.get(id)?.destroy()
         this.actionIndicators.delete(id)
+        this.agentEmotionIcons.get(id)?.destroy()
+        this.agentEmotionIcons.delete(id)
+        this.agentActionIcons.get(id)?.destroy()
+        this.agentActionIcons.delete(id)
         this.spriteCache.remove(id)
       }
     }
@@ -959,10 +965,26 @@ export class WorldScene extends Phaser.Scene {
       strokeThickness: 2,
     }).setOrigin(0.5, 0)
 
+    // Emotion icon (top-left of agent, initially hidden)
+    const emotionIcon = this.add.image(-8, -28, 'emotion_happy')
+      .setOrigin(0.5, 0.5)
+      .setScale(0.5)
+      .setAlpha(0)
+      .setDepth(1)
+    this.agentEmotionIcons.set(agent.id, emotionIcon)
+
+    // Action icon (top-right of agent, initially hidden)
+    const actionIcon = this.add.image(8, -28, 'act_walking')
+      .setOrigin(0.5, 0.5)
+      .setScale(0.5)
+      .setAlpha(0)
+      .setDepth(1)
+    this.agentActionIcons.set(agent.id, actionIcon)
+
     const container = this.add.container(
       screenPos.x,
       screenPos.y,
-      [shadow, spriteOrGroup, nameText, actionText],
+      [shadow, spriteOrGroup, nameText, actionText, emotionIcon, actionIcon],
     )
     container.setDepth(500 + agent.position.y)
     container.setSize(30, 40)
@@ -1032,11 +1054,114 @@ export class WorldScene extends Phaser.Scene {
     const container = this.agentSprites.get(agent.id)
     if (!container || !container.list) return
 
+    // Update action text (keep as small subtitle)
     const actionText = container.list[3] as Phaser.GameObjects.Text | undefined
+    const actionType = agent.currentAction?.type ?? 'idle'
+
     if (actionText && 'setText' in actionText) {
-      const actionType = agent.currentAction?.type ?? 'idle'
       const display = actionType === 'idle' ? '' : actionType
       actionText.setText(display)
+    }
+
+    // Update action icon
+    const actionIcon = this.agentActionIcons.get(agent.id)
+    if (actionIcon) {
+      const actionToTexture: Record<string, string> = {
+        gather: 'act_gathering',
+        mine: 'act_gathering',
+        chop: 'act_gathering',
+        attack: 'act_fighting',
+        flee: 'act_fighting',
+        craft: 'act_crafting',
+        eat: 'act_eating',
+        rest: 'act_resting',
+        trade: 'act_trading',
+        move: 'act_walking',
+        explore: 'act_exploring',
+        quest: 'act_exploring',
+      }
+
+      const textureKey = actionToTexture[actionType]
+      if (textureKey && this.textures.exists(textureKey)) {
+        actionIcon.setTexture(textureKey)
+        actionIcon.setAlpha(0.85)
+
+        // Small bounce when action changes
+        if (actionIcon.alpha === 0) {
+          this.tweens.add({
+            targets: actionIcon,
+            scaleY: { from: 0.3, to: 0.5 },
+            scaleX: { from: 0.3, to: 0.5 },
+            duration: 200,
+            ease: 'Back.easeOut',
+          })
+        }
+      } else {
+        actionIcon.setAlpha(0)
+      }
+    }
+
+    // Update emotion icon based on current mood
+    this.updateEmotionIcon(agent.id, agent.currentMood)
+  }
+
+  /** Update emotion icon based on agent's dominant emotion */
+  private updateEmotionIcon(agentId: string, mood: EmotionState): void {
+    const icon = this.agentEmotionIcons.get(agentId)
+    if (!icon) return
+
+    // Find the dominant emotion (highest intensity)
+    const emotions = Object.entries(mood) as [string, number][]
+    const dominant = emotions.reduce((max, [name, value]) =>
+      value > max.value ? { name, value } : max,
+      { name: 'joy', value: 0 }
+    )
+
+    // Only show if emotion intensity is significant (> 0.3)
+    if (dominant.value < 0.3) {
+      icon.setAlpha(0)
+      return
+    }
+
+    // Map mood to emotion texture
+    const moodToTexture: Record<string, string> = {
+      joy: 'emotion_happy',
+      trust: 'emotion_happy',
+      fear: 'emotion_scared',
+      surprise: 'emotion_surprised',
+      sadness: 'emotion_sad',
+      disgust: 'emotion_angry',
+      anger: 'emotion_angry',
+      anticipation: 'emotion_thinking',
+    }
+
+    const textureKey = moodToTexture[dominant.name] || 'emotion_thinking'
+    if (this.textures.exists(textureKey)) {
+      const wasHidden = icon.alpha === 0
+      icon.setTexture(textureKey)
+      icon.setAlpha(0.9)
+
+      // Small pop-in animation when emotion first appears
+      if (wasHidden) {
+        this.tweens.add({
+          targets: icon,
+          scaleY: { from: 0.3, to: 0.5 },
+          scaleX: { from: 0.3, to: 0.5 },
+          duration: 200,
+          ease: 'Back.easeOut',
+        })
+      }
+
+      // Fade out after 5 seconds
+      this.time.delayedCall(5000, () => {
+        if (icon.active) {
+          this.tweens.add({
+            targets: icon,
+            alpha: 0,
+            duration: 500,
+          })
+        }
+      })
     }
   }
 
