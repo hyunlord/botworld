@@ -90,7 +90,51 @@ const NOUNS: Record<POIType, string[]> = {
   mine:        ['Mine', 'Quarry', 'Dig', 'Delve'],
 }
 
-// --- Decoration tables ---
+// --- Weighted tile variant tables ---
+// Each biome maps to [variant, cumulativeWeight] pairs.
+// The coordinate hash (0-1) selects the variant by cumulative weight.
+
+const BIOME_VARIANTS: Record<string, [number, number][]> = {
+  grassland:        [[0, 0.60], [1, 0.85], [2, 1.0]],   // grass_1 60%, grass_2 25%, grass_3 15%
+  farmland:         [[0, 0.70], [1, 1.0]],                // farmland base 70%, variant 30%
+  temperate_forest: [[0, 0.55], [1, 0.85], [2, 1.0]],
+  alpine_forest:    [[0, 0.60], [1, 1.0]],
+  dense_forest:     [[0, 0.50], [1, 0.80], [2, 1.0]],
+  highland:         [[0, 0.65], [1, 1.0]],
+  beach:            [[0, 0.60], [1, 1.0]],                // sand_1 60%, sand_2 40%
+  desert:           [[0, 0.55], [1, 1.0]],
+  swamp:            [[0, 0.70], [1, 1.0]],
+  tundra:           [[0, 0.60], [1, 1.0]],
+  snow_peak:        [[0, 0.55], [1, 1.0]],
+  mountain:         [[0, 0.50], [1, 0.80], [2, 1.0]],
+}
+
+function getWeightedVariant(biome: string, coordHash: number): number {
+  const weights = BIOME_VARIANTS[biome]
+  if (!weights) return 0
+  const t = (coordHash >>> 0) / 0xFFFFFFFF  // normalize to 0-1
+  for (const [variant, cumWeight] of weights) {
+    if (t < cumWeight) return variant
+  }
+  return 0
+}
+
+// --- Decoration tables with biome-specific rates ---
+
+const BIOME_DECO_RATE: Record<string, number> = {
+  grassland: 0.08,         // 5-10% → 8%
+  farmland: 0.05,
+  temperate_forest: 0.15,  // 15%
+  alpine_forest: 0.10,
+  dense_forest: 0.15,      // 15%
+  highland: 0.06,
+  beach: 0.10,             // 10%
+  swamp: 0.12,
+  tundra: 0.04,
+  desert: 0.05,
+  snow_peak: 0.03,
+  river: 0.05,
+}
 
 const BIOME_DECORATIONS: Record<string, string[]> = {
   grassland:        ['deco_flowers_1', 'deco_flowers_2', 'deco_grass_tuft'],
@@ -119,43 +163,43 @@ interface ResourceDef {
 
 const BIOME_RESOURCES: Record<string, ResourceDef[]> = {
   temperate_forest: [
-    { type: 'wood', density: 0.21, amount: 10, maxAmount: 10, regenRate: 0.01 },
-    { type: 'herb', density: 0.05, amount: 4, maxAmount: 4, regenRate: 0.008 },
+    { type: 'wood', density: 0.10, amount: 10, maxAmount: 10, regenRate: 0.01 },
+    { type: 'herb', density: 0.025, amount: 4, maxAmount: 4, regenRate: 0.008 },
   ],
   alpine_forest: [
-    { type: 'wood', density: 0.15, amount: 8, maxAmount: 8, regenRate: 0.008 },
+    { type: 'wood', density: 0.075, amount: 8, maxAmount: 8, regenRate: 0.008 },
   ],
   dense_forest: [
-    { type: 'wood', density: 0.30, amount: 15, maxAmount: 15, regenRate: 0.012 },
-    { type: 'herb', density: 0.09, amount: 6, maxAmount: 6, regenRate: 0.01 },
+    { type: 'wood', density: 0.15, amount: 15, maxAmount: 15, regenRate: 0.012 },
+    { type: 'herb', density: 0.045, amount: 6, maxAmount: 6, regenRate: 0.01 },
   ],
   grassland: [
-    { type: 'food', density: 0.07, amount: 5, maxAmount: 5, regenRate: 0.02 },
-    { type: 'herb', density: 0.03, amount: 3, maxAmount: 3, regenRate: 0.008 },
+    { type: 'food', density: 0.035, amount: 5, maxAmount: 5, regenRate: 0.02 },
+    { type: 'herb', density: 0.015, amount: 3, maxAmount: 3, regenRate: 0.008 },
   ],
   farmland: [
-    { type: 'food', density: 0.24, amount: 8, maxAmount: 8, regenRate: 0.025 },
+    { type: 'food', density: 0.12, amount: 8, maxAmount: 8, regenRate: 0.025 },
   ],
   highland: [
-    { type: 'stone', density: 0.15, amount: 10, maxAmount: 10, regenRate: 0.005 },
-    { type: 'iron', density: 0.05, amount: 8, maxAmount: 8, regenRate: 0.003 },
+    { type: 'stone', density: 0.075, amount: 10, maxAmount: 10, regenRate: 0.005 },
+    { type: 'iron', density: 0.025, amount: 8, maxAmount: 8, regenRate: 0.003 },
   ],
   swamp: [
-    { type: 'herb', density: 0.12, amount: 6, maxAmount: 6, regenRate: 0.015 },
-    { type: 'food', density: 0.04, amount: 3, maxAmount: 3, regenRate: 0.01 },
+    { type: 'herb', density: 0.06, amount: 6, maxAmount: 6, regenRate: 0.015 },
+    { type: 'food', density: 0.02, amount: 3, maxAmount: 3, regenRate: 0.01 },
   ],
   beach: [
-    { type: 'food', density: 0.03, amount: 3, maxAmount: 3, regenRate: 0.015 },
+    { type: 'food', density: 0.015, amount: 3, maxAmount: 3, regenRate: 0.015 },
   ],
   tundra: [
-    { type: 'stone', density: 0.09, amount: 6, maxAmount: 6, regenRate: 0.004 },
+    { type: 'stone', density: 0.045, amount: 6, maxAmount: 6, regenRate: 0.004 },
   ],
 }
 
 const MOUNTAIN_ADJ_RESOURCES: ResourceDef[] = [
-  { type: 'stone', density: 0.18, amount: 12, maxAmount: 12, regenRate: 0.005 },
-  { type: 'iron', density: 0.07, amount: 10, maxAmount: 10, regenRate: 0.004 },
-  { type: 'gold', density: 0.024, amount: 5, maxAmount: 5, regenRate: 0.002 },
+  { type: 'stone', density: 0.09, amount: 12, maxAmount: 12, regenRate: 0.005 },
+  { type: 'iron', density: 0.035, amount: 10, maxAmount: 10, regenRate: 0.004 },
+  { type: 'gold', density: 0.012, amount: 5, maxAmount: 5, regenRate: 0.002 },
 ]
 
 // --- Elevation sampling (reusable for cross-chunk features like rivers) ---
@@ -241,18 +285,29 @@ export function generateChunk(cx: number, cy: number, seed: number): ChunkData {
       // Biome classification
       const rule = classifyBiome(elev, temp, moist)
 
-      // Variant (0/1/2) from coordinate hash for consistency
+      // Weighted variant from coordinate hash for deterministic biome-specific distribution
       const coordHash = ((wx * 374761393) ^ (wy * 668265263)) >>> 0
-      const variant = coordHash % 3
+      const variant = getWeightedVariant(rule.biome, coordHash)
 
-      // Decoration (biome-specific, noise-gated ~20%, reduced from ~35%)
+      // Decoration: per-biome rate from BIOME_DECO_RATE, noise for spatial clustering
       let decoration: string | undefined
-      const decoNoise = noiseDeco.sample(wx * 0.15, wy * 0.15)
-      if (decoNoise > 0.6) { // Raised threshold from 0.3 to 0.6
-        const decos = BIOME_DECORATIONS[rule.biome]
-        if (decos && decos.length > 0) {
-          const decoIdx = Math.abs(Math.floor((decoNoise * 1000) % decos.length))
-          decoration = decos[decoIdx]
+      const decoRate = BIOME_DECO_RATE[rule.biome] ?? 0
+      // Empty meadow policy: ~25% of grassland is intentionally bare (no decos either)
+      const isMeadowZone = rule.biome === 'grassland' &&
+        noiseVariant.sample(wx * 0.08, wy * 0.08) < -0.25
+      if (decoRate > 0 && !isMeadowZone) {
+        const decoNoise = noiseDeco.sample(wx * 0.15, wy * 0.15)
+        // Use noise for spatial clustering: only place decos where noise > 0.3
+        // then apply biome rate as probability
+        if (decoNoise > 0.3) {
+          const decoChance = ((coordHash >>> 16) & 0xFFFF) / 0xFFFF
+          if (decoChance < decoRate) {
+            const decos = BIOME_DECORATIONS[rule.biome]
+            if (decos && decos.length > 0) {
+              const decoIdx = Math.abs(Math.floor((decoNoise * 1000) % decos.length))
+              decoration = decos[decoIdx]
+            }
+          }
         }
       }
 
@@ -265,7 +320,8 @@ export function generateChunk(cx: number, cy: number, seed: number): ChunkData {
         walkable = false
         cost = 0
         // River tiles get ripple decoration at low density
-        if (decoNoise > 0.7) {
+        const riverDecoNoise = noiseDeco.sample(wx * 0.15, wy * 0.15)
+        if (riverDecoNoise > 0.7) {
           decoration = 'ripple'
         }
       } else {
@@ -294,11 +350,24 @@ export function generateChunk(cx: number, cy: number, seed: number): ChunkData {
   // Step 2: Cellular automata smoothing (inner area only to avoid boundary artifacts)
   smoothChunkTiles(tiles, S)
 
-  // Step 3: Resource scattering
-  scatterChunkResources(tiles, biomeGrid, cx, cy, seed)
-
-  // Step 4: POI placement attempt
+  // Step 3: POI placement attempt (before resources so clear zone can be enforced)
   const poi = tryPlacePOI(tiles, biomeGrid, cx, cy, seed)
+
+  // Step 3b: Clear decorations within POI clear zone (3-tile radius)
+  if (poi) {
+    for (let dy = -3; dy <= 3; dy++) {
+      for (let dx = -3; dx <= 3; dx++) {
+        const ny = poi.localY + dy
+        const nx = poi.localX + dx
+        if (nx >= 0 && nx < S && ny >= 0 && ny < S) {
+          tiles[ny][nx].decoration = undefined
+        }
+      }
+    }
+  }
+
+  // Step 4: Resource scattering (respects POI clear zone, road buffer, meadow policy)
+  scatterChunkResources(tiles, biomeGrid, cx, cy, seed, poi)
 
   return { cx, cy, tiles, poi, generated: true }
 }
@@ -356,9 +425,14 @@ function smoothChunkTiles(tiles: Tile[][], size: number): void {
 function scatterChunkResources(
   tiles: Tile[][], biomeGrid: string[][],
   cx: number, cy: number, seed: number,
+  poi?: ChunkPOI,
 ): void {
   const S = CHUNK_SIZE
   const rng = seededRandom(hashChunk(cx, cy, seed + 9999))
+
+  // Pre-compute POI clear zone (3-tile radius around POI building)
+  const POI_CLEAR_RADIUS = 3
+  const ROAD_BUFFER = 1
 
   for (let ly = 0; ly < S; ly++) {
     for (let lx = 0; lx < S; lx++) {
@@ -368,6 +442,32 @@ function scatterChunkResources(
       const wx = cx * S + lx
       const wy = cy * S + ly
       const biome = biomeGrid[ly]?.[lx] ?? 'grassland'
+
+      // --- POI clear zone: skip tiles within 3 tiles of POI ---
+      if (poi) {
+        const dx = Math.abs(lx - poi.localX)
+        const dy = Math.abs(ly - poi.localY)
+        if (dx <= POI_CLEAR_RADIUS && dy <= POI_CLEAR_RADIUS) continue
+      }
+
+      // --- Road buffer: skip tiles adjacent to roads ---
+      let nearRoad = false
+      for (let dy = -ROAD_BUFFER; dy <= ROAD_BUFFER && !nearRoad; dy++) {
+        for (let dx = -ROAD_BUFFER; dx <= ROAD_BUFFER && !nearRoad; dx++) {
+          if (dx === 0 && dy === 0) continue
+          const nx = lx + dx, ny = ly + dy
+          if (nx >= 0 && nx < S && ny >= 0 && ny < S) {
+            if (tiles[ny][nx].type === 'road') nearRoad = true
+          }
+        }
+      }
+      if (nearRoad) continue
+
+      // --- Empty meadow policy: ~25% of grassland tiles are intentionally empty ---
+      if (biome === 'grassland') {
+        const meadowNoise = noiseVariant.sample(wx * 0.08, wy * 0.08)
+        if (meadowNoise < -0.25) continue  // ~25% of grassland stays empty
+      }
 
       // Check if adjacent to mountain (within chunk only)
       let nearMountain = false
@@ -386,7 +486,7 @@ function scatterChunkResources(
 
       for (const res of resources) {
         if (tile.resource) break
-        if (cluster < 0.55) continue // Raised threshold from 0.4 to 0.55
+        if (cluster < 0.65) continue  // Tighter clustering (raised from 0.55)
         if (rng() < res.density) {
           tile.resource = {
             type: res.type,
