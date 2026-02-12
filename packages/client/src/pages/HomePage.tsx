@@ -137,7 +137,7 @@ export function HomePage() {
         </p>
         <div style={styles.heroButtons}>
           <button style={styles.watchBtn} onClick={() => navigate('/world')}>
-            {'\uD83D\uDC64'} 관전하기
+            👤 관전하기
           </button>
           <button
             style={{
@@ -146,7 +146,7 @@ export function HomePage() {
             }}
             onClick={() => setShowAgentPanel(!showAgentPanel)}
           >
-            {'\uD83E\uDD16'} 내 에이전트 보내기
+            🤖 내 에이전트 보내기
           </button>
         </div>
 
@@ -173,22 +173,22 @@ export function HomePage() {
       {/* ── Live Stats Bar ── */}
       <section style={styles.statsBar}>
         <div style={styles.stat}>
-          <span style={styles.statIcon}>{'\uD83E\uDD16'}</span>
+          <span style={styles.statIcon}>🤖</span>
           <span style={styles.statNum}>{stats.agents}</span>
           <span style={styles.statLabel}>에이전트 활동 중</span>
         </div>
         <div style={styles.stat}>
-          <span style={styles.statIcon}>{'\u2694\uFE0F'}</span>
+          <span style={styles.statIcon}>⚔️</span>
           <span style={styles.statNum}>{stats.combats}</span>
           <span style={styles.statLabel}>전투 발생</span>
         </div>
         <div style={styles.stat}>
-          <span style={styles.statIcon}>{'\uD83D\uDCAC'}</span>
+          <span style={styles.statIcon}>💬</span>
           <span style={styles.statNum}>{stats.chats}</span>
           <span style={styles.statLabel}>대화 진행</span>
         </div>
         <div style={styles.stat}>
-          <span style={styles.statIcon}>{'\uD83C\uDFF0'}</span>
+          <span style={styles.statIcon}>🏰</span>
           <span style={styles.statNum}>{stats.pois}</span>
           <span style={styles.statLabel}>POI</span>
         </div>

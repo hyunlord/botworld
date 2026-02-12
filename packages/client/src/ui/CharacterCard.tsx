@@ -14,8 +14,8 @@ interface CharacterData {
 }
 
 const EMOTION_EMOJI: Record<string, string> = {
-  joy: '\uD83D\uDE0A', trust: '\uD83E\uDD1D', fear: '\uD83D\uDE28', surprise: '\uD83D\uDE32',
-  sadness: '\uD83D\uDE22', disgust: '\uD83E\uDD22', anger: '\uD83D\uDE21', anticipation: '\uD83E\uDD14',
+  joy: '😊', trust: '🤝', fear: '😨', surprise: '😲',
+  sadness: '😢', disgust: '🤢', anger: '😡', anticipation: '🤔',
 }
 
 interface CharacterCardProps {
@@ -50,9 +50,9 @@ export function CharacterCard({
     .slice(0, 4)
 
   const SKILL_ICONS: Record<string, string> = {
-    combat: '\u2694\uFE0F', crafting: '\uD83D\uDD28', diplomacy: '\uD83D\uDCD6',
-    gathering: '\uD83C\uDF3F', exploration: '\uD83E\uDDED', trading: '\uD83E\uDD1D',
-    magic: '\u2728', survival: '\uD83C\uDFD5\uFE0F',
+    combat: '⚔️', crafting: '🔨', diplomacy: '📖',
+    gathering: '🌿', exploration: '🧭', trading: '🤝',
+    magic: '✨', survival: '🏕️',
   }
 
   const lastChat = recentChat?.slice(-1)[0]
@@ -61,14 +61,14 @@ export function CharacterCard({
     <div style={styles.backdrop} onClick={onClose}>
       <div style={{ ...glassPanel, ...interactive, ...styles.card }} onClick={e => e.stopPropagation()}>
         {/* Close button */}
-        <button style={styles.closeBtn} onClick={() => { soundManager.playUIClose(); onClose() }}>\u2715</button>
+        <button style={styles.closeBtn} onClick={() => { soundManager.playUIClose(); onClose() }}>✕</button>
 
         {/* Header: avatar area + name */}
         <div style={styles.header}>
           <div style={styles.avatar}>
             {characterData && (
               <span style={styles.avatarEmoji}>
-                {RACE_ICONS[characterData.race] ?? '\uD83E\uDDD1'}
+                {RACE_ICONS[characterData.race] ?? '🧑'}
               </span>
             )}
           </div>
@@ -90,9 +90,9 @@ export function CharacterCard({
 
         {/* Stat bars */}
         <div style={styles.statsSection}>
-          <StatBar icon="\u2764\uFE0F" value={agent.stats.hp} max={agent.stats.maxHp} color={OV.hpGrad} />
-          <StatBar icon="\u26A1" value={agent.stats.energy} max={agent.stats.maxEnergy} color={OV.energyGrad} />
-          <StatBar icon="\uD83C\uDF56" value={agent.stats.hunger} max={agent.stats.maxHunger} color={OV.hungerGrad} />
+          <StatBar icon="❤️" value={agent.stats.hp} max={agent.stats.maxHp} color={OV.hpGrad} />
+          <StatBar icon="⚡" value={agent.stats.energy} max={agent.stats.maxEnergy} color={OV.energyGrad} />
+          <StatBar icon="🍖" value={agent.stats.hunger} max={agent.stats.maxHunger} color={OV.hungerGrad} />
         </div>
 
         {/* Skills grid */}
@@ -100,7 +100,7 @@ export function CharacterCard({
           <div style={styles.skillsGrid}>
             {topSkills.map(([name, value]) => (
               <div key={name} style={styles.skillItem}>
-                <span style={styles.skillIcon}>{SKILL_ICONS[name] ?? '\uD83D\uDCA0'}</span>
+                <span style={styles.skillIcon}>{SKILL_ICONS[name] ?? '💠'}</span>
                 <span style={styles.skillName}>{name}</span>
                 <span style={styles.skillValue}>{Math.round(value)}</span>
               </div>
@@ -112,10 +112,10 @@ export function CharacterCard({
         <div style={styles.emotionRow}>
           {dominantEmotion ? (
             <span style={styles.emotionText}>
-              {EMOTION_EMOJI[dominantEmotion[0]] ?? '\uD83D\uDE10'} {dominantEmotion[0]} ({(dominantEmotion[1] as number * 100).toFixed(0)}%)
+              {EMOTION_EMOJI[dominantEmotion[0]] ?? '😐'} {dominantEmotion[0]} ({(dominantEmotion[1] as number * 100).toFixed(0)}%)
             </span>
           ) : (
-            <span style={styles.emotionText}>\uD83D\uDE10 Neutral</span>
+            <span style={styles.emotionText}>😐 Neutral</span>
           )}
           {dominantCompound.length > 0 && (
             <span style={styles.compoundText}>
@@ -127,7 +127,7 @@ export function CharacterCard({
         {/* Recent chat */}
         {lastChat && (
           <div style={styles.chatBubble}>
-            \uD83D\uDCAC "{lastChat}"
+            💬 "{lastChat}"
           </div>
         )}
 
@@ -140,13 +140,13 @@ export function CharacterCard({
               background: isFollowing ? OV.hp : 'rgba(255,255,255,0.1)',
             }}
           >
-            {isFollowing ? '\uD83D\uDCCD Unfollow' : '\uD83D\uDCCD Follow'}
+            {isFollowing ? '📍 Unfollow' : '📍 Follow'}
           </button>
           <button
             onClick={() => { soundManager.playUIClick(); setShowDetails(!showDetails) }}
             style={{ ...styles.actionBtn, background: 'rgba(255,255,255,0.1)' }}
           >
-            {showDetails ? '\u25B2 Less' : '\uD83D\uDD0D Details'}
+            {showDetails ? '▲ Less' : '🔍 Details'}
           </button>
         </div>
 

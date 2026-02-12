@@ -23,12 +23,12 @@ const KIND_COLORS: Record<EntryKind, string> = {
 }
 
 const KIND_ICONS: Record<EntryKind, string> = {
-  chat: '\uD83D\uDCAC',
-  gather: '\u26CF\uFE0F',
-  craft: '\uD83D\uDD28',
-  trade: '\uD83E\uDD1D',
-  combat: '\u2694\uFE0F',
-  event: '\u2728',
+  chat: '💬',
+  gather: '⛏️',
+  craft: '🔨',
+  trade: '🤝',
+  combat: '⚔️',
+  event: '✨',
 }
 
 const FILTER_OPTIONS: { label: string; value: EntryKind | 'all' }[] = [

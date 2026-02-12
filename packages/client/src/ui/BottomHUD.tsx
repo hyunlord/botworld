@@ -7,13 +7,13 @@ import { OV, glassPanel, interactive } from './overlay-styles.js'
 import { RACE_ICONS, CLASS_ICONS, ACTION_ICONS } from './constants.js'
 
 const TIME_ICONS: Record<string, string> = {
-  dawn: '\uD83C\uDF05', morning: '\u2600\uFE0F', noon: '\uD83C\uDF1E',
-  afternoon: '\uD83C\uDF24\uFE0F', evening: '\uD83C\uDF07', night: '\uD83C\uDF19',
+  dawn: '🌅', morning: '☀️', noon: '🌞',
+  afternoon: '🌤️', evening: '🌇', night: '🌙',
 }
 
 const WEATHER_ICONS: Record<string, string> = {
-  clear: '\u2600\uFE0F', cloudy: '\u2601\uFE0F', rain: '\uD83C\uDF27\uFE0F',
-  storm: '\u26C8\uFE0F', snow: '\uD83C\uDF28\uFE0F', fog: '\uD83C\uDF2B\uFE0F',
+  clear: '☀️', cloudy: '☁️', rain: '🌧️',
+  storm: '⛈️', snow: '🌨️', fog: '🌫️',
 }
 
 const SPEED_OPTIONS = [0.5, 1, 2, 3, 5]
@@ -56,7 +56,7 @@ export function BottomHUD({
         {/* Left: Game state */}
         <div style={styles.left}>
           <span style={styles.stat}>
-            {TIME_ICONS[clock.timeOfDay] ?? '\u23F0'} Day {clock.day} {clock.timeOfDay}
+            {TIME_ICONS[clock.timeOfDay] ?? '⏰'} Day {clock.day} {clock.timeOfDay}
           </span>
           <span style={styles.divider}>|</span>
           {weather && (
@@ -65,9 +65,9 @@ export function BottomHUD({
               <span style={styles.divider}>|</span>
             </>
           )}
-          <span style={styles.stat}>\uD83E\uDD16 {agentCount}</span>
+          <span style={styles.stat}>🤖 {agentCount}</span>
           <span style={styles.divider}>|</span>
-          <span style={styles.stat}>\uD83D\uDC41 {spectatorCount}</span>
+          <span style={styles.stat}>👁 {spectatorCount}</span>
         </div>
 
         {/* Center: Selected agent summary */}
@@ -94,10 +94,10 @@ export function BottomHUD({
         <div style={styles.right}>
           <div style={styles.audioContainer}>
             <button onClick={() => { soundManager.playUIClick(); handleMute() }} style={styles.iconBtn} title={muted ? 'Unmute' : 'Mute'}>
-              {muted ? '\uD83D\uDD07' : '\uD83D\uDD0A'}
+              {muted ? '🔇' : '🔊'}
             </button>
             <button onClick={() => { soundManager.playUIClick(); setShowAudio(!showAudio) }} style={styles.iconBtn} title="Audio settings">
-              \u25BE
+              ▾
             </button>
             {showAudio && (
               <div style={styles.audioPopup}>
@@ -121,7 +121,7 @@ export function BottomHUD({
             ...styles.ctrlBtn,
             background: speedState.paused ? OV.hp : 'rgba(255,255,255,0.1)',
           }}>
-            {speedState.paused ? '\u25B6' : '\u23F8'}
+            {speedState.paused ? '▶' : '⏸'}
           </button>
 
           <div style={styles.speedGroup}>
@@ -137,7 +137,7 @@ export function BottomHUD({
           </div>
 
           <button onClick={() => { soundManager.playUIClick(); onSendAgent() }} style={styles.sendBtn}>
-            \uD83E\uDD16 Send Agent
+            🤖 Send Agent
           </button>
         </div>
       </div>

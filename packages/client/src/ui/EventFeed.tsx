@@ -15,12 +15,12 @@ interface FeedEntry {
 }
 
 const KIND_ICONS: Record<EntryKind, string> = {
-  chat: '\uD83D\uDDE3\uFE0F',
-  gather: '\uD83C\uDF92',
-  craft: '\uD83D\uDD28',
-  trade: '\uD83E\uDD1D',
-  combat: '\u2694\uFE0F',
-  event: '\uD83C\uDFC6',
+  chat: '🗣️',
+  gather: '🎒',
+  craft: '🔨',
+  trade: '🤝',
+  combat: '⚔️',
+  event: '🏆',
 }
 
 const KIND_COLORS: Record<EntryKind, string> = {
@@ -120,7 +120,7 @@ export function EventFeed({ events, agentNames, onNavigate, onSelectAgent }: Eve
           onClick={() => { soundManager.playUIOpen(); setExpanded(true) }}
           title="Show event feed"
         >
-          <span style={styles.toggleIcon}>{'\uD83D\uDCAC'}</span>
+          <span style={styles.toggleIcon}>💬</span>
           {unreadCount > 0 && (
             <span style={styles.badge}>{unreadCount > 99 ? '99+' : unreadCount}</span>
           )}
@@ -134,7 +134,7 @@ export function EventFeed({ events, agentNames, onNavigate, onSelectAgent }: Eve
       <div style={{ ...glassPanel, ...interactive, ...styles.panel }}>
         <div style={styles.header}>
           <span style={styles.headerTitle}>Live Feed</span>
-          <button style={styles.collapseBtn} onClick={() => { soundManager.playUIClose(); setExpanded(false) }}>{'\u25BC'}</button>
+          <button style={styles.collapseBtn} onClick={() => { soundManager.playUIClose(); setExpanded(false) }}>▼</button>
         </div>
         <div style={styles.entries}>
           {visible.length === 0 && (

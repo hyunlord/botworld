@@ -19,9 +19,9 @@ export function SendAgentModal({ onClose }: { onClose: () => void }) {
   return (
     <div style={styles.backdrop} onClick={() => { soundManager.playUIClose(); onClose() }}>
       <div style={{ ...glassPanel, ...interactive, ...styles.modal }} onClick={e => e.stopPropagation()}>
-        <button style={styles.closeBtn} onClick={() => { soundManager.playUIClose(); onClose() }}>{'\u2715'}</button>
+        <button style={styles.closeBtn} onClick={() => { soundManager.playUIClose(); onClose() }}>✕</button>
 
-        <h2 style={styles.title}>{'\uD83E\uDD16'} Send your Agent to Botworld!</h2>
+        <h2 style={styles.title}>🤖 Send your Agent to Botworld!</h2>
         <p style={styles.description}>
           Send this message to your AI assistant and it will create a character and join the world automatically.
         </p>
@@ -29,7 +29,7 @@ export function SendAgentModal({ onClose }: { onClose: () => void }) {
         <div style={styles.promptBox}>
           <code style={styles.promptText}>{prompt}</code>
           <button style={styles.copyBtn} onClick={handleCopy}>
-            {copied ? '\u2705 Copied!' : '\uD83D\uDCCB Copy'}
+            {copied ? '✅ Copied!' : '📋 Copy'}
           </button>
         </div>
 
