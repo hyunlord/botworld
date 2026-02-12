@@ -59,6 +59,8 @@ export interface NPCContext {
   guildContext?: string
   settlementContext?: string
   kingdomContext?: string
+  /** Building context (optional, enriched when building manager is wired) */
+  buildingContext?: string
 }
 
 // ── Rate limiter ──
@@ -281,6 +283,11 @@ function buildContextMessage(ctx: NPCContext): string {
   }
   if (ctx.kingdomContext) {
     lines.push(`\n${ctx.kingdomContext}`)
+  }
+
+  // Building context
+  if (ctx.buildingContext) {
+    lines.push(`\n${ctx.buildingContext}`)
   }
 
   if (ctx.routineHint) {

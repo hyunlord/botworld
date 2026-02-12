@@ -23,6 +23,8 @@ import { SettlementManager } from '../politics/settlement-manager.js'
 import { KingdomManager } from '../politics/kingdom-manager.js'
 import { WorldHistoryManager } from '../world/world-history.js'
 import { EcosystemManager } from '../world/ecosystem-manager.js'
+import { BuildingManager } from '../buildings/building-manager.js'
+import { SiegeSystem } from '../buildings/siege-system.js'
 
 export class WorldEngine {
   readonly eventBus = new EventBus()
@@ -46,6 +48,8 @@ export class WorldEngine {
   readonly kingdomManager: KingdomManager
   readonly historyManager: WorldHistoryManager
   readonly ecosystemManager: EcosystemManager
+  readonly buildingManager: BuildingManager
+  readonly siegeSystem: SiegeSystem
   clock: WorldClock
 
   private tickInterval: ReturnType<typeof setInterval> | null = null
@@ -143,6 +147,13 @@ export class WorldEngine {
 
     // Wire ecosystem to NPC manager for seasonal context
     this.npcManager.setEcosystemManager(this.ecosystemManager)
+
+    // Building system
+    this.buildingManager = new BuildingManager(this.eventBus)
+    this.siegeSystem = new SiegeSystem(this.eventBus)
+
+    // Wire buildings to NPC manager for AI context
+    this.npcManager.setBuildingManager(this.buildingManager)
   }
 
   start(): void {
@@ -425,6 +436,12 @@ export class WorldEngine {
     // 10.8. Ecosystem tick (resource regen, animals, seasons)
     this.ecosystemManager.tick(this.clock)
 
+    // 10.9. Building system tick (construction progress, production)
+    this.buildingManager.tick(this.clock)
+
+    // 10.95. Siege system tick
+    this.siegeSystem.tick(this.clock, this.buildingManager)
+
     // 11. Weather system tick
     const weatherChanged = this.weather.tick(this.clock)
     if (weatherChanged) {
@@ -481,6 +498,8 @@ export class WorldEngine {
       history: this.historyManager.getBySignificance(4),
       season: this.ecosystemManager.getSeason(),
       animals: this.ecosystemManager.getAnimals(),
+      buildings: this.buildingManager.getAllBuildings(),
+      activeSieges: this.siegeSystem.getActiveSieges(),
     }
   }
 }

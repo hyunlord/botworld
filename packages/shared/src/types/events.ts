@@ -8,6 +8,7 @@ import type { RelationshipInteraction, RelationshipTag, RumorType, SecretType, S
 import type { GuildType, SettlementType, DiplomacyStatus, TreatyType, WarGoal } from './politics.js'
 import type { HistoryEventType } from './history.js'
 import type { Season, AnimalType } from './ecosystem.js'
+import type { BuildingType, BuildingState, SiegeWeaponType } from './building.js'
 
 /** All event types in the world */
 export type WorldEvent =
@@ -63,6 +64,14 @@ export type WorldEvent =
   | AnimalSpawnedEvent
   | AnimalDiedEvent
   | ResourceStateChangedEvent
+  | BuildingConstructionStartedEvent
+  | BuildingConstructionCompletedEvent
+  | BuildingUpgradedEvent
+  | BuildingDamagedEvent
+  | BuildingDestroyedEvent
+  | BuildingRepairedEvent
+  | SiegeStartedEvent
+  | SiegeEndedEvent
 
 export interface AgentMovedEvent {
   type: 'agent:moved'
@@ -542,5 +551,82 @@ export interface ResourceStateChangedEvent {
   tileKey: string
   oldState: string
   newState: string
+  timestamp: number
+}
+
+// ── Building Events ──
+
+export interface BuildingConstructionStartedEvent {
+  type: 'building:construction_started'
+  buildingId: string
+  buildingName: string
+  buildingType: BuildingType
+  builderId: string
+  position: Position
+  timestamp: number
+}
+
+export interface BuildingConstructionCompletedEvent {
+  type: 'building:construction_completed'
+  buildingId: string
+  buildingName: string
+  buildingType: BuildingType
+  position: Position
+  timestamp: number
+}
+
+export interface BuildingUpgradedEvent {
+  type: 'building:upgraded'
+  buildingId: string
+  buildingName: string
+  buildingType: BuildingType
+  oldLevel: number
+  newLevel: number
+  timestamp: number
+}
+
+export interface BuildingDamagedEvent {
+  type: 'building:damaged'
+  buildingId: string
+  buildingName: string
+  damage: number
+  currentHp: number
+  maxHp: number
+  source: string   // who/what caused damage
+  timestamp: number
+}
+
+export interface BuildingDestroyedEvent {
+  type: 'building:destroyed'
+  buildingId: string
+  buildingName: string
+  buildingType: BuildingType
+  destroyedBy: string
+  position: Position
+  timestamp: number
+}
+
+export interface BuildingRepairedEvent {
+  type: 'building:repaired'
+  buildingId: string
+  buildingName: string
+  repairedBy: string
+  hpRestored: number
+  timestamp: number
+}
+
+export interface SiegeStartedEvent {
+  type: 'siege:started'
+  siegeId: string
+  attackerId: string   // kingdom/guild ID
+  defenderId: string   // settlement ID
+  position: Position
+  timestamp: number
+}
+
+export interface SiegeEndedEvent {
+  type: 'siege:ended'
+  siegeId: string
+  result: 'attacker_won' | 'defender_won' | 'draw' | 'abandoned'
   timestamp: number
 }

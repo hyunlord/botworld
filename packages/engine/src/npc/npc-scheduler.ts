@@ -26,6 +26,7 @@ import type { GuildManager } from '../politics/guild-manager.js'
 import type { SettlementManager } from '../politics/settlement-manager.js'
 import type { KingdomManager } from '../politics/kingdom-manager.js'
 import type { EcosystemManager } from '../world/ecosystem-manager.js'
+import type { BuildingManager } from '../buildings/building-manager.js'
 
 // ── Configuration ──
 
@@ -262,6 +263,7 @@ export class NPCScheduler {
   private settlementManager: SettlementManager | null = null
   private kingdomManager: KingdomManager | null = null
   private ecosystemManager: EcosystemManager | null = null
+  private buildingManager: BuildingManager | null = null
 
   /** Wire politics systems for LLM context enrichment */
   setPoliticsSystems(
@@ -277,6 +279,11 @@ export class NPCScheduler {
   /** Wire ecosystem manager for seasonal context */
   setEcosystemManager(em: EcosystemManager): void {
     this.ecosystemManager = em
+  }
+
+  /** Wire building manager for building context */
+  setBuildingManager(bm: BuildingManager): void {
+    this.buildingManager = bm
   }
 
   /** Register an NPC for scheduled LLM decisions */
@@ -454,6 +461,16 @@ export class NPCScheduler {
       ? this.kingdomManager.formatForLLM(ref.agent.id, getAgentName)
       : undefined
 
+    // Building context
+    let buildingContext = ''
+    if (this.buildingManager) {
+      // Check if NPC is at a building
+      const buildings = this.buildingManager.getBuildingsAt(ref.agent.position.x, ref.agent.position.y)
+      if (buildings.length > 0) {
+        buildingContext = buildings.map(b => this.buildingManager!.formatForLLM(b.id)).join('\n')
+      }
+    }
+
     return {
       npcName: ref.agent.name,
       npcRole: runtime.role,
@@ -495,6 +512,7 @@ export class NPCScheduler {
       guildContext,
       settlementContext,
       kingdomContext,
+      buildingContext,
     }
   }
 

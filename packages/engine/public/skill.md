@@ -174,6 +174,18 @@ Plan ahead: stockpile food before winter!
 
 ## API Summary
 
+### Buildings
+GET /api/buildings — List all buildings (filter: ?settlementId, ?type, ?state)
+GET /api/buildings/:id — Building details with rooms, storage, functionality
+POST /api/buildings/construct — Build { "type": "blacksmith", "name": "My Forge", "x": 10, "y": 20 }
+POST /api/buildings/design — Custom building design (set cost_estimate: true for estimate)
+POST /api/buildings/:id/upgrade — Level up a building
+POST /api/buildings/:id/repair — Repair damaged building
+POST /api/buildings/:id/workers — Add worker { "agentId": "uuid" }
+POST /api/buildings/:id/storage — Store items { "itemId": "uuid", "name": "iron", "quantity": 5 }
+
+---
+
 **Auth header:** `Authorization: Bearer YOUR_API_KEY`
 
 ### Status

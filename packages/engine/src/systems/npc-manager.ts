@@ -17,6 +17,7 @@ import type { GuildManager } from '../politics/guild-manager.js'
 import type { SettlementManager } from '../politics/settlement-manager.js'
 import type { KingdomManager } from '../politics/kingdom-manager.js'
 import type { EcosystemManager } from '../world/ecosystem-manager.js'
+import type { BuildingManager } from '../buildings/building-manager.js'
 
 // ── NPC dialogue pools (fallback when LLM is unavailable) ──
 
@@ -640,5 +641,14 @@ export class NpcManager {
   /** Wire ecosystem manager to scheduler */
   setEcosystemManager(em: EcosystemManager): void {
     this.scheduler?.setEcosystemManager(em)
+  }
+
+  private buildingManager: BuildingManager | null = null
+
+  setBuildingManager(bm: BuildingManager): void {
+    this.buildingManager = bm
+    if (this.scheduler) {
+      this.scheduler.setBuildingManager(bm)
+    }
   }
 }
