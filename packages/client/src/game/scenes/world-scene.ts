@@ -7,6 +7,7 @@ import { WeatherEffects } from '../effects/weather-effects.js'
 import { DayNightCycle } from '../effects/day-night-cycle.js'
 import { soundManager } from '../audio/sound-manager.js'
 import { TILE_SIZE, worldToScreen, screenToWorld } from '../utils/coordinates.js'
+import { getAutoTileIndex } from '../utils/autotile.js'
 
 // Scale factors for sprites placed on the top-down grid
 const AGENT_SCALE = 0.6
@@ -697,6 +698,8 @@ export class WorldScene extends Phaser.Scene {
     if (!this.paintedChunks.has(key) && this.groundLayer) {
       this.paintChunkToTilemap(chunk)
       this.paintedChunks.add(key)
+      // Repaint borders of already-painted adjacent chunks for correct autotiling
+      this.repaintAdjacentBorders(chunk)
     }
 
     // Create object sprites (resources, decorations, buildings) on top
@@ -801,9 +804,12 @@ export class WorldScene extends Phaser.Scene {
     this.renderedChunks.set(key, { objectSprites })
   }
 
-  /** Place a chunk's ground tiles into the Phaser Tilemap layer */
+  /** Place a chunk's ground tiles into the Phaser Tilemap layer (autotile-aware) */
   private paintChunkToTilemap(chunk: ChunkData): void {
     if (!this.groundLayer) return
+
+    // Bind getTileAt for cross-chunk neighbor lookups
+    const tileGetter = (x: number, y: number) => this.getTileAt(x, y)
 
     for (let ly = 0; ly < chunk.tiles.length; ly++) {
       for (let lx = 0; lx < chunk.tiles[ly].length; lx++) {
@@ -814,8 +820,58 @@ export class WorldScene extends Phaser.Scene {
         // Skip tiles outside the tilemap bounds
         if (localX < 0 || localY < 0 || localX >= this.tmSize || localY >= this.tmSize) continue
 
-        const tileIndex = getGroundTileIndex(tile)
+        const tileIndex = getAutoTileIndex(tile, tileGetter)
         this.groundLayer.putTileAt(tileIndex, localX, localY)
+      }
+    }
+  }
+
+  /**
+   * Repaint border tiles of adjacent chunks that may need autotile updates
+   * when a new chunk is loaded (their edge tiles now have new neighbors).
+   */
+  private repaintAdjacentBorders(chunk: ChunkData): void {
+    if (!this.groundLayer) return
+
+    const tileGetter = (x: number, y: number) => this.getTileAt(x, y)
+    const cx = chunk.cx
+    const cy = chunk.cy
+
+    // For each adjacent chunk that's already painted, repaint its border row/col
+    const adjacents: [number, number, 'row' | 'col', number][] = [
+      [cx, cy - 1, 'row', CHUNK_SIZE - 1], // chunk above → repaint its bottom row
+      [cx, cy + 1, 'row', 0],              // chunk below → repaint its top row
+      [cx - 1, cy, 'col', CHUNK_SIZE - 1], // chunk left → repaint its right col
+      [cx + 1, cy, 'col', 0],              // chunk right → repaint its left col
+    ]
+
+    for (const [acx, acy, axis, localIdx] of adjacents) {
+      const key = `${acx},${acy}`
+      if (!this.paintedChunks.has(key)) continue
+      const adjChunk = this.chunkDataStore.get(key)
+      if (!adjChunk) continue
+
+      if (axis === 'row') {
+        // Repaint one row of the adjacent chunk
+        const row = adjChunk.tiles[localIdx]
+        if (!row) continue
+        for (let i = 0; i < row.length; i++) {
+          const tile = row[i]
+          const lx = tile.position.x - this.tmOriginX
+          const ly = tile.position.y - this.tmOriginY
+          if (lx < 0 || ly < 0 || lx >= this.tmSize || ly >= this.tmSize) continue
+          this.groundLayer.putTileAt(getAutoTileIndex(tile, tileGetter), lx, ly)
+        }
+      } else {
+        // Repaint one column of the adjacent chunk
+        for (let r = 0; r < adjChunk.tiles.length; r++) {
+          const tile = adjChunk.tiles[r]?.[localIdx]
+          if (!tile) continue
+          const lx = tile.position.x - this.tmOriginX
+          const ly = tile.position.y - this.tmOriginY
+          if (lx < 0 || ly < 0 || lx >= this.tmSize || ly >= this.tmSize) continue
+          this.groundLayer.putTileAt(getAutoTileIndex(tile, tileGetter), lx, ly)
+        }
       }
     }
   }
