@@ -244,6 +244,50 @@ export class CombatSystem {
     })
   }
 
+  /** Spawn a monster at a specific position (used by world events) */
+  spawnMonsterAt(position: Position, minLevel?: number, preferredType?: MonsterType): Monster {
+    const clock = this.clockGetter()
+
+    // Pick template
+    let template: MonsterTemplate
+    if (preferredType) {
+      template = MONSTER_TEMPLATES.find(t => t.type === preferredType) ?? MONSTER_TEMPLATES[0]
+    } else {
+      // Weighted random, but filter by minLevel
+      const candidates = MONSTER_TEMPLATES.filter(t => t.minLevel >= (minLevel ?? 1))
+      if (candidates.length === 0) {
+        template = MONSTER_TEMPLATES[MONSTER_TEMPLATES.length - 1]
+      } else {
+        const totalWeight = candidates.reduce((sum, t) => sum + t.weight, 0)
+        let roll = Math.random() * totalWeight
+        template = candidates[0]
+        for (const t of candidates) {
+          roll -= t.weight
+          if (roll <= 0) { template = t; break }
+        }
+      }
+    }
+
+    const level = Math.max(template.minLevel, minLevel ?? template.minLevel)
+    const id = generateId()
+    const scaled = scaleMonster(template, level + randomInt(0, 2))
+
+    const monster: Monster = { id, ...scaled, position }
+    this.monsters.set(id, monster)
+
+    this.eventBus.emit({
+      type: 'monster:spawned',
+      monsterId: id,
+      monsterType: monster.type,
+      name: monster.name,
+      level: monster.level,
+      position,
+      timestamp: clock.tick,
+    })
+
+    return monster
+  }
+
   /** Start combat between an agent and a nearby monster */
   startCombat(
     agentId: string,

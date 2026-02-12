@@ -50,16 +50,47 @@ export class WorldEngine {
     this.npcManager.initScheduler(
       () => [...this.agentManager.getAllAgents(), ...this.npcManager.getAllNpcs()],
       () => this.weather.getState().current,
-      () => this.eventBus.getRecentEvents(5)
-        .filter(e => e.type === 'world_event:started' || e.type === 'combat:started' || e.type === 'monster:spawned')
-        .map(e => {
-          if (e.type === 'world_event:started') return e.title
-          if (e.type === 'monster:spawned') return `A ${e.monsterType} appeared nearby`
-          if (e.type === 'combat:started') return `Combat broke out nearby`
-          return ''
-        })
-        .filter(Boolean),
+      () => {
+        // Combine recent events with active world event descriptions
+        const recent = this.eventBus.getRecentEvents(5)
+          .filter(e => e.type === 'world_event:started' || e.type === 'combat:started' || e.type === 'monster:spawned')
+          .map(e => {
+            if (e.type === 'world_event:started') return e.title
+            if (e.type === 'monster:spawned') return `A ${e.monsterType} appeared nearby`
+            if (e.type === 'combat:started') return `Combat broke out nearby`
+            return ''
+          })
+          .filter(Boolean)
+        // Add active world event descriptions for richer NPC awareness
+        const active = this.worldEvents.getActiveEvents()
+          .map(e => `[Active Event] ${e.title}: ${e.description}`)
+        return [...recent, ...active]
+      },
     )
+
+    // React to world events — spawn monsters for danger/portal events
+    this.eventBus.on('world_event:started', (event) => {
+      if (event.type !== 'world_event:started') return
+      const { eventType, position } = event
+
+      if (eventType === 'monster_spawn') {
+        // Spawn 3-5 monsters around the event location
+        const count = 3 + Math.floor(Math.random() * 3)
+        for (let i = 0; i < count; i++) {
+          const offset = { x: position.x + Math.floor(Math.random() * 6) - 3, y: position.y + Math.floor(Math.random() * 6) - 3 }
+          if (this.tileMap.isWalkable(offset.x, offset.y)) {
+            this.combat.spawnMonsterAt(offset, 2)
+          }
+        }
+        console.log(`[WorldEngine] Spawned ${count} monsters for Monster Sighting at (${position.x}, ${position.y})`)
+      }
+
+      if (eventType === 'new_poi') {
+        // Portal guardian — spawn a stronger monster at the portal
+        const guardian = this.combat.spawnMonsterAt(position, 5)
+        console.log(`[WorldEngine] Spawned portal guardian ${guardian.name} at (${position.x}, ${position.y})`)
+      }
+    })
 
     console.log('[WorldEngine] Starting simulation...')
     this.restartInterval()

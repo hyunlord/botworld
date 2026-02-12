@@ -7,6 +7,7 @@ import { WeatherEffects } from '../effects/weather-effects.js'
 import { DayNightCycle } from '../effects/day-night-cycle.js'
 import { soundManager } from '../audio/sound-manager.js'
 import { InteractionEffects } from '../systems/interaction-effects.js'
+import { EventVisuals } from '../systems/event-visuals.js'
 import { TILE_SIZE, worldToScreen, screenToWorld } from '../utils/coordinates.js'
 import { getAutoTileIndex } from '../utils/autotile.js'
 
@@ -170,8 +171,8 @@ export class WorldScene extends Phaser.Scene {
   private dayNightCycle: DayNightCycle | null = null
   private selectionRing: Phaser.GameObjects.Image | null = null
   private weatherEffects: WeatherEffects | null = null
-  private eventMarkers = new Map<string, Phaser.GameObjects.Container>()
   private interactionEffects: InteractionEffects | null = null
+  private eventVisuals: EventVisuals | null = null
 
   // Hover interaction state
   private hoveredAgentId: string | null = null
@@ -220,6 +221,9 @@ export class WorldScene extends Phaser.Scene {
 
     // Interaction visual effects (conversation lines, combat zones, emotions, dust, paths)
     this.interactionEffects = new InteractionEffects(this)
+
+    // World event visual effects (type-specific markers, zones, particles)
+    this.eventVisuals = new EventVisuals(this)
 
     // Initialize audio on first user interaction (Web Audio requirement)
     this.input.once('pointerdown', () => {
@@ -283,6 +287,9 @@ export class WorldScene extends Phaser.Scene {
 
     // Update interaction effects (conversation lines, combat zones, emotions, dust, paths)
     this.interactionEffects?.update(this.agents, this.agentSprites, this.selectedAgentId)
+
+    // Update world event ambient particles
+    this.eventVisuals?.update()
   }
 
   // --- Chunk data management ---
@@ -610,65 +617,8 @@ export class WorldScene extends Phaser.Scene {
   // ── World event markers ──
 
   setWorldEvents(events: ActiveWorldEvent[]): void {
-    const currentIds = new Set(events.map(e => e.id))
-
-    // Remove expired markers
-    for (const [id, container] of this.eventMarkers) {
-      if (!currentIds.has(id)) {
-        container.destroy()
-        this.eventMarkers.delete(id)
-      }
-    }
-
-    // Add/update markers
-    for (const event of events) {
-      if (!this.eventMarkers.has(event.id)) {
-        this.createEventMarker(event)
-      }
-    }
-  }
-
-  private createEventMarker(event: ActiveWorldEvent): void {
-    const pos = worldToScreen(event.position.x, event.position.y)
-    const container = this.add.container(pos.x + TILE_SIZE / 2, pos.y)
-    container.setDepth(900)
-
-    const CATEGORY_COLORS: Record<string, number> = {
-      resource: 0x2ecc71,
-      social: 0xf1c40f,
-      danger: 0xe74c3c,
-      discovery: 0x9b59b6,
-    }
-    const color = CATEGORY_COLORS[event.category] ?? 0x888888
-
-    // Pulsing circle
-    const circle = this.add.graphics()
-    circle.fillStyle(color, 0.3)
-    circle.fillCircle(0, 0, 16)
-    circle.lineStyle(2, color, 0.8)
-    circle.strokeCircle(0, 0, 16)
-    container.add(circle)
-
-    // Inner diamond icon
-    const diamond = this.add.graphics()
-    diamond.fillStyle(color, 0.9)
-    diamond.fillTriangle(0, -8, 6, 0, 0, 8)
-    diamond.fillTriangle(0, -8, -6, 0, 0, 8)
-    container.add(diamond)
-
-    // Pulse animation
-    this.tweens.add({
-      targets: container,
-      scaleX: { from: 0.8, to: 1.2 },
-      scaleY: { from: 0.8, to: 1.2 },
-      alpha: { from: 0.6, to: 1 },
-      duration: 1000,
-      yoyo: true,
-      repeat: -1,
-      ease: 'Sine.easeInOut',
-    })
-
-    this.eventMarkers.set(event.id, container)
+    // Delegate to EventVisuals system for type-specific rendering
+    this.eventVisuals?.sync(events)
   }
 
   // --- Viewport-based chunk rendering ---
