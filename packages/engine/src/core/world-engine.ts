@@ -28,6 +28,8 @@ import { SiegeSystem } from '../buildings/siege-system.js'
 import { CreatureManager } from '../creatures/creature-manager.js'
 import { PackManager } from '../creatures/pack-manager.js'
 import { DenManager } from '../creatures/den-manager.js'
+import { AdvancedCombatEngine } from '../combat/combat-engine.js'
+import { FormationSystem } from '../combat/formation-system.js'
 
 export class WorldEngine {
   readonly eventBus = new EventBus()
@@ -56,6 +58,8 @@ export class WorldEngine {
   readonly creatureManager: CreatureManager
   readonly packManager: PackManager
   readonly denManager: DenManager
+  readonly advancedCombat: AdvancedCombatEngine
+  readonly formationSystem: FormationSystem
   clock: WorldClock
 
   private tickInterval: ReturnType<typeof setInterval> | null = null
@@ -168,6 +172,10 @@ export class WorldEngine {
 
     // Wire creatures to NPC manager for AI context
     this.npcManager.setCreatureManager(this.creatureManager)
+
+    // Advanced combat system
+    this.advancedCombat = new AdvancedCombatEngine(this.eventBus)
+    this.formationSystem = new FormationSystem()
   }
 
   start(): void {
@@ -546,6 +554,7 @@ export class WorldEngine {
       creatures: this.creatureManager.getAllCreatures(),
       packs: this.packManager.getAllPacks(),
       dens: this.denManager.getAllDens(),
+      advancedCombats: this.advancedCombat.getActiveCombats().length,
     }
   }
 }

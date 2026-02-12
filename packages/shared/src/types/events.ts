@@ -3,7 +3,7 @@ import type { Position, WorldClock, WeatherState } from './world.js'
 import type { Item, MarketOrder } from './item.js'
 import type { CharacterAppearance, CharacterClass, Race } from './character.js'
 import type { WorldEventType, WorldEventCategory, WorldEventEffect } from './world-event.js'
-import type { MonsterType, CombatRound, CombatOutcome } from './combat.js'
+import type { MonsterType, CombatRound, CombatOutcome, CombatType, CombatActionType, BodyPartType, ConditionType, FormationType, CombatSide, CombatRole } from './combat.js'
 import type { RelationshipInteraction, RelationshipTag, RumorType, SecretType, SocialStatus } from './relationship.js'
 import type { GuildType, SettlementType, DiplomacyStatus, TreatyType, WarGoal } from './politics.js'
 import type { HistoryEventType } from './history.js'
@@ -80,6 +80,14 @@ export type WorldEvent =
   | DenDiscoveredEvent
   | DenClearedEvent
   | DenRespawnedEvent
+  | AdvancedCombatStartedEvent
+  | AdvancedCombatRoundEvent
+  | AdvancedCombatEndedEvent
+  | BodyPartDisabledEvent
+  | ConditionAppliedEvent
+  | FormationChangedEvent
+  | CombatSurrenderEvent
+  | SiegeCombatPhaseEvent
 
 export interface AgentMovedEvent {
   type: 'agent:moved'
@@ -718,5 +726,100 @@ export interface DenRespawnedEvent {
   denType: DenType
   name: string
   newTier: CreatureTier
+  timestamp: number
+}
+
+// ── Advanced Combat Events ──
+
+export interface AdvancedCombatStartedEvent {
+  type: 'advanced_combat:started'
+  combatId: string
+  combatType: CombatType
+  terrain: string
+  attackerNames: string[]
+  defenderNames: string[]
+  attackerFormation: FormationType
+  defenderFormation: FormationType
+  position: Position
+  timestamp: number
+}
+
+export interface AdvancedCombatRoundEvent {
+  type: 'advanced_combat:round'
+  combatId: string
+  round: number
+  actions: {
+    actorName: string
+    actionType: CombatActionType
+    targetName?: string
+    bodyPart?: BodyPartType
+    damage: number
+    hit: boolean
+    critical: boolean
+    conditionApplied?: ConditionType
+    description: string
+  }[]
+  timestamp: number
+}
+
+export interface AdvancedCombatEndedEvent {
+  type: 'advanced_combat:ended'
+  combatId: string
+  combatType: CombatType
+  winningSide: CombatSide | 'draw'
+  survivors: { name: string; hpRemaining: number }[]
+  casualties: { name: string; side: CombatSide }[]
+  duration: number
+  summary: string
+  timestamp: number
+}
+
+export interface BodyPartDisabledEvent {
+  type: 'combat:body_part_disabled'
+  combatId: string
+  participantId: string
+  participantName: string
+  bodyPart: BodyPartType
+  disabledBy: string
+  timestamp: number
+}
+
+export interface ConditionAppliedEvent {
+  type: 'combat:condition_applied'
+  combatId: string
+  targetId: string
+  targetName: string
+  condition: ConditionType
+  appliedBy: string
+  duration: number
+  timestamp: number
+}
+
+export interface FormationChangedEvent {
+  type: 'combat:formation_changed'
+  combatId: string
+  side: CombatSide
+  oldFormation: FormationType
+  newFormation: FormationType
+  commanderName: string
+  timestamp: number
+}
+
+export interface CombatSurrenderEvent {
+  type: 'combat:surrender'
+  combatId: string
+  surrenderId: string
+  surrenderName: string
+  acceptedBy?: string
+  timestamp: number
+}
+
+export interface SiegeCombatPhaseEvent {
+  type: 'siege_combat:phase'
+  siegeId: string
+  phase: 'bombardment' | 'breach' | 'urban_combat' | 'surrender'
+  description: string
+  wallHp?: number
+  gateHp?: number
   timestamp: number
 }
