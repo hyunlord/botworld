@@ -16,6 +16,18 @@ interface TimeConfig {
   starAlpha: number
   /** Agent torch glow radius (0 = off) */
   torchRadius: number
+  /** Shadow offset angle in radians (0=below, negative=west, positive=east) */
+  shadowAngle: number
+  /** Shadow length multiplier (1=normal, 2=long, 0.5=short) */
+  shadowScale: number
+  /** Shadow alpha (0=invisible, 0.3=strong) */
+  shadowAlpha: number
+}
+
+export interface ShadowConfig {
+  angle: number
+  scale: number
+  alpha: number
 }
 
 const TIME_CONFIGS: Record<TimeOfDay, TimeConfig> = {
@@ -26,6 +38,9 @@ const TIME_CONFIGS: Record<TimeOfDay, TimeConfig> = {
     lightsOn: false,
     starAlpha: 0,
     torchRadius: 0,
+    shadowAngle: -0.6,
+    shadowScale: 2.0,
+    shadowAlpha: 0.15,
   },
   morning: {
     tint: 0xFFF8E8,
@@ -34,6 +49,9 @@ const TIME_CONFIGS: Record<TimeOfDay, TimeConfig> = {
     lightsOn: false,
     starAlpha: 0,
     torchRadius: 0,
+    shadowAngle: -0.4,
+    shadowScale: 1.5,
+    shadowAlpha: 0.22,
   },
   noon: {
     tint: 0xFFFFFF,
@@ -42,6 +60,9 @@ const TIME_CONFIGS: Record<TimeOfDay, TimeConfig> = {
     lightsOn: false,
     starAlpha: 0,
     torchRadius: 0,
+    shadowAngle: 0,
+    shadowScale: 0.5,
+    shadowAlpha: 0.25,
   },
   afternoon: {
     tint: 0xFFF0D0,
@@ -50,6 +71,9 @@ const TIME_CONFIGS: Record<TimeOfDay, TimeConfig> = {
     lightsOn: false,
     starAlpha: 0,
     torchRadius: 0,
+    shadowAngle: 0.4,
+    shadowScale: 1.5,
+    shadowAlpha: 0.2,
   },
   evening: {
     tint: 0xFFB060,
@@ -58,6 +82,9 @@ const TIME_CONFIGS: Record<TimeOfDay, TimeConfig> = {
     lightsOn: true,
     starAlpha: 0,
     torchRadius: 40,
+    shadowAngle: 0.6,
+    shadowScale: 2.0,
+    shadowAlpha: 0.15,
   },
   night: {
     tint: 0x405080,
@@ -66,6 +93,9 @@ const TIME_CONFIGS: Record<TimeOfDay, TimeConfig> = {
     lightsOn: true,
     starAlpha: 1,
     torchRadius: 60,
+    shadowAngle: 0,
+    shadowScale: 0.3,
+    shadowAlpha: 0.08,
   },
 }
 
@@ -188,6 +218,21 @@ export class DayNightCycle {
   /** Get the existing overlay (so world-scene doesn't create a duplicate) */
   getOverlay(): Phaser.GameObjects.Rectangle {
     return this.overlay
+  }
+
+  /** Get current shadow configuration for the shadow system */
+  getShadowConfig(): ShadowConfig {
+    const config = TIME_CONFIGS[this.currentTime]
+    return {
+      angle: config.shadowAngle,
+      scale: config.shadowScale,
+      alpha: config.shadowAlpha,
+    }
+  }
+
+  /** Get current time of day */
+  getCurrentTime(): TimeOfDay {
+    return this.currentTime
   }
 
   // ── Private ──

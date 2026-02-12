@@ -5,6 +5,10 @@ import { composeCharacterSprite } from '../character/sprite-composer.js'
 import { SpriteCache } from '../character/sprite-cache.js'
 import { WeatherEffects } from '../effects/weather-effects.js'
 import { DayNightCycle } from '../effects/day-night-cycle.js'
+import { ShadowSystem } from '../effects/shadow-system.js'
+import { WaterAnimation } from '../effects/water-animation.js'
+import { AmbientParticles } from '../effects/ambient-particles.js'
+import { PostProcessing } from '../effects/post-processing.js'
 import { soundManager } from '../audio/sound-manager.js'
 import { InteractionEffects } from '../systems/interaction-effects.js'
 import { EventVisuals } from '../systems/event-visuals.js'
@@ -252,6 +256,10 @@ export class WorldScene extends Phaser.Scene {
   private weatherEffects: WeatherEffects | null = null
   private interactionEffects: InteractionEffects | null = null
   private eventVisuals: EventVisuals | null = null
+  private shadowSystem: ShadowSystem | null = null
+  private waterAnimation: WaterAnimation | null = null
+  private ambientParticles: AmbientParticles | null = null
+  private postProcessing: PostProcessing | null = null
 
   // Hover interaction state
   private hoveredAgentId: string | null = null
@@ -321,6 +329,12 @@ export class WorldScene extends Phaser.Scene {
 
     // World event visual effects (type-specific markers, zones, particles)
     this.eventVisuals = new EventVisuals(this)
+
+    // Atmosphere effects
+    this.shadowSystem = new ShadowSystem(this)
+    this.waterAnimation = new WaterAnimation(this)
+    this.ambientParticles = new AmbientParticles(this)
+    this.postProcessing = new PostProcessing(this)
 
     // Initialize audio on first user interaction (Web Audio requirement)
     this.input.once('pointerdown', () => {
@@ -425,6 +439,37 @@ export class WorldScene extends Phaser.Scene {
 
     // Update world event ambient particles
     this.eventVisuals?.update()
+
+    // Atmosphere effects updates
+    if (this.shadowSystem) {
+      if (this.dayNightCycle) {
+        this.shadowSystem.setConfig(this.dayNightCycle.getShadowConfig())
+      }
+      this.shadowSystem.update()
+
+      // Draw agent shadows
+      for (const [, container] of this.agentSprites) {
+        this.shadowSystem.drawAgentShadow(container.x, container.y, container.depth)
+      }
+    }
+
+    if (this.waterAnimation) {
+      const cam = this.cameras.main
+      const updates = this.waterAnimation.update(this.groundLayer, cam)
+      // Apply water tile shimmer to tilemap
+      if (this.groundLayer && updates.length > 0) {
+        for (const u of updates) {
+          const tmX = u.tileX - this.tmOriginX
+          const tmY = u.tileY - this.tmOriginY
+          if (tmX >= 0 && tmX < this.tmSize && tmY >= 0 && tmY < this.tmSize) {
+            this.groundLayer.putTileAt(u.index, tmX, tmY)
+          }
+        }
+      }
+    }
+
+    this.ambientParticles?.update()
+    this.postProcessing?.update()
   }
 
   // --- Chunk data management ---
@@ -551,10 +596,15 @@ export class WorldScene extends Phaser.Scene {
       })
       this.dayNightCycle.drawAgentTorches(torchPositions)
     }
+
+    // Propagate time-of-day to atmosphere systems
+    this.ambientParticles?.setTimeOfDay(clock.timeOfDay)
+    this.postProcessing?.setTimeOfDay(clock.timeOfDay)
   }
 
   setWeather(weather: WeatherState): void {
     this.weatherEffects?.setWeather(weather)
+    this.ambientParticles?.setWind(weather.windIntensity)
   }
 
   showSpeechBubble(agentId: string, message: string): void {
@@ -848,6 +898,20 @@ export class WorldScene extends Phaser.Scene {
       this.paintedChunks.add(key)
       // Repaint borders of already-painted adjacent chunks for correct autotiling
       this.repaintAdjacentBorders(chunk)
+    }
+
+    // Register water tiles for animation
+    this.waterAnimation?.addChunkWater(chunk.tiles)
+
+    // Collect biomes for ambient particles
+    if (this.ambientParticles) {
+      const biomeSet = new Set<string>()
+      for (const row of chunk.tiles) {
+        for (const tile of row) {
+          if (tile.biome) biomeSet.add(tile.biome)
+        }
+      }
+      this.ambientParticles.setBiomes([...biomeSet])
     }
 
     // Create object sprites (resources, decorations, buildings) on top
