@@ -9,18 +9,23 @@ import type { EventBus } from '../core/event-bus.js'
 
 // ── Constants ──
 
-/** How often to evaluate spawning new events */
-const EVENT_CHECK_INTERVAL = 100
 /** Max concurrent active events */
 const MAX_ACTIVE_EVENTS = 3
-/** Base probability of spawning an event per check (0-1) */
-const BASE_SPAWN_CHANCE = 0.6
+
+/** Tier-based event frequency: check intervals and spawn chances */
+type EventTier = 'small' | 'medium' | 'large'
+const TIER_CONFIG: Record<EventTier, { checkInterval: number; spawnChance: number }> = {
+  small:  { checkInterval: 300,  spawnChance: 0.40 }, // ~12 min avg
+  medium: { checkInterval: 600,  spawnChance: 0.30 }, // ~33 min avg
+  large:  { checkInterval: 1200, spawnChance: 0.25 }, // ~80 min avg
+}
 
 // ── Event templates ──
 
 interface EventTemplate {
   type: WorldEventType
   category: WorldEventCategory
+  tier: EventTier
   titleTemplate: string
   descTemplate: string
   /** Duration in ticks */
@@ -43,6 +48,7 @@ const EVENT_TEMPLATES: EventTemplate[] = [
   {
     type: 'resource_bloom',
     category: 'resource',
+    tier: 'small',
     titleTemplate: 'Resource Bloom: {resource}',
     descTemplate: '{location} 근처에서 {resource}가 대량 발견되었습니다! 서둘러 채집하세요!',
     durationRange: [TICKS_PER_GAME_DAY, TICKS_PER_GAME_DAY * 2],
@@ -51,12 +57,16 @@ const EVENT_TEMPLATES: EventTemplate[] = [
     weight: 3,
     generateEffects: () => {
       const resource = RESOURCE_TYPES[Math.floor(Math.random() * RESOURCE_TYPES.length)]
-      return [{ type: 'gather_bonus', target: resource, value: 2 }]
+      return [
+        { type: 'gather_bonus', target: resource, value: 3 },
+        { type: 'rare_resource_chance', value: 0.10 },
+      ]
     },
   },
   {
     type: 'resource_drought',
     category: 'resource',
+    tier: 'small',
     titleTemplate: 'Resource Drought',
     descTemplate: '가뭄이 {location} 주변을 강타했습니다. {resource} 수확량이 감소합니다.',
     durationRange: [TICKS_PER_GAME_DAY, TICKS_PER_GAME_DAY * 2],
@@ -74,21 +84,23 @@ const EVENT_TEMPLATES: EventTemplate[] = [
   {
     type: 'festival',
     category: 'social',
+    tier: 'large',
     titleTemplate: 'Festival at {location}',
-    descTemplate: '{location}에서 축제가 열립니다! 채집 보너스와 거래 할인을 즐기세요!',
-    durationRange: [TICKS_PER_GAME_DAY, TICKS_PER_GAME_DAY * 3],
+    descTemplate: '{location}에서 축제가 열립니다! 에너지 회복 +50%, 거래 할인을 즐기세요!',
+    durationRange: [TICKS_PER_GAME_DAY * 2, TICKS_PER_GAME_DAY * 4],
     radiusRange: [12, 20],
     spawnTarget: 'poi',
     poiTypes: ['tavern', 'marketplace'],
     weight: 2,
     generateEffects: () => [
-      { type: 'gather_bonus', value: 1.5 },
+      { type: 'energy_regen_bonus', value: 1.5 },
       { type: 'trade_discount', value: 0.8 },
     ],
   },
   {
     type: 'market_boom',
     category: 'social',
+    tier: 'small',
     titleTemplate: 'Market Boom: {resource}',
     descTemplate: '{resource} 수요가 급증했습니다! 가격이 2배로 올랐습니다!',
     durationRange: [Math.floor(TICKS_PER_GAME_DAY * 0.5), TICKS_PER_GAME_DAY],
@@ -106,6 +118,7 @@ const EVENT_TEMPLATES: EventTemplate[] = [
   {
     type: 'monster_spawn',
     category: 'danger',
+    tier: 'medium',
     titleTemplate: 'Monster Sighting!',
     descTemplate: '{location} 근처에서 몬스터 무리가 목격되었습니다! 주의하세요!',
     durationRange: [TICKS_PER_GAME_DAY, TICKS_PER_GAME_DAY * 2],
@@ -120,6 +133,7 @@ const EVENT_TEMPLATES: EventTemplate[] = [
   {
     type: 'storm_warning',
     category: 'danger',
+    tier: 'medium',
     titleTemplate: 'Storm Warning!',
     descTemplate: '강한 폭풍이 {location} 방향에서 접근 중입니다! 안전한 곳으로 피하세요!',
     durationRange: [Math.floor(TICKS_PER_GAME_DAY * 0.3), TICKS_PER_GAME_DAY],
@@ -136,6 +150,7 @@ const EVENT_TEMPLATES: EventTemplate[] = [
   {
     type: 'hidden_treasure',
     category: 'discovery',
+    tier: 'small',
     titleTemplate: 'Hidden Treasure!',
     descTemplate: '오래된 지도가 발견되었습니다! {location} 근처 어딘가에 보물이 숨겨져 있습니다...',
     durationRange: [TICKS_PER_GAME_DAY, TICKS_PER_GAME_DAY * 3],
@@ -150,6 +165,7 @@ const EVENT_TEMPLATES: EventTemplate[] = [
   {
     type: 'new_poi',
     category: 'discovery',
+    tier: 'medium',
     titleTemplate: 'Mysterious Portal!',
     descTemplate: '미지의 포탈이 {location} 근처에 나타났습니다! 탐험가를 기다리고 있습니다!',
     durationRange: [TICKS_PER_GAME_DAY * 2, TICKS_PER_GAME_DAY * 4],
@@ -167,7 +183,7 @@ const EVENT_TEMPLATES: EventTemplate[] = [
 
 export class WorldEventSystem {
   private activeEvents: Map<string, WorldEventData> = new Map()
-  private lastCheckTick = 0
+  private lastCheckTick: Record<EventTier, number> = { small: 0, medium: 0, large: 0 }
   private eventHistory: string[] = []  // recent event type history to avoid repetition
 
   constructor(
@@ -180,10 +196,13 @@ export class WorldEventSystem {
     // Expire ended events
     this.expireEvents(clock.tick)
 
-    // Check for new event spawn
-    if (clock.tick - this.lastCheckTick >= EVENT_CHECK_INTERVAL) {
-      this.lastCheckTick = clock.tick
-      this.trySpawnEvent(clock.tick)
+    // Check each tier independently
+    for (const tier of ['small', 'medium', 'large'] as EventTier[]) {
+      const cfg = TIER_CONFIG[tier]
+      if (clock.tick - this.lastCheckTick[tier] >= cfg.checkInterval) {
+        this.lastCheckTick[tier] = clock.tick
+        this.trySpawnEvent(clock.tick, tier)
+      }
     }
   }
 
@@ -240,16 +259,18 @@ export class WorldEventSystem {
     }
   }
 
-  private trySpawnEvent(currentTick: number): void {
+  private trySpawnEvent(currentTick: number, tier?: EventTier): void {
     if (this.activeEvents.size >= MAX_ACTIVE_EVENTS) return
-    if (Math.random() > BASE_SPAWN_CHANCE) return
+
+    const cfg = tier ? TIER_CONFIG[tier] : TIER_CONFIG.small
+    if (Math.random() > cfg.spawnChance) return
 
     // Filter out recently used event types
     const recentTypes = new Set(this.eventHistory.slice(-3))
     const activeTypes = new Set(Array.from(this.activeEvents.values()).map(e => e.type))
 
     const candidates = EVENT_TEMPLATES.filter(t =>
-      !recentTypes.has(t.type) && !activeTypes.has(t.type),
+      !recentTypes.has(t.type) && !activeTypes.has(t.type) && (!tier || t.tier === tier),
     )
     if (candidates.length === 0) return
 

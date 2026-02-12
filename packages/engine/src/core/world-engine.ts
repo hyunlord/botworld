@@ -10,6 +10,7 @@ import { NpcManager } from '../systems/npc-manager.js'
 import { QuestManager } from '../systems/quest-manager.js'
 import { WorldEventSystem } from '../systems/world-events.js'
 import { CombatSystem } from '../systems/combat.js'
+import { NpcEventReactions } from '../npc/npc-event-reactions.js'
 
 export class WorldEngine {
   readonly eventBus = new EventBus()
@@ -21,6 +22,7 @@ export class WorldEngine {
   readonly questManager: QuestManager
   readonly worldEvents: WorldEventSystem
   readonly combat: CombatSystem
+  readonly npcEventReactions: NpcEventReactions
   clock: WorldClock
 
   private tickInterval: ReturnType<typeof setInterval> | null = null
@@ -60,6 +62,7 @@ export class WorldEngine {
     this.questManager = new QuestManager(this.eventBus, this.tileMap, this.npcManager, () => this.clock)
     this.worldEvents = new WorldEventSystem(this.eventBus, this.tileMap, () => this.clock)
     this.combat = new CombatSystem(this.eventBus, this.tileMap, () => this.clock)
+    this.npcEventReactions = new NpcEventReactions(this.eventBus, this.npcManager, this.planExecutor, this.tileMap)
   }
 
   start(): void {
@@ -119,21 +122,34 @@ export class WorldEngine {
       const { eventType, position } = event
 
       if (eventType === 'monster_spawn') {
-        // Spawn 3-5 monsters around the event location
-        const count = 3 + Math.floor(Math.random() * 3)
+        // Spawn 10-15 monsters (monster wave) around the event location
+        const count = 10 + Math.floor(Math.random() * 6)
+        let spawned = 0
         for (let i = 0; i < count; i++) {
-          const offset = { x: position.x + Math.floor(Math.random() * 6) - 3, y: position.y + Math.floor(Math.random() * 6) - 3 }
+          const offset = { x: position.x + Math.floor(Math.random() * 10) - 5, y: position.y + Math.floor(Math.random() * 10) - 5 }
           if (this.tileMap.isWalkable(offset.x, offset.y)) {
             this.combat.spawnMonsterAt(offset, 2)
+            spawned++
           }
         }
-        console.log(`[WorldEngine] Spawned ${count} monsters for Monster Sighting at (${position.x}, ${position.y})`)
+        console.log(`[WorldEngine] Spawned ${spawned} monsters for Monster Wave at (${position.x}, ${position.y})`)
       }
 
       if (eventType === 'new_poi') {
-        // Portal guardian — spawn a stronger monster at the portal
-        const guardian = this.combat.spawnMonsterAt(position, 5)
-        console.log(`[WorldEngine] Spawned portal guardian ${guardian.name} at (${position.x}, ${position.y})`)
+        // Portal guardian — spawn a boss-level monster (HP ~500, attack ~30)
+        const guardian = this.combat.spawnMonsterAt(position, 8, 'dragon_whelp')
+        // Override stats to match portal guardian spec
+        guardian.maxHp = 500
+        guardian.hp = 500
+        guardian.attack = 30
+        guardian.defense = 15
+        guardian.name = '포탈 가디언'
+        guardian.loot = [
+          ...guardian.loot,
+          { itemType: 'portal_shard', chance: 1.0, quantityMin: 1, quantityMax: 1 },
+          { itemType: 'gold_coin', chance: 1.0, quantityMin: 50, quantityMax: 100 },
+        ]
+        console.log(`[WorldEngine] Spawned portal guardian at (${position.x}, ${position.y}) [HP: 500, ATK: 30]`)
       }
     })
 
