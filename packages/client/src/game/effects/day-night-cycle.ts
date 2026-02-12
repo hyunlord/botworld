@@ -77,8 +77,8 @@ const TIME_CONFIGS: Record<TimeOfDay, TimeConfig> = {
   },
   evening: {
     tint: 0xFFB060,
-    alpha: 0.10,
-    bgColor: '#1a1a30',
+    alpha: 0.05,
+    bgColor: '#1e2038',
     lightsOn: true,
     starAlpha: 0,
     torchRadius: 40,
@@ -88,8 +88,8 @@ const TIME_CONFIGS: Record<TimeOfDay, TimeConfig> = {
   },
   night: {
     tint: 0x405080,
-    alpha: 0.20,
-    bgColor: '#0d0d17',
+    alpha: 0.10,
+    bgColor: '#121220',
     lightsOn: true,
     starAlpha: 1,
     torchRadius: 60,

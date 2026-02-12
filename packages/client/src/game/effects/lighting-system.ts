@@ -50,8 +50,8 @@ const AMBIENT_CONFIGS: Record<TimeOfDay, AmbientConfig> = {
   morning:   { color: 0x000000, alpha: 0.0, lightsActive: false },
   noon:      { color: 0x000000, alpha: 0.0, lightsActive: false },
   afternoon: { color: 0x000000, alpha: 0.0, lightsActive: false },
-  evening:   { color: 0x181018, alpha: 0.15, lightsActive: true },
-  night:     { color: 0x080818, alpha: 0.30, lightsActive: true },
+  evening:   { color: 0x181018, alpha: 0.04, lightsActive: true },
+  night:     { color: 0x080818, alpha: 0.12, lightsActive: true },
 }
 
 // ── Light type defaults ──
