@@ -171,6 +171,10 @@ export class WorldScene extends Phaser.Scene {
   private weatherEffects: WeatherEffects | null = null
   private eventMarkers = new Map<string, Phaser.GameObjects.Container>()
 
+  // Hover interaction state
+  private hoveredAgentId: string | null = null
+  private hoverTooltip: Phaser.GameObjects.Container | null = null
+
   // Character appearance (layered sprite) data
   private characterAppearances: CharacterAppearanceMap = {}
   private spriteCache = new SpriteCache()
@@ -230,7 +234,10 @@ export class WorldScene extends Phaser.Scene {
     // Drag to pan
     this.input.on('pointermove', (pointer: Phaser.Input.Pointer) => {
       if (pointer.isDown) {
-        this.followingAgentId = null  // Stop following on manual pan
+        if (this.followingAgentId) {
+          this.followingAgentId = null
+          this.events.emit('follow:stopped')
+        }
         const cam = this.cameras.main
         cam.scrollX -= (pointer.x - pointer.prevPosition.x) / cam.zoom
         cam.scrollY -= (pointer.y - pointer.prevPosition.y) / cam.zoom
@@ -251,6 +258,14 @@ export class WorldScene extends Phaser.Scene {
         cam.scrollY += (targetY - cam.scrollY) * 0.08
       } else {
         this.followingAgentId = null
+      }
+    }
+
+    // Update hover tooltip position to follow agent
+    if (this.hoverTooltip && this.hoveredAgentId) {
+      const hoverContainer = this.agentSprites.get(this.hoveredAgentId)
+      if (hoverContainer) {
+        this.hoverTooltip.setPosition(hoverContainer.x, hoverContainer.y + 22)
       }
     }
 
@@ -344,6 +359,7 @@ export class WorldScene extends Phaser.Scene {
     // Remove sprites for agents that no longer exist
     for (const [id, sprite] of this.agentSprites) {
       if (!agents.find(a => a.id === id)) {
+        if (id === this.hoveredAgentId) this.handleAgentHoverEnd(id)
         sprite.destroy()
         this.agentSprites.delete(id)
         this.agentDirections.delete(id)
@@ -1046,6 +1062,14 @@ export class WorldScene extends Phaser.Scene {
     container.setSize(30, 40)
     container.setInteractive()
 
+    container.on('pointerover', () => {
+      this.handleAgentHover(agent.id)
+    })
+
+    container.on('pointerout', () => {
+      this.handleAgentHoverEnd(agent.id)
+    })
+
     container.on('pointerdown', () => {
       this.selectedAgentId = agent.id
       this.events.emit('agent:selected', agent.id)
@@ -1058,6 +1082,9 @@ export class WorldScene extends Phaser.Scene {
         duration: 100,
         yoyo: true,
       })
+
+      // Smooth camera pan if agent is off-center
+      this.panCameraToAgent(agent.id)
     })
 
     this.agentSprites.set(agent.id, container)
@@ -1244,6 +1271,170 @@ export class WorldScene extends Phaser.Scene {
       repeat: -1,
       ease: 'Sine.easeInOut',
     })
+  }
+
+  // ── Hover interaction ──
+
+  private handleAgentHover(agentId: string): void {
+    if (this.hoveredAgentId === agentId) return
+    if (this.hoveredAgentId) this.handleAgentHoverEnd(this.hoveredAgentId)
+
+    this.hoveredAgentId = agentId
+    this.input.setDefaultCursor('pointer')
+
+    const container = this.agentSprites.get(agentId)
+    if (!container) return
+
+    // Glow effect on visual sprite (Sprite/Image with preFX support)
+    const visual = container.list[1]
+    if (visual && 'preFX' in visual && (visual as Phaser.GameObjects.Sprite).preFX) {
+      try {
+        const fx = (visual as Phaser.GameObjects.Sprite).preFX!.addGlow(0xffd700, 4, 0, false, 0.1, 16)
+        container.setData('_hoverFx', fx)
+      } catch { /* Canvas renderer fallback - no preFX */ }
+    }
+
+    // Expand name label with background
+    const nameText = container.list[2] as Phaser.GameObjects.Text
+    if (nameText?.setFontSize) {
+      container.setData('_origFontSize', nameText.style.fontSize)
+      nameText.setFontSize('12px')
+      nameText.setBackgroundColor('#000000bb')
+      nameText.setPadding(4, 2, 4, 2)
+    }
+
+    // Show action tooltip below agent
+    const agent = this.agents.find(a => a.id === agentId)
+    if (agent) {
+      this.showHoverTooltip(agent, container)
+    }
+  }
+
+  private handleAgentHoverEnd(agentId: string): void {
+    if (this.hoveredAgentId !== agentId) return
+    this.hoveredAgentId = null
+    this.input.setDefaultCursor('default')
+
+    const container = this.agentSprites.get(agentId)
+    if (!container) return
+
+    // Remove glow
+    const fx = container.getData('_hoverFx')
+    if (fx) {
+      const visual = container.list[1]
+      if (visual && 'preFX' in visual && (visual as Phaser.GameObjects.Sprite).preFX) {
+        try { (visual as Phaser.GameObjects.Sprite).preFX!.remove(fx) } catch { /* noop */ }
+      }
+      container.setData('_hoverFx', null)
+    }
+
+    // Reset name label
+    const nameText = container.list[2] as Phaser.GameObjects.Text
+    if (nameText?.setFontSize) {
+      nameText.setFontSize(container.getData('_origFontSize') || '10px')
+      nameText.setBackgroundColor('')
+      nameText.setPadding(0, 0, 0, 0)
+    }
+
+    this.hideHoverTooltip()
+  }
+
+  private static HOVER_ACTION_LABELS: Record<string, string> = {
+    gather: '\u26CF\uFE0F Gathering...',
+    mine: '\u26CF\uFE0F Mining...',
+    chop: '\uD83E\uDE93 Chopping...',
+    craft: '\uD83D\uDD28 Crafting...',
+    trade: '\uD83E\uDD1D Trading...',
+    rest: '\uD83D\uDCA4 Resting...',
+    eat: '\uD83C\uDF7D\uFE0F Eating...',
+    move: '\uD83D\uDEB6 Walking...',
+    explore: '\uD83E\uDDED Exploring...',
+    quest: '\u2757 On a quest...',
+    attack: '\u2694\uFE0F Fighting!',
+    flee: '\uD83C\uDFC3 Fleeing!',
+    speak: '\uD83D\uDCAC Talking...',
+    talk: '\uD83D\uDCAC Talking...',
+  }
+
+  private showHoverTooltip(agent: Agent, container: Phaser.GameObjects.Container): void {
+    this.hideHoverTooltip()
+
+    const actionType = agent.currentAction?.type ?? 'idle'
+    if (actionType === 'idle') return
+
+    const label = WorldScene.HOVER_ACTION_LABELS[actionType] ?? actionType
+
+    const text = this.add.text(0, 0, label, {
+      fontSize: '10px',
+      fontFamily: 'Arial, sans-serif',
+      color: '#ffffff',
+    }).setOrigin(0.5, 0.5)
+
+    const bounds = text.getBounds()
+    const bg = this.add.graphics()
+    bg.fillStyle(0x000000, 0.75)
+    bg.fillRoundedRect(
+      -bounds.width / 2 - 6, -bounds.height / 2 - 3,
+      bounds.width + 12, bounds.height + 6,
+      4,
+    )
+
+    this.hoverTooltip = this.add.container(
+      container.x,
+      container.y + 22,
+      [bg, text],
+    )
+    this.hoverTooltip.setDepth(3000)
+    this.hoverTooltip.setAlpha(0)
+
+    this.tweens.add({
+      targets: this.hoverTooltip,
+      alpha: 1,
+      duration: 150,
+    })
+  }
+
+  private hideHoverTooltip(): void {
+    if (this.hoverTooltip) {
+      this.hoverTooltip.destroy()
+      this.hoverTooltip = null
+    }
+  }
+
+  /** Smoothly pan camera to an agent if it's not near the center of the viewport */
+  private panCameraToAgent(agentId: string): void {
+    const container = this.agentSprites.get(agentId)
+    if (!container) return
+
+    const cam = this.cameras.main
+    const wv = cam.worldView
+    const marginX = wv.width * 0.3
+    const marginY = wv.height * 0.3
+
+    const inCenter = container.x > wv.left + marginX
+      && container.x < wv.right - marginX
+      && container.y > wv.top + marginY
+      && container.y < wv.bottom - marginY
+
+    if (!inCenter) {
+      const targetX = container.x - cam.width / (2 * cam.zoom)
+      const targetY = container.y - cam.height / (2 * cam.zoom)
+
+      this.tweens.add({
+        targets: cam,
+        scrollX: targetX,
+        scrollY: targetY,
+        duration: 400,
+        ease: 'Cubic.easeOut',
+      })
+    }
+  }
+
+  /** Get the name of the agent currently being followed (for React UI) */
+  getFollowingAgentName(): string | null {
+    if (!this.followingAgentId) return null
+    const agent = this.agents.find(a => a.id === this.followingAgentId)
+    return agent?.name ?? null
   }
 
   private showGatherEffect(x: number, y: number, resourceType?: string): void {

@@ -92,6 +92,10 @@ export function WorldView() {
           })
         })
 
+        scene.events.on('follow:stopped', () => {
+          setFollowing(false)
+        })
+
         if (pendingState.current) {
           applyState(pendingState.current)
           pendingState.current = null
@@ -284,6 +288,16 @@ export function WorldView() {
         background: connected ? '#2ecc71' : '#e74c3c',
       }} title={connected ? 'Connected' : 'Disconnected'} />
 
+      {/* Follow Banner (top center, shown when following an agent) */}
+      {following && selectedAgent && (
+        <div style={styles.followBanner}>
+          <span>{'\uD83D\uDCCD'} Following {selectedAgent.name}</span>
+          <button style={styles.followUnfollowBtn} onClick={handleUnfollow}>
+            Unfollow
+          </button>
+        </div>
+      )}
+
       {/* Event Banner (top center) */}
       <EventBanner
         activeEvents={worldEvents}
@@ -365,5 +379,35 @@ const styles: Record<string, React.CSSProperties> = {
     borderRadius: 4,
     zIndex: 50,
     pointerEvents: 'none',
+  },
+  followBanner: {
+    position: 'absolute',
+    top: 12,
+    left: '50%',
+    transform: 'translateX(-50%)',
+    zIndex: 200,
+    background: 'rgba(15, 20, 30, 0.85)',
+    backdropFilter: 'blur(8px)',
+    borderRadius: 8,
+    border: '1px solid rgba(255, 215, 0, 0.3)',
+    padding: '6px 16px',
+    display: 'flex',
+    alignItems: 'center',
+    gap: 12,
+    fontSize: 13,
+    color: '#FFD700',
+    fontWeight: 'bold',
+    pointerEvents: 'auto',
+    boxShadow: '0 2px 12px rgba(0,0,0,0.4)',
+  },
+  followUnfollowBtn: {
+    background: 'rgba(255,255,255,0.1)',
+    border: '1px solid rgba(255,255,255,0.2)',
+    borderRadius: 4,
+    color: '#E8E8E8',
+    fontSize: 11,
+    padding: '3px 10px',
+    cursor: 'pointer',
+    fontFamily: 'inherit',
   },
 }
