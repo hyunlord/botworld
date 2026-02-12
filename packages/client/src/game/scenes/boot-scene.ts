@@ -80,10 +80,34 @@ export class BootScene extends Phaser.Scene {
       this.load.image(`item_${name}`, `assets/items/${name}.png`)
     }
 
-    // ── New character base sprites (8 races) ──
+    // ── Character spritesheets (32x48 frames, 3 cols x 4 rows) ──
+    const CHAR_FRAME_W = 32
+    const CHAR_FRAME_H = 48
+
+    // 8 race spritesheets
     const races = ['human', 'elf', 'dwarf', 'orc', 'beastkin', 'undead', 'fairy', 'dragonkin']
     for (const race of races) {
+      this.load.spritesheet(`char_${race}`, `assets/characters/${race}_sprite.png`, {
+        frameWidth: CHAR_FRAME_W, frameHeight: CHAR_FRAME_H,
+      })
+      // Legacy single-frame base (backward compat)
       this.load.image(`char_race_${race}`, `assets/characters/${race}_base.png`)
+    }
+
+    // 5 NPC spritesheets
+    const npcTypes = ['merchant', 'innkeeper', 'guildmaster', 'guard', 'wanderer']
+    for (const npc of npcTypes) {
+      this.load.spritesheet(`char_npc_${npc}`, `assets/characters/npc_${npc}.png`, {
+        frameWidth: CHAR_FRAME_W, frameHeight: CHAR_FRAME_H,
+      })
+    }
+
+    // 4 monster spritesheets
+    const monsterSpriteTypes = ['goblin', 'wolf', 'skeleton', 'slime']
+    for (const mon of monsterSpriteTypes) {
+      this.load.spritesheet(`char_monster_${mon}`, `assets/characters/monster_${mon}.png`, {
+        frameWidth: CHAR_FRAME_W, frameHeight: CHAR_FRAME_H,
+      })
     }
 
     // ── UI elements ──
@@ -179,6 +203,7 @@ export class BootScene extends Phaser.Scene {
 
   create(): void {
     this.generateFallbackTextures()
+    this.createCharacterAnimations()
     this.scene.start('WorldScene')
   }
 
@@ -192,7 +217,49 @@ export class BootScene extends Phaser.Scene {
     this.generateDecorationFallbacks()
     this.generateAgentFallbacks()
     this.generateCharacterFallbacks()
+    this.generateCharacterSheetFallbacks()
     this.generateShadowAndRing()
+  }
+
+  /** Generate spritesheet fallbacks for all character types when PNGs not loaded */
+  private generateCharacterSheetFallbacks(): void {
+    // Race spritesheets
+    const raceColors: Record<string, [number, number]> = {
+      char_human:    [0x3c64a0, 0xe6be96],
+      char_elf:      [0x2d7841, 0xf0dac3],
+      char_dwarf:    [0x825a32, 0xdcb48c],
+      char_orc:      [0x644628, 0x64a050],
+      char_beastkin: [0x506e32, 0xb48c64],
+      char_undead:   [0x4b414b, 0x96a59b],
+      char_fairy:    [0xa0c88c, 0xf0e1eb],
+      char_dragonkin:[0x503228, 0x8c463c],
+    }
+    for (const [key, [body, head]] of Object.entries(raceColors)) {
+      this.generateCharacterSheetFallback(key, body, head)
+    }
+
+    // NPC spritesheets
+    const npcColors: Record<string, [number, number]> = {
+      char_npc_merchant:    [0x966e2d, 0xe1b991],
+      char_npc_innkeeper:   [0xb9a591, 0xdaaf8a],
+      char_npc_guildmaster: [0x322869, 0xd7b491],
+      char_npc_guard:       [0x7d7d87, 0xd2af8c],
+      char_npc_wanderer:    [0x5a503c, 0xc8a582],
+    }
+    for (const [key, [body, head]] of Object.entries(npcColors)) {
+      this.generateCharacterSheetFallback(key, body, head)
+    }
+
+    // Monster spritesheets
+    const monsterColors: Record<string, [number, number]> = {
+      char_monster_goblin:   [0x64503c, 0x508c3c],
+      char_monster_wolf:     [0x827868, 0x827868],
+      char_monster_skeleton: [0xc8c3b9, 0xdcd7c8],
+      char_monster_slime:    [0x3cb450, 0x3cb450],
+    }
+    for (const [key, [body, head]] of Object.entries(monsterColors)) {
+      this.generateCharacterSheetFallback(key, body, head)
+    }
   }
 
   /** Sparkle indicator for generic resources */
@@ -621,6 +688,121 @@ export class BootScene extends Phaser.Scene {
     rg.strokeEllipse(12, 4, 22, 9)
     rg.generateTexture('selection_ring', 24, 8)
     rg.destroy()
+  }
+
+  /**
+   * Create walk animations for all character spritesheets.
+   * Frame layout per sheet (3 cols x 4 rows, 32x48 each):
+   *   Row 0 (down):  0, 1, 2
+   *   Row 1 (left):  3, 4, 5
+   *   Row 2 (right): 6, 7, 8
+   *   Row 3 (up):    9, 10, 11
+   * Walk cycle: walk1 → stand → walk2 → stand (frameRate 5)
+   */
+  private createCharacterAnimations(): void {
+    const allKeys: string[] = []
+
+    // Races
+    for (const race of ['human', 'elf', 'dwarf', 'orc', 'beastkin', 'undead', 'fairy', 'dragonkin']) {
+      allKeys.push(`char_${race}`)
+    }
+    // NPCs
+    for (const npc of ['merchant', 'innkeeper', 'guildmaster', 'guard', 'wanderer']) {
+      allKeys.push(`char_npc_${npc}`)
+    }
+    // Monsters
+    for (const mon of ['goblin', 'wolf', 'skeleton', 'slime']) {
+      allKeys.push(`char_monster_${mon}`)
+    }
+
+    const dirs: { name: string; row: number }[] = [
+      { name: 'down',  row: 0 },
+      { name: 'left',  row: 1 },
+      { name: 'right', row: 2 },
+      { name: 'up',    row: 3 },
+    ]
+
+    for (const key of allKeys) {
+      if (!this.textures.exists(key)) continue
+
+      for (const dir of dirs) {
+        const base = dir.row * 3
+        // Walk animation: walk1 → stand → walk2 → stand
+        this.anims.create({
+          key: `${key}_walk_${dir.name}`,
+          frames: [
+            { key, frame: base + 0 },
+            { key, frame: base + 1 },
+            { key, frame: base + 2 },
+            { key, frame: base + 1 },
+          ],
+          frameRate: 5,
+          repeat: -1,
+        })
+        // Idle: single stand frame
+        this.anims.create({
+          key: `${key}_idle_${dir.name}`,
+          frames: [{ key, frame: base + 1 }],
+          frameRate: 1,
+          repeat: 0,
+        })
+      }
+    }
+  }
+
+  /**
+   * Generate a spritesheet fallback for a character key.
+   * Draws a simple colored humanoid in 12 frames (3x4 grid, 32x48 each).
+   */
+  private generateCharacterSheetFallback(key: string, bodyColor: number, headColor: number): void {
+    if (this.textures.exists(key)) return
+
+    const FW = 32, FH = 48
+    const SW = FW * 3, SH = FH * 4
+    const g = this.add.graphics()
+
+    for (let row = 0; row < 4; row++) {
+      for (let col = 0; col < 3; col++) {
+        const fx = col * FW
+        const fy = row * FH
+        const cx = fx + 16
+        const walkShift = col === 0 ? -2 : col === 2 ? 2 : 0
+
+        // Shadow
+        g.fillStyle(0x000000, 0.2)
+        g.fillEllipse(cx, fy + 44, 14, 4)
+
+        // Legs
+        g.fillStyle(bodyColor, 0.7)
+        g.fillRect(cx - 3 + walkShift, fy + 32, 3, 10)
+        g.fillRect(cx + 1 - walkShift, fy + 32, 3, 10)
+
+        // Body
+        g.fillStyle(bodyColor, 1)
+        g.fillRoundedRect(cx - 5, fy + 18, 10, 14, 2)
+
+        // Head
+        g.fillStyle(headColor, 1)
+        g.fillCircle(cx, fy + 12, 6)
+
+        // Eyes (front/side only)
+        if (row !== 3) {
+          g.fillStyle(0x000000, 0.8)
+          if (row === 0) {
+            // Down
+            g.fillCircle(cx - 2, fy + 13, 1)
+            g.fillCircle(cx + 2, fy + 13, 1)
+          } else {
+            // Side
+            const dir = row === 1 ? -1 : 1
+            g.fillCircle(cx + dir * 2, fy + 13, 1)
+          }
+        }
+      }
+    }
+
+    g.generateTexture(key, SW, SH)
+    g.destroy()
   }
 
   /* ───── helpers ───── */

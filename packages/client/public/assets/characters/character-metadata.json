@@ -1,0 +1,223 @@
+{
+  "human_sprite": {
+    "frameWidth": 32,
+    "frameHeight": 48,
+    "cols": 3,
+    "rows": 4,
+    "directions": [
+      "down",
+      "left",
+      "right",
+      "up"
+    ],
+    "framesPerDirection": 3
+  },
+  "elf_sprite": {
+    "frameWidth": 32,
+    "frameHeight": 48,
+    "cols": 3,
+    "rows": 4,
+    "directions": [
+      "down",
+      "left",
+      "right",
+      "up"
+    ],
+    "framesPerDirection": 3
+  },
+  "dwarf_sprite": {
+    "frameWidth": 32,
+    "frameHeight": 48,
+    "cols": 3,
+    "rows": 4,
+    "directions": [
+      "down",
+      "left",
+      "right",
+      "up"
+    ],
+    "framesPerDirection": 3
+  },
+  "orc_sprite": {
+    "frameWidth": 32,
+    "frameHeight": 48,
+    "cols": 3,
+    "rows": 4,
+    "directions": [
+      "down",
+      "left",
+      "right",
+      "up"
+    ],
+    "framesPerDirection": 3
+  },
+  "beastkin_sprite": {
+    "frameWidth": 32,
+    "frameHeight": 48,
+    "cols": 3,
+    "rows": 4,
+    "directions": [
+      "down",
+      "left",
+      "right",
+      "up"
+    ],
+    "framesPerDirection": 3
+  },
+  "undead_sprite": {
+    "frameWidth": 32,
+    "frameHeight": 48,
+    "cols": 3,
+    "rows": 4,
+    "directions": [
+      "down",
+      "left",
+      "right",
+      "up"
+    ],
+    "framesPerDirection": 3
+  },
+  "fairy_sprite": {
+    "frameWidth": 32,
+    "frameHeight": 48,
+    "cols": 3,
+    "rows": 4,
+    "directions": [
+      "down",
+      "left",
+      "right",
+      "up"
+    ],
+    "framesPerDirection": 3
+  },
+  "dragonkin_sprite": {
+    "frameWidth": 32,
+    "frameHeight": 48,
+    "cols": 3,
+    "rows": 4,
+    "directions": [
+      "down",
+      "left",
+      "right",
+      "up"
+    ],
+    "framesPerDirection": 3
+  },
+  "npc_merchant": {
+    "frameWidth": 32,
+    "frameHeight": 48,
+    "cols": 3,
+    "rows": 4,
+    "directions": [
+      "down",
+      "left",
+      "right",
+      "up"
+    ],
+    "framesPerDirection": 3
+  },
+  "npc_innkeeper": {
+    "frameWidth": 32,
+    "frameHeight": 48,
+    "cols": 3,
+    "rows": 4,
+    "directions": [
+      "down",
+      "left",
+      "right",
+      "up"
+    ],
+    "framesPerDirection": 3
+  },
+  "npc_guildmaster": {
+    "frameWidth": 32,
+    "frameHeight": 48,
+    "cols": 3,
+    "rows": 4,
+    "directions": [
+      "down",
+      "left",
+      "right",
+      "up"
+    ],
+    "framesPerDirection": 3
+  },
+  "npc_guard": {
+    "frameWidth": 32,
+    "frameHeight": 48,
+    "cols": 3,
+    "rows": 4,
+    "directions": [
+      "down",
+      "left",
+      "right",
+      "up"
+    ],
+    "framesPerDirection": 3
+  },
+  "npc_wanderer": {
+    "frameWidth": 32,
+    "frameHeight": 48,
+    "cols": 3,
+    "rows": 4,
+    "directions": [
+      "down",
+      "left",
+      "right",
+      "up"
+    ],
+    "framesPerDirection": 3
+  },
+  "monster_goblin": {
+    "frameWidth": 32,
+    "frameHeight": 48,
+    "cols": 3,
+    "rows": 4,
+    "directions": [
+      "down",
+      "left",
+      "right",
+      "up"
+    ],
+    "framesPerDirection": 3
+  },
+  "monster_skeleton": {
+    "frameWidth": 32,
+    "frameHeight": 48,
+    "cols": 3,
+    "rows": 4,
+    "directions": [
+      "down",
+      "left",
+      "right",
+      "up"
+    ],
+    "framesPerDirection": 3
+  },
+  "monster_wolf": {
+    "frameWidth": 32,
+    "frameHeight": 48,
+    "cols": 3,
+    "rows": 4,
+    "directions": [
+      "down",
+      "left",
+      "right",
+      "up"
+    ],
+    "framesPerDirection": 3
+  },
+  "monster_slime": {
+    "frameWidth": 32,
+    "frameHeight": 48,
+    "cols": 3,
+    "rows": 4,
+    "directions": [
+      "down",
+      "left",
+      "right",
+      "up"
+    ],
+    "framesPerDirection": 3
+  }
+}

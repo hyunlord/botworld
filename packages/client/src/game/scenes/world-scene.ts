@@ -158,6 +158,8 @@ export class WorldScene extends Phaser.Scene {
 
   // Agent rendering
   private agentSprites = new Map<string, Phaser.GameObjects.Container>()
+  private agentDirections = new Map<string, string>()  // agentId → 'down'|'left'|'right'|'up'
+  private agentMoving = new Map<string, boolean>()      // agentId → currently walking
   private actionIndicators = new Map<string, Phaser.GameObjects.Image>()
   private speechBubbles = new Map<string, { container: Phaser.GameObjects.Container; timer: number }>()
   private monsterSprites = new Map<string, Phaser.GameObjects.Container>()
@@ -341,6 +343,8 @@ export class WorldScene extends Phaser.Scene {
       if (!agents.find(a => a.id === id)) {
         sprite.destroy()
         this.agentSprites.delete(id)
+        this.agentDirections.delete(id)
+        this.agentMoving.delete(id)
         this.actionIndicators.get(id)?.destroy()
         this.actionIndicators.delete(id)
         this.spriteCache.remove(id)
@@ -440,6 +444,13 @@ export class WorldScene extends Phaser.Scene {
       case 'agent:moved': {
         const container = this.agentSprites.get(event.agentId)
         if (container) {
+          // Compute and store facing direction
+          const dir = WorldScene.getMovementDirection(event.from, event.to)
+          this.agentDirections.set(event.agentId, dir)
+
+          // Start walk animation
+          this.setAgentAnimation(event.agentId, true)
+
           const pos = worldToScreen(event.to.x, event.to.y)
           this.tweens.add({
             targets: container,
@@ -447,6 +458,10 @@ export class WorldScene extends Phaser.Scene {
             y: pos.y + TILE_SIZE / 2 - 8,
             duration: 500,
             ease: 'Linear',
+            onComplete: () => {
+              // Switch to idle when movement tween finishes
+              this.setAgentAnimation(event.agentId, false)
+            },
           })
         }
         // Footstep SFX for selected agent only
@@ -805,44 +820,123 @@ export class WorldScene extends Phaser.Scene {
 
   // --- Agent rendering ---
 
+  /** Map NpcRole to spritesheet key suffix */
+  private static NPC_ROLE_TO_KEY: Record<string, string> = {
+    merchant: 'merchant',
+    innkeeper: 'innkeeper',
+    guild_master: 'guildmaster',
+    guard: 'guard',
+    wanderer: 'wanderer',
+  }
+
+  /** Determine which spritesheet key to use for an agent */
+  private resolveAgentSpriteKey(agent: Agent): string | null {
+    // NPC → use NPC spritesheet
+    if (agent.isNpc && agent.npcRole) {
+      const suffix = WorldScene.NPC_ROLE_TO_KEY[agent.npcRole] ?? 'wanderer'
+      const key = `char_npc_${suffix}`
+      if (this.textures.exists(key)) return key
+    }
+
+    // Check race from character appearances
+    const charData = this.characterAppearances[agent.id]
+    if (charData) {
+      const key = `char_${charData.race}`
+      if (this.textures.exists(key)) return key
+    }
+
+    // Fallback to human
+    if (this.textures.exists('char_human')) return 'char_human'
+    return null
+  }
+
+  /** Compute facing direction from movement vector */
+  private static getMovementDirection(from: { x: number; y: number }, to: { x: number; y: number }): string {
+    const dx = to.x - from.x
+    const dy = to.y - from.y
+    if (dx === 0 && dy === 0) return 'down'
+    if (Math.abs(dy) >= Math.abs(dx)) {
+      return dy > 0 ? 'down' : 'up'
+    }
+    return dx > 0 ? 'right' : 'left'
+  }
+
+  /** Play walk or idle animation on an agent's sprite */
+  private setAgentAnimation(agentId: string, walking: boolean): void {
+    const container = this.agentSprites.get(agentId)
+    if (!container || !container.list || container.list.length < 2) return
+
+    const visual = container.list[1]
+    if (!(visual instanceof Phaser.GameObjects.Sprite)) return
+
+    const dir = this.agentDirections.get(agentId) ?? 'down'
+    const sheetKey = (visual as Phaser.GameObjects.Sprite).texture.key
+    const animKey = walking ? `${sheetKey}_walk_${dir}` : `${sheetKey}_idle_${dir}`
+
+    if (this.anims.exists(animKey) && visual.anims.currentAnim?.key !== animKey) {
+      visual.play(animKey)
+    }
+    this.agentMoving.set(agentId, walking)
+  }
+
   private createAgentSprite(agent: Agent, screenPos: { x: number; y: number }): void {
     const shadow = this.add.image(0, 6, 'agent_shadow')
       .setScale(0.7)
       .setAlpha(0.3)
 
-    const charData = this.characterAppearances[agent.id]
-    let spriteOrGroup: Phaser.GameObjects.Image | Phaser.GameObjects.Container
+    // Default direction
+    this.agentDirections.set(agent.id, 'down')
+    this.agentMoving.set(agent.id, false)
 
-    if (charData) {
-      const { bodyGroup, auraEmitter } = composeCharacterSprite(this, charData.appearance, charData.race)
-      bodyGroup.setScale(AGENT_SCALE)
-      this.spriteCache.set(agent.id, charData.spriteHash, { bodyGroup, auraEmitter })
-      spriteOrGroup = bodyGroup
+    let spriteOrGroup: Phaser.GameObjects.Sprite | Phaser.GameObjects.Image | Phaser.GameObjects.Container
 
-      this.tweens.add({
-        targets: bodyGroup,
-        scaleY: AGENT_SCALE * 1.015,
-        duration: 1200 + Math.random() * 400,
-        yoyo: true,
-        repeat: -1,
-        ease: 'Sine.easeInOut',
-      })
-    } else {
-      const index = this.agents.indexOf(agent)
-      const textureKey = `agent_${index >= 0 && index < 5 ? index : 'default'}`
-      const sprite = this.add.image(0, 0, textureKey)
-        .setOrigin(0.5, 0.7)
+    // Try animated spritesheet first
+    const sheetKey = this.resolveAgentSpriteKey(agent)
+    if (sheetKey) {
+      const sprite = this.add.sprite(0, 0, sheetKey, 1) // frame 1 = stand facing down
+        .setOrigin(0.5, 0.8)
         .setScale(AGENT_SCALE)
       spriteOrGroup = sprite
 
-      this.tweens.add({
-        targets: sprite,
-        scaleY: AGENT_SCALE * 1.015,
-        duration: 1200 + Math.random() * 400,
-        yoyo: true,
-        repeat: -1,
-        ease: 'Sine.easeInOut',
-      })
+      // Start idle animation facing down
+      const idleAnim = `${sheetKey}_idle_down`
+      if (this.anims.exists(idleAnim)) {
+        sprite.play(idleAnim)
+      }
+    } else {
+      // Fallback: layered composition or legacy sprite
+      const charData = this.characterAppearances[agent.id]
+      if (charData) {
+        const { bodyGroup, auraEmitter } = composeCharacterSprite(this, charData.appearance, charData.race)
+        bodyGroup.setScale(AGENT_SCALE)
+        this.spriteCache.set(agent.id, charData.spriteHash, { bodyGroup, auraEmitter })
+        spriteOrGroup = bodyGroup
+
+        this.tweens.add({
+          targets: bodyGroup,
+          scaleY: AGENT_SCALE * 1.015,
+          duration: 1200 + Math.random() * 400,
+          yoyo: true,
+          repeat: -1,
+          ease: 'Sine.easeInOut',
+        })
+      } else {
+        const index = this.agents.indexOf(agent)
+        const textureKey = `agent_${index >= 0 && index < 5 ? index : 'default'}`
+        const sprite = this.add.image(0, 0, textureKey)
+          .setOrigin(0.5, 0.7)
+          .setScale(AGENT_SCALE)
+        spriteOrGroup = sprite
+
+        this.tweens.add({
+          targets: sprite,
+          scaleY: AGENT_SCALE * 1.015,
+          duration: 1200 + Math.random() * 400,
+          yoyo: true,
+          repeat: -1,
+          ease: 'Sine.easeInOut',
+        })
+      }
     }
 
     const isNpc = agent.isNpc === true
@@ -891,7 +985,7 @@ export class WorldScene extends Phaser.Scene {
     this.agentSprites.set(agent.id, container)
   }
 
-  /** Recompose an agent's layered sprite at runtime */
+  /** Recompose an agent's visual at runtime (called when appearance changes) */
   private recomposeAgentSprite(agentId: string): void {
     const container = this.agentSprites.get(agentId)
     if (!container || !container.list || container.list.length < 2) return
@@ -903,20 +997,35 @@ export class WorldScene extends Phaser.Scene {
     if (oldVisual) oldVisual.destroy()
     this.spriteCache.remove(agentId)
 
-    const { bodyGroup, auraEmitter } = composeCharacterSprite(this, charData.appearance, charData.race)
-    bodyGroup.setScale(AGENT_SCALE)
-    this.spriteCache.set(agentId, charData.spriteHash, { bodyGroup, auraEmitter })
+    // Try spritesheet first
+    const sheetKey = `char_${charData.race}`
+    if (this.textures.exists(sheetKey)) {
+      const dir = this.agentDirections.get(agentId) ?? 'down'
+      const sprite = this.add.sprite(0, 0, sheetKey, 1)
+        .setOrigin(0.5, 0.8)
+        .setScale(AGENT_SCALE)
+      container.addAt(sprite, 1)
 
-    container.addAt(bodyGroup, 1)
+      const idleAnim = `${sheetKey}_idle_${dir}`
+      if (this.anims.exists(idleAnim)) {
+        sprite.play(idleAnim)
+      }
+    } else {
+      // Fallback to layered composition
+      const { bodyGroup, auraEmitter } = composeCharacterSprite(this, charData.appearance, charData.race)
+      bodyGroup.setScale(AGENT_SCALE)
+      this.spriteCache.set(agentId, charData.spriteHash, { bodyGroup, auraEmitter })
+      container.addAt(bodyGroup, 1)
 
-    this.tweens.add({
-      targets: bodyGroup,
-      scaleY: AGENT_SCALE * 1.015,
-      duration: 1200 + Math.random() * 400,
-      yoyo: true,
-      repeat: -1,
-      ease: 'Sine.easeInOut',
-    })
+      this.tweens.add({
+        targets: bodyGroup,
+        scaleY: AGENT_SCALE * 1.015,
+        duration: 1200 + Math.random() * 400,
+        yoyo: true,
+        repeat: -1,
+        ease: 'Sine.easeInOut',
+      })
+    }
   }
 
   private updateActionIndicator(agent: Agent): void {
@@ -1209,14 +1318,43 @@ export class WorldScene extends Phaser.Scene {
   ): void {
     const shadow = this.add.ellipse(0, 8, 20, 8, 0x000000, 0.3)
 
-    const body = this.add.graphics()
-    const size = 10 + monster.level * 1.5
-    body.fillStyle(color, 1)
-    body.fillRoundedRect(-size / 2, -size, size, size, 3)
-    body.fillStyle(0xFF0000, 0.9)
-    body.fillCircle(-size * 0.2, -size * 0.7, 2)
-    body.fillCircle(size * 0.2, -size * 0.7, 2)
+    // Try spritesheet for known monster types
+    const sheetKey = `char_monster_${monster.type}`
+    let body: Phaser.GameObjects.GameObject
 
+    if (this.textures.exists(sheetKey)) {
+      const sprite = this.add.sprite(0, 0, sheetKey, 1) // stand frame facing down
+        .setOrigin(0.5, 0.8)
+        .setScale(AGENT_SCALE)
+      body = sprite
+
+      // Play idle animation
+      const idleAnim = `${sheetKey}_idle_down`
+      if (this.anims.exists(idleAnim)) {
+        sprite.play(idleAnim)
+      }
+    } else {
+      // Fallback: procedural graphics
+      const gfx = this.add.graphics()
+      const size = 10 + monster.level * 1.5
+      gfx.fillStyle(color, 1)
+      gfx.fillRoundedRect(-size / 2, -size, size, size, 3)
+      gfx.fillStyle(0xFF0000, 0.9)
+      gfx.fillCircle(-size * 0.2, -size * 0.7, 2)
+      gfx.fillCircle(size * 0.2, -size * 0.7, 2)
+      body = gfx
+
+      this.tweens.add({
+        targets: gfx,
+        y: gfx.y - 2,
+        duration: 800 + Math.random() * 400,
+        yoyo: true,
+        repeat: -1,
+        ease: 'Sine.easeInOut',
+      })
+    }
+
+    const size = 10 + monster.level * 1.5
     const nameText = this.add.text(0, -size - 14, monster.name, {
       fontSize: '8px',
       fontFamily: 'Arial, sans-serif',
@@ -1241,15 +1379,6 @@ export class WorldScene extends Phaser.Scene {
       [shadow, body, nameText, hpBarBg, hpBarFill],
     )
     container.setDepth(490 + monster.position.y)
-
-    this.tweens.add({
-      targets: body,
-      y: body.y - 2,
-      duration: 800 + Math.random() * 400,
-      yoyo: true,
-      repeat: -1,
-      ease: 'Sine.easeInOut',
-    })
 
     this.monsterSprites.set(monster.id, container)
   }
