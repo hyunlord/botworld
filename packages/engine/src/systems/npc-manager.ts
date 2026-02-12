@@ -8,6 +8,7 @@ import { EventBus } from '../core/event-bus.js'
 import { TileMap } from '../world/tile-map.js'
 import { findPath } from '../world/pathfinding.js'
 import { NPCScheduler } from '../npc/npc-scheduler.js'
+import type { PlanExecutor } from '../agent/plan-executor.js'
 
 // ── NPC dialogue pools (fallback when LLM is unavailable) ──
 
@@ -362,6 +363,31 @@ export class NpcManager {
     return this.npcs.has(id)
   }
 
+  /** Move an NPC to a target position (used by PlanExecutor) */
+  moveNpc(npcId: string, target: Position): boolean {
+    const runtime = this.npcs.get(npcId)
+    if (!runtime) return false
+    const path = findPath(this.tileMap, runtime.agent.position, target)
+    if (path.length === 0) return false
+    runtime.path = path
+    runtime.pathIndex = 0
+    runtime.agent.currentAction = {
+      type: 'move',
+      targetPosition: target,
+      startedAt: this.clockGetter().tick,
+      duration: path.length * 3,
+    }
+    return true
+  }
+
+  /** Set a generic action on an NPC (used by PlanExecutor for non-move actions) */
+  setNpcAction(npcId: string, action: Agent['currentAction']): boolean {
+    const runtime = this.npcs.get(npcId)
+    if (!runtime) return false
+    runtime.agent.currentAction = action
+    return true
+  }
+
   /** Get a dialogue line for an NPC (when a bot agent speaks to them) */
   getDialogue(npcId: string, _speakerAgentId?: string): string | null {
     const runtime = this.npcs.get(npcId)
@@ -405,6 +431,19 @@ export class NpcManager {
             to: runtime.agent.position,
             timestamp: clock.tick,
           })
+        }
+      }
+
+      // Clear completed actions (so PlanExecutor detects step completion)
+      if (runtime.agent.currentAction) {
+        const action = runtime.agent.currentAction
+        // Move actions: clear when path exhausts
+        if (action.type === 'move' && (runtime.path.length === 0 || runtime.pathIndex >= runtime.path.length)) {
+          runtime.agent.currentAction = null
+        }
+        // Timed actions: clear when duration expires
+        if (action.type !== 'move' && action.startedAt + action.duration <= clock.tick) {
+          runtime.agent.currentAction = null
         }
       }
 
@@ -470,5 +509,10 @@ export class NpcManager {
   /** Feed a chat message to the scheduler (for NPC conversation awareness) */
   feedChatToScheduler(speakerId: string, speakerName: string, message: string, position: Position, targetId?: string): void {
     this.scheduler?.feedChat(speakerId, speakerName, message, position, targetId)
+  }
+
+  /** Wire plan executor to the NPC scheduler */
+  setPlanExecutor(executor: PlanExecutor): void {
+    this.scheduler?.setPlanExecutor(executor)
   }
 }

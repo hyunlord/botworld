@@ -1,3 +1,4 @@
+export * from './action-plan.js'
 export * from './agent.js'
 export * from './character.js'
 export * from './emotion.js'

@@ -9,14 +9,15 @@
  *   - Routine says no LLM: skip entirely (rule-based behavior)
  */
 
-import type { Agent, NpcRole, Position, WorldClock } from '@botworld/shared'
+import type { Agent, NpcRole, Position, WorldClock, ActionPlan } from '@botworld/shared'
 import type { NPCContext, NPCDecision } from './npc-brain.js'
-import { callNPCBrain } from './npc-brain.js'
+import { callNPCBrain, callNPCBrainForPlan } from './npc-brain.js'
 import { buildSystemPrompt } from './npc-prompts.js'
 import { getRoutineEntry } from './npc-routines.js'
 import type { EventBus } from '../core/event-bus.js'
 import { findPath } from '../world/pathfinding.js'
 import type { TileMap } from '../world/tile-map.js'
+import type { PlanExecutor } from '../agent/plan-executor.js'
 
 // ── Configuration ──
 
@@ -48,6 +49,82 @@ interface NPCRef {
 }
 
 // ── Scheduler ──
+
+// ── Helper function to convert single decisions to plans ──
+
+function singleDecisionToPlan(decision: NPCDecision, role: NpcRole): ActionPlan {
+  const steps: ActionPlan['steps'] = []
+
+  switch (decision.action) {
+    case 'speak': {
+      if (decision.params.message) {
+        steps.push({
+          action: 'speak',
+          params: { message: decision.params.message },
+          target: decision.params.target,
+          wait_after: 3 + Math.floor(Math.random() * 5),
+        })
+      }
+      // Add a follow-up idle with ambient feel
+      steps.push({
+        action: 'idle',
+        params: {},
+        wait_after: 5 + Math.floor(Math.random() * 10),
+      })
+      break
+    }
+    case 'move': {
+      if (decision.params.destination) {
+        steps.push({
+          action: 'move',
+          params: { destination: decision.params.destination },
+        })
+        // After arriving, do something contextual
+        steps.push({
+          action: 'idle',
+          params: {},
+          wait_after: 3 + Math.floor(Math.random() * 5),
+        })
+      }
+      break
+    }
+    case 'emote': {
+      if (decision.params.emotion) {
+        steps.push({
+          action: 'emote',
+          params: { emote: `*${decision.params.emotion}*` },
+          wait_after: 5,
+        })
+      }
+      break
+    }
+    case 'rest': {
+      steps.push({
+        action: 'rest',
+        params: { duration: 10 },
+      })
+      break
+    }
+    case 'idle':
+    default: {
+      steps.push({
+        action: 'idle',
+        params: {},
+        wait_after: 10 + Math.floor(Math.random() * 20),
+      })
+      break
+    }
+  }
+
+  return {
+    plan_name: decision.thinking || decision.action,
+    steps,
+    interrupt_conditions: {
+      on_spoken_to: 'pause_and_respond',
+    },
+    max_duration: 60,
+  }
+}
 
 // ── Ambient dialogue pools (when NPC is alone) ──
 
@@ -100,6 +177,7 @@ export class NPCScheduler {
   private getAllAgentsIncludingNpcs: () => Agent[]
   private getWeather: () => string
   private getRecentEventDescriptions: () => string[]
+  private planExecutor: PlanExecutor | null = null
 
   constructor(
     private eventBus: EventBus,
@@ -113,6 +191,11 @@ export class NPCScheduler {
     this.getAllAgentsIncludingNpcs = getAllAgents
     this.getWeather = getWeather
     this.getRecentEventDescriptions = getRecentEvents
+  }
+
+  /** Set the plan executor reference (called by NpcManager after WorldEngine creates it) */
+  setPlanExecutor(executor: PlanExecutor): void {
+    this.planExecutor = executor
   }
 
   /** Register an NPC for scheduled LLM decisions */
@@ -142,6 +225,9 @@ export class NPCScheduler {
       const ref = this.npcRefs().get(npcId)
       if (!ref) continue
 
+      // Skip if NPC already has an active plan running
+      if (this.planExecutor?.hasPlan(npcId)) continue
+
       // Check routine — some time slots skip LLM
       const routine = getRoutineEntry(runtime.role, clock.timeOfDay)
 
@@ -167,17 +253,33 @@ export class NPCScheduler {
       const hasPlayerNearby = nearby.some(a => !a.isNpc)
 
       // Fire-and-forget: don't block the tick loop
-      callNPCBrain(runtime.systemPrompt, context, hasPlayerNearby)
-        .then(decision => {
-          if (decision) {
-            this.executeDecision(ref, runtime, decision, clock)
-          } else {
+      if (this.planExecutor) {
+        // Use plan-aware brain call → set plan directly
+        callNPCBrainForPlan(runtime.systemPrompt, context, hasPlayerNearby)
+          .then(plan => {
+            if (plan && !this.planExecutor!.hasPlan(npcId)) {
+              this.planExecutor!.setPlan(npcId, plan)
+            } else if (!plan) {
+              this.executeFallback(ref, runtime, routine.fallback, clock)
+            }
+          })
+          .catch(() => {
             this.executeFallback(ref, runtime, routine.fallback, clock)
-          }
-        })
-        .catch(() => {
-          this.executeFallback(ref, runtime, routine.fallback, clock)
-        })
+          })
+      } else {
+        // Legacy: single-action brain call
+        callNPCBrain(runtime.systemPrompt, context, hasPlayerNearby)
+          .then(decision => {
+            if (decision) {
+              this.executeDecision(ref, runtime, decision, clock)
+            } else {
+              this.executeFallback(ref, runtime, routine.fallback, clock)
+            }
+          })
+          .catch(() => {
+            this.executeFallback(ref, runtime, routine.fallback, clock)
+          })
+      }
     }
   }
 

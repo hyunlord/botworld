@@ -3,6 +3,7 @@ import { TICK_RATE, LOAD_DISTANCE_CHUNKS } from '@botworld/shared'
 import { EventBus } from './event-bus.js'
 import { createWorldClock, advanceClock } from './world-clock.js'
 import { AgentManager } from '../agent/agent-manager.js'
+import { PlanExecutor } from '../agent/plan-executor.js'
 import { TileMap } from '../world/tile-map.js'
 import { WeatherSystem } from '../systems/weather.js'
 import { NpcManager } from '../systems/npc-manager.js'
@@ -13,6 +14,7 @@ import { CombatSystem } from '../systems/combat.js'
 export class WorldEngine {
   readonly eventBus = new EventBus()
   readonly agentManager: AgentManager
+  readonly planExecutor: PlanExecutor
   readonly tileMap: TileMap
   readonly weather: WeatherSystem
   readonly npcManager: NpcManager
@@ -32,6 +34,29 @@ export class WorldEngine {
     this.weather = new WeatherSystem()
     this.npcManager = new NpcManager(this.eventBus, this.tileMap, () => this.clock)
     this.agentManager = new AgentManager(this.eventBus, this.tileMap, () => this.clock)
+    this.planExecutor = new PlanExecutor(
+      this.eventBus,
+      this.tileMap,
+      (id) => this.agentManager.getAgent(id) ?? this.npcManager.getNpc(id),
+      () => [...this.agentManager.getAllAgents(), ...this.npcManager.getAllNpcs()],
+      (agentId, action) => {
+        // Try AgentManager first (player bots)
+        const result = this.agentManager.enqueueAction(agentId, action)
+        if (result.success) return result
+        // Fall back to NpcManager for NPC agents
+        if (this.npcManager.isNpc(agentId)) {
+          if (action.type === 'move' && action.targetPosition) {
+            return this.npcManager.moveNpc(agentId, action.targetPosition)
+              ? { success: true } : { success: false, error: 'NPC path not found' }
+          }
+          // For non-move actions, set the action directly on the NPC
+          return this.npcManager.setNpcAction(agentId, action)
+            ? { success: true } : { success: false, error: 'NPC not found' }
+        }
+        return result
+      },
+      () => this.clock,
+    )
     this.questManager = new QuestManager(this.eventBus, this.tileMap, this.npcManager, () => this.clock)
     this.worldEvents = new WorldEventSystem(this.eventBus, this.tileMap, () => this.clock)
     this.combat = new CombatSystem(this.eventBus, this.tileMap, () => this.clock)
@@ -67,6 +92,26 @@ export class WorldEngine {
         return [...recent, ...active]
       },
     )
+
+    // Wire plan executor to NPC scheduler
+    this.npcManager.setPlanExecutor(this.planExecutor)
+
+    // Handle pause_and_respond for plan executor
+    this.eventBus.on('agent:spoke', (event) => {
+      if (event.type !== 'agent:spoke') return
+      if (!event.targetAgentId) return
+      const state = this.planExecutor.getPlanState(event.targetAgentId)
+      if (state && !state.paused) {
+        const plan = state.plan
+        if (plan.interrupt_conditions?.on_spoken_to === 'pause_and_respond') {
+          this.planExecutor.pausePlan(event.targetAgentId)
+          // Resume after 10 ticks (enough time for response)
+          setTimeout(() => {
+            this.planExecutor.resumePlan(event.targetAgentId!)
+          }, 10_000)
+        }
+      }
+    })
 
     // React to world events — spawn monsters for danger/portal events
     this.eventBus.on('world_event:started', (event) => {
@@ -158,6 +203,9 @@ export class WorldEngine {
 
     // 4. Process queued actions (complete finished → start queued)
     this.agentManager.processQueuedActions(this.clock)
+
+    // 4.5. Execute active plans (move to next step when current step completes)
+    this.planExecutor.tick(this.clock)
 
     // 5. Update passive effects (hunger, emotions, movement, rest)
     this.agentManager.updatePassiveEffects(this.clock)

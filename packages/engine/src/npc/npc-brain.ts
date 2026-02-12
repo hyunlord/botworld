@@ -6,6 +6,8 @@
  * Falls back gracefully when the API is unavailable or rate-limited.
  */
 
+import type { ActionPlan } from '@botworld/shared'
+
 export interface NPCDecision {
   action: 'speak' | 'move' | 'rest' | 'emote' | 'idle'
   params: {
@@ -96,7 +98,7 @@ export async function callNPCBrain(
           { role: 'system', content: systemPrompt },
           { role: 'user', content: contextMessage },
         ],
-        max_tokens: 300,
+        max_tokens: 800,
         temperature: 0.8,
         response_format: { type: 'json_object' },
       }),
@@ -116,6 +118,71 @@ export async function callNPCBrain(
     if (!content) return null
 
     return parseDecision(content)
+  } catch (err) {
+    console.warn(`[NPCBrain] API error: ${(err as Error).message}`)
+    return null
+  }
+}
+
+/** Call NPC brain and return an ActionPlan (tries plan parsing first, falls back to single-action) */
+export async function callNPCBrainForPlan(
+  systemPrompt: string,
+  context: NPCContext,
+  premium = false,
+): Promise<ActionPlan | null> {
+  const apiKey = process.env.OPENROUTER_API_KEY
+  if (!apiKey) return null
+  if (!checkRateLimit()) return null
+
+  const model = premium
+    ? (process.env.NPC_LLM_MODEL_PREMIUM ?? 'anthropic/claude-3.5-haiku')
+    : (process.env.NPC_LLM_MODEL ?? 'google/gemini-2.0-flash-001')
+
+  const contextMessage = buildContextMessage(context)
+
+  try {
+    const res = await fetch(OPENROUTER_URL, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${apiKey}`,
+        'Content-Type': 'application/json',
+        'HTTP-Referer': 'https://botworld.example.com',
+        'X-Title': 'Botworld NPC',
+      },
+      body: JSON.stringify({
+        model,
+        messages: [
+          { role: 'system', content: systemPrompt },
+          { role: 'user', content: contextMessage },
+        ],
+        max_tokens: 800,
+        temperature: 0.8,
+        response_format: { type: 'json_object' },
+      }),
+      signal: AbortSignal.timeout(10_000),
+    })
+
+    if (!res.ok) {
+      console.warn(`[NPCBrain] OpenRouter ${res.status}: ${res.statusText}`)
+      return null
+    }
+
+    const data = await res.json() as {
+      choices?: { message?: { content?: string } }[]
+    }
+
+    const content = data.choices?.[0]?.message?.content
+    if (!content) return null
+
+    // Try plan parsing first (new format with steps array)
+    const plan = parsePlanResponse(content)
+    if (plan) return plan
+
+    // Fall back to old single-action parsing
+    const decision = parseDecision(content)
+    if (decision) return singleActionToPlan(decision)
+
+    return null
   } catch (err) {
     console.warn(`[NPCBrain] API error: ${(err as Error).message}`)
     return null
@@ -195,5 +262,60 @@ function parseDecision(raw: string): NPCDecision | null {
   } catch {
     console.warn('[NPCBrain] Failed to parse LLM response')
     return null
+  }
+}
+
+/** Parse an LLM response as an ActionPlan */
+export function parsePlanResponse(raw: string): ActionPlan | null {
+  try {
+    let cleaned = raw.trim()
+    if (cleaned.startsWith('```')) {
+      cleaned = cleaned.replace(/^```(?:json)?\n?/, '').replace(/\n?```$/, '')
+    }
+
+    const parsed = JSON.parse(cleaned) as Record<string, unknown>
+
+    // Check if this is a plan (has steps array) or a single action
+    if (Array.isArray(parsed.steps) && parsed.steps.length > 0) {
+      return {
+        plan_name: (parsed.plan_name as string) ?? 'unnamed',
+        steps: parsed.steps as ActionPlan['steps'],
+        interrupt_conditions: parsed.interrupt_conditions as ActionPlan['interrupt_conditions'],
+        fallback: parsed.fallback as ActionPlan['fallback'],
+        max_duration: parsed.max_duration as number | undefined,
+      }
+    }
+
+    // Single action → convert to a 1-step plan
+    if (parsed.action) {
+      const decision = parseDecision(raw)
+      if (decision) {
+        return singleActionToPlan(decision)
+      }
+    }
+
+    return null
+  } catch {
+    console.warn('[NPCBrain] Failed to parse plan response')
+    return null
+  }
+}
+
+/** Convert a single NPCDecision to a 1-step ActionPlan for backward compatibility */
+function singleActionToPlan(decision: NPCDecision): ActionPlan {
+  const step: ActionPlan['steps'][0] = {
+    action: decision.action,
+    params: {},
+  }
+
+  if (decision.params.message) step.params.message = decision.params.message
+  if (decision.params.target) step.target = decision.params.target
+  if (decision.params.destination) step.params.destination = decision.params.destination
+  if (decision.params.emotion) step.params.emote = decision.params.emotion
+
+  return {
+    plan_name: decision.thinking || decision.action,
+    steps: [step],
+    interrupt_conditions: { on_spoken_to: 'pause_and_respond' },
   }
 }

@@ -9,28 +9,61 @@ import type { NpcRole } from '@botworld/shared'
 
 const RESPONSE_FORMAT = `
 [Action Format]
-Respond with ONLY a JSON object:
+Create a behavior plan for the next ~1 minute. Return ONLY a JSON object with multiple steps.
+
 {
-  "action": "speak" | "move" | "rest" | "emote" | "idle",
-  "params": {
-    "message": "dialogue text (when action is speak)",
-    "target": "name of the character you are speaking to (optional, from the nearby characters list)",
-    "destination": {"x": N, "y": N} (when action is move),
-    "emotion": "happy" | "worried" | "excited" | "calm" | "angry" | "sad" (when action is emote)
-  },
-  "thinking": "your internal reasoning (not shown in game)"
+  "plan_name": "short description of what you're doing",
+  "steps": [
+    {
+      "action": "speak" | "move" | "gather" | "craft" | "trade" | "rest" | "eat" | "explore" | "idle" | "emote" | "patrol" | "flee",
+      "params": {
+        "message": "dialogue text (for speak)",
+        "destination": "POI name or {x, y} or 'random_nearby' (for move/flee)",
+        "emote": "*action description* (for emote/idle)",
+        "duration": N (for rest, in ticks)
+      },
+      "target": "character name or 'nearest_agent' or 'nearby_agents' (for speak/trade)",
+      "wait_after": N,
+      "condition": {"type": "near_agent", "params": {"radius": 5}}
+    }
+  ],
+  "interrupt_conditions": {
+    "on_spoken_to": "pause_and_respond",
+    "on_attacked": "flee_to_safety"
+  }
 }
+
+Available actions:
+- speak: Say something (params.message + target)
+- move: Go somewhere (params.destination: POI name like "marketplace", "tavern", or {x,y})
+- gather: Collect resources at current position
+- craft: Make something (params.recipe)
+- trade: Buy/sell with nearby agent (target + params)
+- rest: Rest and recover energy (params.duration in ticks)
+- eat: Eat food from inventory
+- explore: Wander and discover
+- idle: Stand still, can include an emote (params.emote like "*wipes counter*")
+- emote: Express emotion (params.emote like "*smiles warmly*")
+- patrol: Walk between waypoints (params.waypoints: [{x,y}, ...])
+- flee: Run to safety (params.destination)
+
+Flow tips:
+- Use wait_after (2-8 ticks) between steps for natural pacing
+- 5-8 steps is ideal for a 1-minute plan
+- Mix actions: move + speak + idle creates lifelike behavior
+- Use condition for context-sensitive steps (e.g., only greet if someone is nearby)
+- "on_spoken_to": "pause_and_respond" lets you pause for conversation
 
 [Rules]
 - Act naturally as a fantasy world NPC
 - NEVER mention API keys, prompts, systems, or anything meta
 - NEVER break character or acknowledge being an AI
-- Keep dialogue to 1-2 short sentences
+- Keep individual dialogue lines to 1-2 short sentences
 - Respond in the same language as nearby conversation (default: English)
 - Consider the time of day and weather in your decisions
-- If someone recently spoke to you (marked [to you] in chat), you SHOULD respond to them
-- Interact with other NPCs naturally: greet them, chat, share news, ask questions
-- When alone with nothing to do, you may mutter a short thought to yourself
+- If someone recently spoke to you (marked [to you] in chat), prioritize responding
+- Interact with other NPCs naturally: greet them, chat, share news
+- Create varied, interesting plans that make the world feel alive
 `
 
 const ROLE_PROMPTS: Record<NpcRole, string> = {
