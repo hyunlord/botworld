@@ -18,33 +18,33 @@ interface ColorGradeConfig {
 
 const TIME_COLOR_GRADES: Record<TimeOfDay, ColorGradeConfig> = {
   dawn: {
-    vignetteStrength: 0.4,
-    bloomStrength: 0.8,
+    vignetteStrength: 0.2,
+    bloomStrength: 0.5,
     bloomColor: 0xFFD4A0,
   },
   morning: {
-    vignetteStrength: 0.3,
-    bloomStrength: 0.5,
+    vignetteStrength: 0.15,
+    bloomStrength: 0.3,
     bloomColor: 0xFFF8E8,
   },
   noon: {
-    vignetteStrength: 0.2,
-    bloomStrength: 0.3,
+    vignetteStrength: 0.1,
+    bloomStrength: 0.2,
     bloomColor: 0xFFFFFF,
   },
   afternoon: {
-    vignetteStrength: 0.3,
-    bloomStrength: 0.6,
+    vignetteStrength: 0.15,
+    bloomStrength: 0.4,
     bloomColor: 0xFFF0D0,
   },
   evening: {
-    vignetteStrength: 0.5,
-    bloomStrength: 1.0,
+    vignetteStrength: 0.3,
+    bloomStrength: 0.7,
     bloomColor: 0xFFB060,
   },
   night: {
-    vignetteStrength: 0.6,
-    bloomStrength: 0.4,
+    vignetteStrength: 0.4,
+    bloomStrength: 0.3,
     bloomColor: 0x405080,
   },
 }

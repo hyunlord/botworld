@@ -42,13 +42,16 @@ interface AmbientConfig {
   lightsActive: boolean
 }
 
+// NOTE: DayNightCycle already provides base ambient darkness via its own MULTIPLY overlay.
+// This system ONLY adds the light-punching-through-darkness effect at evening/night.
+// Daytime alphas must be 0 to avoid double-darkening.
 const AMBIENT_CONFIGS: Record<TimeOfDay, AmbientConfig> = {
-  dawn:      { color: 0x403028, alpha: 0.25, lightsActive: false },
-  morning:   { color: 0x000000, alpha: 0.05, lightsActive: false },
+  dawn:      { color: 0x000000, alpha: 0.0, lightsActive: false },
+  morning:   { color: 0x000000, alpha: 0.0, lightsActive: false },
   noon:      { color: 0x000000, alpha: 0.0, lightsActive: false },
-  afternoon: { color: 0x000000, alpha: 0.05, lightsActive: false },
-  evening:   { color: 0x201810, alpha: 0.35, lightsActive: true },
-  night:     { color: 0x0a0a20, alpha: 0.55, lightsActive: true },
+  afternoon: { color: 0x000000, alpha: 0.0, lightsActive: false },
+  evening:   { color: 0x181018, alpha: 0.15, lightsActive: true },
+  night:     { color: 0x080818, alpha: 0.30, lightsActive: true },
 }
 
 // ── Light type defaults ──

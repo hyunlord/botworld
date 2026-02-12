@@ -33,8 +33,8 @@ export interface ShadowConfig {
 const TIME_CONFIGS: Record<TimeOfDay, TimeConfig> = {
   dawn: {
     tint: 0xFFD4A0,
-    alpha: 0.12,
-    bgColor: '#2a1a2e',
+    alpha: 0.06,
+    bgColor: '#2a3040',
     lightsOn: false,
     starAlpha: 0,
     torchRadius: 0,
@@ -44,8 +44,8 @@ const TIME_CONFIGS: Record<TimeOfDay, TimeConfig> = {
   },
   morning: {
     tint: 0xFFF8E8,
-    alpha: 0.05,
-    bgColor: '#1a2a3e',
+    alpha: 0.03,
+    bgColor: '#2a3848',
     lightsOn: false,
     starAlpha: 0,
     torchRadius: 0,
@@ -56,7 +56,7 @@ const TIME_CONFIGS: Record<TimeOfDay, TimeConfig> = {
   noon: {
     tint: 0xFFFFFF,
     alpha: 0.0,
-    bgColor: '#1a2a4e',
+    bgColor: '#2a3a50',
     lightsOn: false,
     starAlpha: 0,
     torchRadius: 0,
@@ -66,8 +66,8 @@ const TIME_CONFIGS: Record<TimeOfDay, TimeConfig> = {
   },
   afternoon: {
     tint: 0xFFF0D0,
-    alpha: 0.08,
-    bgColor: '#1a2a3e',
+    alpha: 0.04,
+    bgColor: '#2a3848',
     lightsOn: false,
     starAlpha: 0,
     torchRadius: 0,
@@ -77,8 +77,8 @@ const TIME_CONFIGS: Record<TimeOfDay, TimeConfig> = {
   },
   evening: {
     tint: 0xFFB060,
-    alpha: 0.15,
-    bgColor: '#1a1a3e',
+    alpha: 0.10,
+    bgColor: '#1a1a30',
     lightsOn: true,
     starAlpha: 0,
     torchRadius: 40,
@@ -88,7 +88,7 @@ const TIME_CONFIGS: Record<TimeOfDay, TimeConfig> = {
   },
   night: {
     tint: 0x405080,
-    alpha: 0.30,
+    alpha: 0.20,
     bgColor: '#0d0d17',
     lightsOn: true,
     starAlpha: 1,
