@@ -174,6 +174,8 @@ export class WorldScene extends Phaser.Scene {
   // Hover interaction state
   private hoveredAgentId: string | null = null
   private hoverTooltip: Phaser.GameObjects.Container | null = null
+  // Zoom tier for LOD visibility (0=far, 1=normal, 2=close)
+  private currentZoomTier = 1
 
   // Character appearance (layered sprite) data
   private characterAppearances: CharacterAppearanceMap = {}
@@ -268,6 +270,9 @@ export class WorldScene extends Phaser.Scene {
         this.hoverTooltip.setPosition(hoverContainer.x, hoverContainer.y + 22)
       }
     }
+
+    // Zoom-based LOD visibility
+    this.updateZoomVisibility()
 
     this.updateVisibleChunks()
   }
@@ -412,23 +417,46 @@ export class WorldScene extends Phaser.Scene {
     if (!agentContainer) return
 
     const isPlan = message.startsWith('[Plan]')
-    const bgColor = isPlan ? '#2d5016' : '#333333'
     const displayMsg = isPlan ? message.slice(7).trim() : message
+    const truncated = displayMsg.length > 30 ? displayMsg.slice(0, 30) + '...' : displayMsg
 
-    const text = this.add.text(0, -44, displayMsg.slice(0, 80), {
-      fontSize: '10px',
+    const text = this.add.text(0, 0, truncated, {
+      fontSize: '9px',
       fontFamily: 'Arial, sans-serif',
-      color: '#ffffff',
-      backgroundColor: bgColor + 'dd',
-      padding: { x: 6, y: 3 },
-      wordWrap: { width: 180 },
-    }).setOrigin(0.5, 1)
+      color: isPlan ? '#ccffcc' : '#222222',
+      wordWrap: { width: 120 },
+    }).setOrigin(0.5, 0.5)
 
+    const bounds = text.getBounds()
+    const padX = 8
+    const padY = 5
+    const bg = this.add.graphics()
+    if (isPlan) {
+      bg.fillStyle(0x2d5016, 0.9)
+    } else {
+      bg.fillStyle(0xffffff, 0.95)
+    }
+    bg.fillRoundedRect(
+      -bounds.width / 2 - padX, -bounds.height / 2 - padY,
+      bounds.width + padX * 2, bounds.height + padY * 2,
+      6,
+    )
+    bg.lineStyle(1, isPlan ? 0x4a8a2a : 0xcccccc, 0.6)
+    bg.strokeRoundedRect(
+      -bounds.width / 2 - padX, -bounds.height / 2 - padY,
+      bounds.width + padX * 2, bounds.height + padY * 2,
+      6,
+    )
+
+    // Tail pointer
     const pointer = this.add.graphics()
-    pointer.fillStyle(isPlan ? 0x2d5016 : 0x333333, 0.87)
-    pointer.fillTriangle(-4, -1, 4, -1, 0, 4)
+    pointer.fillStyle(isPlan ? 0x2d5016 : 0xffffff, 0.95)
+    const tailY = bounds.height / 2 + padY
+    pointer.fillTriangle(-4, tailY - 1, 4, tailY - 1, 0, tailY + 5)
 
-    const container = this.add.container(agentContainer.x, agentContainer.y - 10, [text, pointer])
+    const bubbleContainer = this.add.container(0, -bounds.height / 2 - padY - 8, [bg, pointer, text])
+
+    const container = this.add.container(agentContainer.x, agentContainer.y - 24, [bubbleContainer])
     container.setDepth(2000)
     container.setAlpha(0)
 
@@ -440,10 +468,10 @@ export class WorldScene extends Phaser.Scene {
 
     this.speechBubbles.set(agentId, {
       container,
-      timer: this.time.now + 6000,
+      timer: this.time.now + 3000,
     })
 
-    this.time.delayedCall(6000, () => {
+    this.time.delayedCall(3000, () => {
       const bubble = this.speechBubbles.get(agentId)
       if (bubble) {
         this.tweens.add({
@@ -1019,15 +1047,36 @@ export class WorldScene extends Phaser.Scene {
 
     const isNpc = agent.isNpc === true
     const displayName = isNpc ? `[NPC] ${agent.name}` : agent.name
-    const nameColor = isNpc ? '#f0c040' : '#ffffff'
+    const nameColor = isNpc ? '#FFD700' : '#ffffff'
 
     const nameText = this.add.text(0, -22, displayName, {
       fontSize: '10px',
       fontFamily: 'Arial, sans-serif',
+      fontStyle: 'bold',
       color: nameColor,
       stroke: '#000000',
-      strokeThickness: 3,
+      strokeThickness: 2,
+      backgroundColor: '#00000099',
+      padding: { x: 4, y: 2 },
     }).setOrigin(0.5, 1)
+
+    // Level badge (small circle to the right of name)
+    const badgeX = nameText.width / 2 + 8
+    const badgeY = -26
+    const lvlBadge = this.add.graphics()
+    lvlBadge.fillStyle(isNpc ? 0xFFD700 : 0x4488FF, 0.85)
+    lvlBadge.fillCircle(badgeX, badgeY, 7)
+    lvlBadge.lineStyle(1, 0x000000, 0.5)
+    lvlBadge.strokeCircle(badgeX, badgeY, 7)
+
+    const lvlText = this.add.text(badgeX, badgeY, `${agent.level}`, {
+      fontSize: '7px',
+      fontFamily: 'Arial, sans-serif',
+      fontStyle: 'bold',
+      color: '#ffffff',
+      stroke: '#000000',
+      strokeThickness: 1,
+    }).setOrigin(0.5, 0.5)
 
     const actionText = this.add.text(0, 10, '', {
       fontSize: '8px',
@@ -1056,7 +1105,7 @@ export class WorldScene extends Phaser.Scene {
     const container = this.add.container(
       screenPos.x,
       screenPos.y,
-      [shadow, spriteOrGroup, nameText, actionText, emotionIcon, actionIcon],
+      [shadow, spriteOrGroup, nameText, actionText, emotionIcon, actionIcon, lvlBadge, lvlText],
     )
     container.setDepth(500 + agent.position.y)
     container.setSize(30, 40)
@@ -1294,13 +1343,12 @@ export class WorldScene extends Phaser.Scene {
       } catch { /* Canvas renderer fallback - no preFX */ }
     }
 
-    // Expand name label with background
+    // Expand name label (make more prominent on hover)
     const nameText = container.list[2] as Phaser.GameObjects.Text
     if (nameText?.setFontSize) {
       container.setData('_origFontSize', nameText.style.fontSize)
       nameText.setFontSize('12px')
-      nameText.setBackgroundColor('#000000bb')
-      nameText.setPadding(4, 2, 4, 2)
+      nameText.setBackgroundColor('#000000cc')
     }
 
     // Show action tooltip below agent
@@ -1332,8 +1380,7 @@ export class WorldScene extends Phaser.Scene {
     const nameText = container.list[2] as Phaser.GameObjects.Text
     if (nameText?.setFontSize) {
       nameText.setFontSize(container.getData('_origFontSize') || '10px')
-      nameText.setBackgroundColor('')
-      nameText.setPadding(0, 0, 0, 0)
+      nameText.setBackgroundColor('#00000099')
     }
 
     this.hideHoverTooltip()
@@ -1427,6 +1474,63 @@ export class WorldScene extends Phaser.Scene {
         duration: 400,
         ease: 'Cubic.easeOut',
       })
+    }
+  }
+
+  // ── Zoom-based LOD ──
+
+  private updateZoomVisibility(): void {
+    const zoom = this.cameras.main.zoom
+    const newTier = zoom < 0.8 ? 0 : zoom < 1.5 ? 1 : 2
+
+    if (newTier === this.currentZoomTier) return
+    this.currentZoomTier = newTier
+
+    const showLabels = newTier >= 1
+    const showIcons = newTier >= 1
+
+    for (const [agentId, container] of this.agentSprites) {
+      if (!container.list || container.list.length < 6) continue
+
+      // Index 2: nameText, 3: actionText, 4: emotionIcon, 5: actionIcon, 6: lvlBadge, 7: lvlText
+      const nameText = container.list[2] as Phaser.GameObjects.Text
+      const actionText = container.list[3] as Phaser.GameObjects.Text
+      const emotionIcon = container.list[4] as Phaser.GameObjects.Image
+      const actionIcon = container.list[5] as Phaser.GameObjects.Image
+      const lvlBadge = container.list[6] as Phaser.GameObjects.Graphics | undefined
+      const lvlTextObj = container.list[7] as Phaser.GameObjects.Text | undefined
+
+      nameText.setVisible(showLabels)
+      actionText.setVisible(showLabels)
+      emotionIcon.setVisible(showIcons)
+      actionIcon.setVisible(showIcons)
+      lvlBadge?.setVisible(showLabels)
+      lvlTextObj?.setVisible(showLabels)
+
+      // At far zoom, reduce agent sprite to a small dot
+      const visual = container.list[1] as Phaser.GameObjects.Sprite | Phaser.GameObjects.Image | Phaser.GameObjects.Container
+      if (newTier === 0) {
+        visual.setVisible(false)
+        // Show a colored dot instead
+        let dot = container.getData('_zoomDot') as Phaser.GameObjects.Arc | null
+        if (!dot) {
+          const agent = this.agents.find(a => a.id === agentId)
+          const dotColor = agent?.isNpc ? 0xFFD700 : 0xffffff
+          dot = this.add.circle(0, 0, 3, dotColor, 0.9)
+          container.add(dot)
+          container.setData('_zoomDot', dot)
+        }
+        dot.setVisible(true)
+      } else {
+        visual.setVisible(true)
+        const dot = container.getData('_zoomDot') as Phaser.GameObjects.Arc | null
+        if (dot) dot.setVisible(false)
+      }
+    }
+
+    // Also apply to speech bubbles
+    for (const [, bubble] of this.speechBubbles) {
+      bubble.container.setVisible(newTier >= 1)
     }
   }
 
