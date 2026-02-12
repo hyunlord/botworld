@@ -42,17 +42,21 @@ function eventToEntry(e: WorldEvent, agentNames: Map<string, string>): FeedEntry
     case 'item:crafted':
       return { agentName: name(e.agentId), message: `crafted ${e.item.name}`, kind: 'craft', timestamp: e.timestamp, agentId: e.agentId }
     case 'trade:completed':
-      return { agentName: name(e.buyerId), message: `traded with ${name(e.sellerId)}`, kind: 'trade', timestamp: e.timestamp, agentId: e.buyerId }
+      return { agentName: name(e.sellerId), message: `sold ${e.item.name} to ${name(e.buyerId)} for ${e.price}G`, kind: 'trade', timestamp: e.timestamp, agentId: e.buyerId }
     case 'combat:started':
       return { agentName: name(e.agentId), message: `engaged ${e.monsterName}!`, kind: 'combat', timestamp: e.timestamp, position: e.position, agentId: e.agentId }
-    case 'combat:ended':
-      return {
-        agentName: name(e.agentId),
-        message: e.outcome === 'victory'
-          ? `defeated monster! +${e.xpGained}xp`
-          : e.outcome === 'fled' ? 'fled from combat!' : 'was defeated!',
-        kind: 'combat', timestamp: e.timestamp, agentId: e.agentId,
+    case 'combat:ended': {
+      let msg: string
+      if (e.outcome === 'victory') {
+        const lootStr = e.loot.length > 0 ? `, ${e.loot.map(l => l.name).join(', ')}` : ''
+        msg = `defeated monster! +${e.xpGained}xp${lootStr}`
+      } else if (e.outcome === 'fled') {
+        msg = 'fled from combat!'
+      } else {
+        msg = 'was defeated!'
       }
+      return { agentName: name(e.agentId), message: msg, kind: 'combat', timestamp: e.timestamp, agentId: e.agentId }
+    }
     case 'monster:spawned':
       return { agentName: e.name, message: `Lv${e.level} ${e.monsterType} appeared!`, kind: 'event', timestamp: e.timestamp, position: e.position }
     case 'monster:died':

@@ -6,6 +6,7 @@ import { SpriteCache } from '../character/sprite-cache.js'
 import { WeatherEffects } from '../effects/weather-effects.js'
 import { DayNightCycle } from '../effects/day-night-cycle.js'
 import { soundManager } from '../audio/sound-manager.js'
+import { InteractionEffects } from '../systems/interaction-effects.js'
 import { TILE_SIZE, worldToScreen, screenToWorld } from '../utils/coordinates.js'
 import { getAutoTileIndex } from '../utils/autotile.js'
 
@@ -170,6 +171,7 @@ export class WorldScene extends Phaser.Scene {
   private selectionRing: Phaser.GameObjects.Image | null = null
   private weatherEffects: WeatherEffects | null = null
   private eventMarkers = new Map<string, Phaser.GameObjects.Container>()
+  private interactionEffects: InteractionEffects | null = null
 
   // Hover interaction state
   private hoveredAgentId: string | null = null
@@ -215,6 +217,9 @@ export class WorldScene extends Phaser.Scene {
 
     // Weather visual effects layer
     this.weatherEffects = new WeatherEffects(this)
+
+    // Interaction visual effects (conversation lines, combat zones, emotions, dust, paths)
+    this.interactionEffects = new InteractionEffects(this)
 
     // Initialize audio on first user interaction (Web Audio requirement)
     this.input.once('pointerdown', () => {
@@ -275,6 +280,9 @@ export class WorldScene extends Phaser.Scene {
     this.updateZoomVisibility()
 
     this.updateVisibleChunks()
+
+    // Update interaction effects (conversation lines, combat zones, emotions, dust, paths)
+    this.interactionEffects?.update(this.agents, this.agentSprites, this.selectedAgentId)
   }
 
   // --- Chunk data management ---
@@ -491,6 +499,7 @@ export class WorldScene extends Phaser.Scene {
     switch (event.type) {
       case 'agent:spoke':
         this.showSpeechBubble(event.agentId, event.message)
+        this.interactionEffects?.onSpoke(event.agentId, event.targetAgentId, event.message)
         break
       case 'agent:moved': {
         const container = this.agentSprites.get(event.agentId)
@@ -520,6 +529,8 @@ export class WorldScene extends Phaser.Scene {
           const tile = this.getTileAt(event.to.x, event.to.y)
           if (tile) soundManager.playFootstep(tile.type)
         }
+        // Movement dust particles
+        this.interactionEffects?.onMoved(event.from)
         break
       }
       case 'resource:gathered': {
@@ -554,6 +565,11 @@ export class WorldScene extends Phaser.Scene {
       }
       case 'combat:started': {
         this.showCombatEffect(event.position.x, event.position.y)
+        this.interactionEffects?.onCombatStarted(event.combatId, event.agentId, event.monsterId, event.position)
+        break
+      }
+      case 'combat:ended': {
+        this.interactionEffects?.onCombatEnded(event.combatId)
         break
       }
       case 'combat:round': {
@@ -1615,6 +1631,29 @@ export class WorldScene extends Phaser.Scene {
   }
 
   private showTradeEffect(x: number, y: number): void {
+    // 🤝 handshake icon with pop-in
+    const handshake = this.add.text(x, y - 10, '\u{1F91D}', {
+      fontSize: '18px',
+    }).setOrigin(0.5).setDepth(3001).setScale(0.3).setAlpha(0)
+
+    this.tweens.add({
+      targets: handshake,
+      alpha: 1,
+      scale: 1,
+      duration: 300,
+      ease: 'Back.easeOut',
+    })
+    this.tweens.add({
+      targets: handshake,
+      y: handshake.y - 20,
+      alpha: 0,
+      duration: 1000,
+      delay: 400,
+      ease: 'Quad.easeOut',
+      onComplete: () => handshake.destroy(),
+    })
+
+    // Gold coin sparkles
     for (let i = 0; i < 4; i++) {
       const coin = this.add.circle(
         x + Phaser.Math.Between(-8, 8),
@@ -1633,20 +1672,27 @@ export class WorldScene extends Phaser.Scene {
       })
     }
 
-    const text = this.add.text(x, y - 25, 'Trade!', {
-      fontSize: '10px',
-      fontFamily: 'Arial, sans-serif',
-      color: '#2ecc71',
-      stroke: '#000000',
-      strokeThickness: 3,
-    }).setOrigin(0.5).setDepth(3000)
+    // ✅ success check with delay
+    const check = this.add.text(x, y - 30, '\u2705', {
+      fontSize: '14px',
+    }).setOrigin(0.5).setDepth(3001).setAlpha(0).setScale(0.5)
 
     this.tweens.add({
-      targets: text,
-      y: text.y - 20,
+      targets: check,
+      alpha: 1,
+      scale: 1,
+      duration: 250,
+      delay: 300,
+      ease: 'Back.easeOut',
+    })
+    this.tweens.add({
+      targets: check,
+      y: check.y - 15,
       alpha: 0,
-      duration: 1000,
-      onComplete: () => text.destroy(),
+      duration: 800,
+      delay: 700,
+      ease: 'Quad.easeOut',
+      onComplete: () => check.destroy(),
     })
   }
 
@@ -1687,6 +1733,22 @@ export class WorldScene extends Phaser.Scene {
     const x = container.x
     const y = container.y
 
+    // Golden light pillar rising from agent
+    const pillar = this.add.graphics().setDepth(2999)
+    pillar.fillStyle(0xFFD700, 0.25)
+    pillar.fillRect(x - 8, y - 80, 16, 80)
+    pillar.fillStyle(0xFFFFAA, 0.4)
+    pillar.fillRect(x - 3, y - 80, 6, 80)
+    this.tweens.add({
+      targets: pillar,
+      alpha: 0,
+      duration: 1500,
+      delay: 500,
+      ease: 'Quad.easeIn',
+      onComplete: () => pillar.destroy(),
+    })
+
+    // Expanding glow ring
     const glow = this.add.circle(x, y, 5, 0xF1C40F, 0.8).setDepth(3000)
     this.tweens.add({
       targets: glow,
@@ -1697,39 +1759,73 @@ export class WorldScene extends Phaser.Scene {
       onComplete: () => glow.destroy(),
     })
 
-    for (let i = 0; i < 8; i++) {
-      const angle = (Math.PI * 2 * i) / 8
+    // Radial sparkle burst
+    for (let i = 0; i < 12; i++) {
+      const angle = (Math.PI * 2 * i) / 12
       const sparkle = this.add.rectangle(
         x, y, 2, 6, 0xFFD700, 1,
       ).setDepth(3000).setRotation(angle)
 
       this.tweens.add({
         targets: sparkle,
-        x: x + Math.cos(angle) * 25,
-        y: y + Math.sin(angle) * 25,
+        x: x + Math.cos(angle) * 30,
+        y: y + Math.sin(angle) * 30,
         alpha: 0,
-        duration: 600,
+        duration: 600 + i * 30,
         ease: 'Quad.easeOut',
         onComplete: () => sparkle.destroy(),
       })
     }
 
-    const text = this.add.text(x, y - 30, `Level ${newLevel}!`, {
-      fontSize: '14px',
+    // "LEVEL UP!" text with scale pop-in
+    const text = this.add.text(x, y - 35, 'LEVEL UP!', {
+      fontSize: '13px',
       fontFamily: 'Arial, sans-serif',
       color: '#FFD700',
       stroke: '#000000',
       strokeThickness: 4,
       fontStyle: 'bold',
-    }).setOrigin(0.5).setDepth(3001)
+    }).setOrigin(0.5).setDepth(3001).setScale(0.3)
 
     this.tweens.add({
       targets: text,
-      y: text.y - 35,
+      scale: 1,
+      duration: 300,
+      ease: 'Back.easeOut',
+    })
+    this.tweens.add({
+      targets: text,
+      y: text.y - 30,
       alpha: 0,
       duration: 2000,
+      delay: 500,
       ease: 'Quad.easeOut',
       onComplete: () => text.destroy(),
+    })
+
+    // Level number below
+    const lvlText = this.add.text(x, y - 20, `Lv.${newLevel}`, {
+      fontSize: '10px',
+      fontFamily: 'Arial, sans-serif',
+      color: '#FFFACD',
+      stroke: '#000000',
+      strokeThickness: 3,
+    }).setOrigin(0.5).setDepth(3001).setAlpha(0)
+
+    this.tweens.add({
+      targets: lvlText,
+      alpha: 1,
+      duration: 300,
+      delay: 300,
+    })
+    this.tweens.add({
+      targets: lvlText,
+      y: lvlText.y - 25,
+      alpha: 0,
+      duration: 1500,
+      delay: 800,
+      ease: 'Quad.easeOut',
+      onComplete: () => lvlText.destroy(),
     })
   }
 
