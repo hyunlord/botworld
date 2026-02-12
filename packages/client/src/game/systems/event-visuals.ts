@@ -14,7 +14,7 @@
 
 import Phaser from 'phaser'
 import type { ActiveWorldEvent, WorldEventType } from '@botworld/shared'
-import { TILE_SIZE, worldToScreen } from '../utils/coordinates.js'
+import { ISO_TILE_WIDTH, ISO_TILE_HEIGHT, worldToScreen } from '../utils/coordinates.js'
 
 // ── Configuration ──
 
@@ -119,13 +119,13 @@ export class EventVisuals {
 
   private createVisual(event: ActiveWorldEvent): void {
     const pos = worldToScreen(event.position.x, event.position.y)
-    const cx = pos.x + TILE_SIZE / 2
-    const cy = pos.y + TILE_SIZE / 2
+    const cx = pos.x + ISO_TILE_WIDTH / 2
+    const cy = pos.y + ISO_TILE_HEIGHT / 2
     const colors = EVENT_COLORS[event.type] ?? EVENT_COLORS.resource_bloom
 
     // 1. Ground zone circle (shows the event's radius)
     const zoneGfx = this.scene.add.graphics().setDepth(0)
-    const zoneRadius = event.radius * TILE_SIZE
+    const zoneRadius = event.radius * (ISO_TILE_WIDTH / 2)
     zoneGfx.fillStyle(colors.primary, ZONE_ALPHA)
     zoneGfx.fillCircle(cx, cy, zoneRadius)
     zoneGfx.lineStyle(1.5, colors.primary, 0.25)

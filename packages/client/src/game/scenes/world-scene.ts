@@ -8,7 +8,7 @@ import { DayNightCycle } from '../effects/day-night-cycle.js'
 import { soundManager } from '../audio/sound-manager.js'
 import { InteractionEffects } from '../systems/interaction-effects.js'
 import { EventVisuals } from '../systems/event-visuals.js'
-import { TILE_SIZE, worldToScreen, screenToWorld } from '../utils/coordinates.js'
+import { TILE_SIZE, ISO_TILE_WIDTH, ISO_TILE_HEIGHT, worldToScreen, screenToWorld, isoDepth } from '../utils/coordinates.js'
 import { getAutoTileIndex } from '../utils/autotile.js'
 
 // Scale factors for sprites placed on the top-down grid
@@ -189,27 +189,45 @@ export class WorldScene extends Phaser.Scene {
   private followingAgentId: string | null = null
   private hasCentered = false
 
+  // WASD + arrow key camera controls
+  private keys!: {
+    W: Phaser.Input.Keyboard.Key
+    A: Phaser.Input.Keyboard.Key
+    S: Phaser.Input.Keyboard.Key
+    D: Phaser.Input.Keyboard.Key
+    UP: Phaser.Input.Keyboard.Key
+    DOWN: Phaser.Input.Keyboard.Key
+    LEFT: Phaser.Input.Keyboard.Key
+    RIGHT: Phaser.Input.Keyboard.Key
+  }
+
   constructor() {
     super({ key: 'WorldScene' })
   }
 
   create(): void {
-    this.cameras.main.setZoom(1.5)
+    this.cameras.main.setZoom(1.0)
     this.cameras.main.setRoundPixels(true)
     this.cameras.main.setBackgroundColor('#1a2e1a')
 
-    // Create Phaser Tilemap for ground layer (covers tmSize x tmSize tiles)
-    this.tilemap = this.make.tilemap({
-      tileWidth: TILE_SIZE,
-      tileHeight: TILE_SIZE,
+    // Create isometric Phaser Tilemap for ground layer
+    const mapData = new Phaser.Tilemaps.MapData({
+      name: 'iso-world',
       width: this.tmSize,
       height: this.tmSize,
+      tileWidth: ISO_TILE_WIDTH,
+      tileHeight: ISO_TILE_HEIGHT,
+      orientation: Phaser.Tilemaps.Orientation.ISOMETRIC,
+      format: Phaser.Tilemaps.Formats.ARRAY_2D,
     })
-    const tileset = this.tilemap.addTilesetImage('terrain', 'terrain-sheet', TILE_SIZE, TILE_SIZE, 0, 0, 0)!
+    this.tilemap = new Phaser.Tilemaps.Tilemap(this, mapData)
+    const tileset = this.tilemap.addTilesetImage('iso-terrain', 'iso-terrain-sheet', ISO_TILE_WIDTH, ISO_TILE_HEIGHT, 0, 0, 0)!
+    // Position layer so tile (0,0) of tilemap maps to world tile tmOrigin
+    const layerX = (this.tmOriginX - this.tmOriginY) * (ISO_TILE_WIDTH / 2)
+    const layerY = (this.tmOriginX + this.tmOriginY) * (ISO_TILE_HEIGHT / 2)
     this.groundLayer = this.tilemap.createBlankLayer(
       'ground', tileset,
-      this.tmOriginX * TILE_SIZE,
-      this.tmOriginY * TILE_SIZE,
+      layerX, layerY,
     )!
     this.groundLayer.setDepth(-1)
 
@@ -239,8 +257,20 @@ export class WorldScene extends Phaser.Scene {
     ) => {
       const cam = this.cameras.main
       const newZoom = cam.zoom - dy * 0.001
-      cam.setZoom(Phaser.Math.Clamp(newZoom, 0.5, 4))
+      cam.setZoom(Phaser.Math.Clamp(newZoom, 0.3, 2.5))
     })
+
+    // WASD + arrow key camera controls
+    this.keys = {
+      W: this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.W),
+      A: this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.A),
+      S: this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.S),
+      D: this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.D),
+      UP: this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.UP),
+      DOWN: this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.DOWN),
+      LEFT: this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.LEFT),
+      RIGHT: this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.RIGHT),
+    }
 
     // Drag to pan
     this.input.on('pointermove', (pointer: Phaser.Input.Pointer) => {
@@ -256,19 +286,45 @@ export class WorldScene extends Phaser.Scene {
     })
   }
 
-  update(_time: number, _delta: number): void {
+  update(_time: number, delta: number): void {
     // Camera follow mode
     if (this.followingAgentId) {
       const agent = this.agents.find(a => a.id === this.followingAgentId)
       if (agent) {
         const pos = worldToScreen(agent.position.x, agent.position.y)
         const cam = this.cameras.main
-        const targetX = pos.x + TILE_SIZE / 2 - cam.width / (2 * cam.zoom)
-        const targetY = pos.y + TILE_SIZE / 2 - cam.height / (2 * cam.zoom)
+        const targetX = pos.x + ISO_TILE_WIDTH / 2 - cam.width / (2 * cam.zoom)
+        const targetY = pos.y + ISO_TILE_HEIGHT / 2 - cam.height / (2 * cam.zoom)
         cam.scrollX += (targetX - cam.scrollX) * 0.08
         cam.scrollY += (targetY - cam.scrollY) * 0.08
       } else {
         this.followingAgentId = null
+      }
+    }
+
+    // WASD / Arrow key camera movement
+    if (!this.followingAgentId) {
+      const cam = this.cameras.main
+      const scrollSpeed = 400 / cam.zoom * (delta / 1000)
+      let dx = 0
+      let dy = 0
+
+      if (this.keys.A.isDown || this.keys.LEFT.isDown) dx -= scrollSpeed
+      if (this.keys.D.isDown || this.keys.RIGHT.isDown) dx += scrollSpeed
+      if (this.keys.W.isDown || this.keys.UP.isDown) dy -= scrollSpeed
+      if (this.keys.S.isDown || this.keys.DOWN.isDown) dy += scrollSpeed
+
+      // Edge scrolling — move camera when mouse is within 20px of viewport edge
+      const pointer = this.input.activePointer
+      const edgeMargin = 20
+      if (pointer.x < edgeMargin) dx -= scrollSpeed * 0.7
+      if (pointer.x > cam.width - edgeMargin) dx += scrollSpeed * 0.7
+      if (pointer.y < edgeMargin) dy -= scrollSpeed * 0.7
+      if (pointer.y > cam.height - edgeMargin) dy += scrollSpeed * 0.7
+
+      if (dx !== 0 || dy !== 0) {
+        cam.scrollX += dx
+        cam.scrollY += dy
       }
     }
 
@@ -303,7 +359,7 @@ export class WorldScene extends Phaser.Scene {
     if (!this.hasCentered && this.chunkDataStore.size > 0) {
       this.hasCentered = true
       const centerScreen = worldToScreen(0, 0)
-      this.cameras.main.centerOn(centerScreen.x, centerScreen.y)
+      this.cameras.main.centerOn(centerScreen.x + ISO_TILE_WIDTH / 2, centerScreen.y + ISO_TILE_HEIGHT / 2)
       this.time.delayedCall(300, () => this.playCameraIntro())
     }
   }
@@ -328,8 +384,8 @@ export class WorldScene extends Phaser.Scene {
     // Pan to active area + zoom in over 1.5s
     this.tweens.add({
       targets: cam,
-      scrollX: targetScreen.x + TILE_SIZE / 2 - cam.width / 2,
-      scrollY: targetScreen.y + TILE_SIZE / 2 - cam.height / 2,
+      scrollX: targetScreen.x + ISO_TILE_WIDTH / 2 - cam.width / 2,
+      scrollY: targetScreen.y + ISO_TILE_HEIGHT / 2 - cam.height / 2,
       zoom: 1.5,
       duration: 1500,
       ease: 'Cubic.easeInOut',
@@ -357,8 +413,8 @@ export class WorldScene extends Phaser.Scene {
 
     for (const agent of agents) {
       const pos = worldToScreen(agent.position.x, agent.position.y)
-      const screenX = pos.x + TILE_SIZE / 2
-      const screenY = pos.y + TILE_SIZE / 2 - 8
+      const screenX = pos.x + ISO_TILE_WIDTH / 2
+      const screenY = pos.y + ISO_TILE_HEIGHT / 2 - 8
 
       if (!this.agentSprites.has(agent.id)) {
         this.createAgentSprite(agent, { x: screenX, y: screenY })
@@ -400,7 +456,7 @@ export class WorldScene extends Phaser.Scene {
     if (!this.hasCentered && agents.length > 0) {
       this.hasCentered = true
       const pos = worldToScreen(agents[0].position.x, agents[0].position.y)
-      this.cameras.main.centerOn(pos.x + TILE_SIZE / 2, pos.y + TILE_SIZE / 2)
+      this.cameras.main.centerOn(pos.x + ISO_TILE_WIDTH / 2, pos.y + ISO_TILE_HEIGHT / 2)
     }
   }
 
@@ -412,7 +468,7 @@ export class WorldScene extends Phaser.Scene {
     if (this.dayNightCycle && this.agents.length > 0) {
       const torchPositions = this.agents.map(a => {
         const pos = worldToScreen(a.position.x, a.position.y)
-        return { screenX: pos.x + TILE_SIZE / 2, screenY: pos.y + TILE_SIZE / 2 - 8 }
+        return { screenX: pos.x + ISO_TILE_WIDTH / 2, screenY: pos.y + ISO_TILE_HEIGHT / 2 - 8 }
       })
       this.dayNightCycle.drawAgentTorches(torchPositions)
     }
@@ -521,8 +577,8 @@ export class WorldScene extends Phaser.Scene {
           const pos = worldToScreen(event.to.x, event.to.y)
           this.tweens.add({
             targets: container,
-            x: pos.x + TILE_SIZE / 2,
-            y: pos.y + TILE_SIZE / 2 - 8,
+            x: pos.x + ISO_TILE_WIDTH / 2,
+            y: pos.y + ISO_TILE_HEIGHT / 2 - 8,
             duration: 500,
             ease: 'Linear',
             onComplete: () => {
@@ -542,7 +598,7 @@ export class WorldScene extends Phaser.Scene {
       }
       case 'resource:gathered': {
         const gatherPos = worldToScreen(event.position.x, event.position.y)
-        this.showGatherEffect(gatherPos.x + TILE_SIZE / 2, gatherPos.y + TILE_SIZE / 2, event.resourceType)
+        this.showGatherEffect(gatherPos.x + ISO_TILE_WIDTH / 2, gatherPos.y + ISO_TILE_HEIGHT / 2, event.resourceType)
         soundManager.playGather(event.resourceType)
         break
       }
@@ -550,7 +606,7 @@ export class WorldScene extends Phaser.Scene {
         const crafter = this.agents.find(a => a.id === event.agentId)
         if (crafter) {
           const pos = worldToScreen(crafter.position.x, crafter.position.y)
-          this.showCraftEffect(pos.x + TILE_SIZE / 2, pos.y + TILE_SIZE / 2 - 8, event.item.name)
+          this.showCraftEffect(pos.x + ISO_TILE_WIDTH / 2, pos.y + ISO_TILE_HEIGHT / 2 - 8, event.item.name)
         }
         break
       }
@@ -558,7 +614,7 @@ export class WorldScene extends Phaser.Scene {
         const buyer = this.agents.find(a => a.id === event.buyerId)
         if (buyer) {
           const pos = worldToScreen(buyer.position.x, buyer.position.y)
-          this.showTradeEffect(pos.x + TILE_SIZE / 2, pos.y + TILE_SIZE / 2 - 8)
+          this.showTradeEffect(pos.x + ISO_TILE_WIDTH / 2, pos.y + ISO_TILE_HEIGHT / 2 - 8)
         }
         break
       }
@@ -566,7 +622,7 @@ export class WorldScene extends Phaser.Scene {
         const actor = this.agents.find(a => a.id === event.agentId)
         if (actor && event.action.type === 'rest') {
           const pos = worldToScreen(actor.position.x, actor.position.y)
-          this.showRestEffect(pos.x + TILE_SIZE / 2, pos.y + TILE_SIZE / 2 - 8)
+          this.showRestEffect(pos.x + ISO_TILE_WIDTH / 2, pos.y + ISO_TILE_HEIGHT / 2 - 8)
         }
         break
       }
@@ -655,12 +711,10 @@ export class WorldScene extends Phaser.Scene {
         for (const tile of row) {
           if (tile.poiType) {
             const pos = worldToScreen(tile.position.x, tile.position.y)
-            const bldgSize = BUILDING_SIZES[tile.poiType]
-            const offsetX = bldgSize ? (bldgSize.w / 2) : TILE_SIZE / 2
             buildings.push({
               key: `${tile.position.x},${tile.position.y}`,
-              screenX: pos.x + offsetX,
-              screenY: pos.y,
+              screenX: pos.x + ISO_TILE_WIDTH / 2,
+              screenY: pos.y + ISO_TILE_HEIGHT / 2,
             })
           }
         }
@@ -674,16 +728,21 @@ export class WorldScene extends Phaser.Scene {
     const cam = this.cameras.main
     const wv = cam.worldView
 
-    // Convert camera viewport corners to tile coordinates
-    const topLeft = screenToWorld(wv.left, wv.top)
-    const bottomRight = screenToWorld(wv.right, wv.bottom)
+    // Convert all 4 camera viewport corners to tile coordinates.
+    // In isometric projection, tile_x and tile_y extremes come from different corners:
+    //   min tile_x → top-left,  max tile_x → bottom-right
+    //   min tile_y → top-right, max tile_y → bottom-left
+    const tl = screenToWorld(wv.left, wv.top)
+    const tr = screenToWorld(wv.right, wv.top)
+    const bl = screenToWorld(wv.left, wv.bottom)
+    const br = screenToWorld(wv.right, wv.bottom)
 
     // Bounding box in tile space with margin
     const margin = CHUNK_SIZE * 2
-    const minTX = topLeft.x - margin
-    const maxTX = bottomRight.x + margin
-    const minTY = topLeft.y - margin
-    const maxTY = bottomRight.y + margin
+    const minTX = Math.min(tl.x, tr.x, bl.x, br.x) - margin
+    const maxTX = Math.max(tl.x, tr.x, bl.x, br.x) + margin
+    const minTY = Math.min(tl.y, tr.y, bl.y, br.y) - margin
+    const maxTY = Math.max(tl.y, tr.y, bl.y, br.y) + margin
 
     // Convert to chunk coords
     const minCX = Math.floor(minTX / CHUNK_SIZE)
@@ -717,8 +776,8 @@ export class WorldScene extends Phaser.Scene {
       for (let lx = 0; lx < chunk.tiles[ly].length; lx++) {
         const tile = chunk.tiles[ly][lx]
         const pos = worldToScreen(tile.position.x, tile.position.y)
-        const centerX = pos.x + TILE_SIZE / 2
-        const centerY = pos.y + TILE_SIZE / 2
+        const centerX = pos.x + ISO_TILE_WIDTH / 2
+        const centerY = pos.y + ISO_TILE_HEIGHT / 2
 
         // Coordinate-based hash for tile diversity
         const hash = ((tile.position.x * 73856093) ^ (tile.position.y * 19349663)) >>> 0
@@ -726,13 +785,11 @@ export class WorldScene extends Phaser.Scene {
         // POI building overlay
         if (tile.poiType) {
           const bldgKey = resolveBuildingTexture(tile.poiType, this.textures)
-          const bldgSize = BUILDING_SIZES[tile.poiType]
-          // For multi-tile buildings, offset so sprite centers on the footprint
-          const offsetX = bldgSize ? (bldgSize.w / 2) : TILE_SIZE / 2
-          const bldgSprite = this.add.image(pos.x + offsetX, pos.y + TILE_SIZE, bldgKey)
+          // Center building on diamond, anchor at bottom-center
+          const bldgSprite = this.add.image(centerX, centerY + ISO_TILE_HEIGHT / 2, bldgKey)
             .setOrigin(0.5, 1.0)
             .setScale(BUILDING_SCALE)
-            .setDepth(tile.position.y + 0.3)
+            .setDepth(isoDepth(tile.position.x, tile.position.y) + 0.3)
           objectSprites.push(bldgSprite)
 
           // Tavern warm light flicker
@@ -756,7 +813,7 @@ export class WorldScene extends Phaser.Scene {
           const deco = this.add.image(centerX + jitterX, centerY - 4 + jitterY, tile.decoration)
             .setOrigin(0.5, 0.5)
             .setScale(0.5)
-            .setDepth(tile.position.y + 0.05)
+            .setDepth(isoDepth(tile.position.x, tile.position.y) + 0.05)
             .setFlipX((hash % 3) === 0)
           objectSprites.push(deco)
         }
@@ -779,7 +836,7 @@ export class WorldScene extends Phaser.Scene {
           )
             .setOrigin(0.5, 0.5)
             .setScale(scale)
-            .setDepth(tile.position.y + 0.1)
+            .setDepth(isoDepth(tile.position.x, tile.position.y) + 0.1)
             .setAlpha(0.85)
             .setFlipX((hash % 3) === 0)
           objectSprites.push(resSprite)
@@ -1073,7 +1130,7 @@ export class WorldScene extends Phaser.Scene {
       screenPos.y,
       [shadow, spriteOrGroup, nameText, actionText, emotionIcon, actionIcon, lvlBadge, lvlText],
     )
-    container.setDepth(500 + agent.position.y)
+    container.setDepth(500 + isoDepth(agent.position.x, agent.position.y))
     container.setSize(30, 40)
     container.setInteractive()
 
@@ -1782,7 +1839,7 @@ export class WorldScene extends Phaser.Scene {
   /** Navigate camera to a tile position (used by minimap) */
   centerOnTile(tileX: number, tileY: number): void {
     const pos = worldToScreen(tileX, tileY)
-    this.cameras.main.centerOn(pos.x + TILE_SIZE / 2, pos.y + TILE_SIZE / 2)
+    this.cameras.main.centerOn(pos.x + ISO_TILE_WIDTH / 2, pos.y + ISO_TILE_HEIGHT / 2)
   }
 
   // ── Monster rendering ──
@@ -1811,8 +1868,8 @@ export class WorldScene extends Phaser.Scene {
 
     for (const monster of monsters) {
       const pos = worldToScreen(monster.position.x, monster.position.y)
-      const screenX = pos.x + TILE_SIZE / 2
-      const screenY = pos.y + TILE_SIZE / 2 - 8
+      const screenX = pos.x + ISO_TILE_WIDTH / 2
+      const screenY = pos.y + ISO_TILE_HEIGHT / 2 - 8
       const color = WorldScene.MONSTER_COLORS[monster.type] ?? 0xFF4444
 
       if (!this.monsterSprites.has(monster.id)) {
@@ -1826,7 +1883,7 @@ export class WorldScene extends Phaser.Scene {
           duration: 400,
           ease: 'Quad.easeOut',
         })
-        container.setDepth(490 + monster.position.y)
+        container.setDepth(490 + isoDepth(monster.position.x, monster.position.y))
 
         this.updateMonsterHpBar(container, monster)
       }
@@ -1900,7 +1957,7 @@ export class WorldScene extends Phaser.Scene {
       screenPos.y,
       [shadow, body, nameText, hpBarBg, hpBarFill],
     )
-    container.setDepth(490 + monster.position.y)
+    container.setDepth(490 + isoDepth(monster.position.x, monster.position.y))
 
     this.monsterSprites.set(monster.id, container)
   }
@@ -1923,8 +1980,8 @@ export class WorldScene extends Phaser.Scene {
     const prefix = '-'
 
     const text = this.add.text(
-      pos.x + TILE_SIZE / 2 + Phaser.Math.Between(-10, 10),
-      pos.y + TILE_SIZE / 2 - 20,
+      pos.x + ISO_TILE_WIDTH / 2 + Phaser.Math.Between(-10, 10),
+      pos.y + ISO_TILE_HEIGHT / 2 - 20,
       `${prefix}${damage}`,
       {
         fontSize: '14px',
@@ -1948,8 +2005,8 @@ export class WorldScene extends Phaser.Scene {
 
   showCombatEffect(worldX: number, worldY: number): void {
     const pos = worldToScreen(worldX, worldY)
-    const cx = pos.x + TILE_SIZE / 2
-    const cy = pos.y + TILE_SIZE / 2
+    const cx = pos.x + ISO_TILE_WIDTH / 2
+    const cy = pos.y + ISO_TILE_HEIGHT / 2
 
     const ring = this.add.circle(cx, cy, 8, 0xFF4444, 0.6)
       .setDepth(3000)

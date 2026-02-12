@@ -1,5 +1,5 @@
 import Phaser from 'phaser'
-import { TILE_SIZE } from '../utils/coordinates.js'
+import { TILE_SIZE, ISO_TILE_WIDTH, ISO_TILE_HEIGHT } from '../utils/coordinates.js'
 
 /**
  * Boot scene: loads PNG assets, generates procedural fallbacks
@@ -11,7 +11,13 @@ export class BootScene extends Phaser.Scene {
   }
 
   preload(): void {
-    // ── Terrain tilemap spritesheet (primary ground layer) ──
+    // ── Isometric terrain tilemap spritesheet (primary ground layer) ──
+    this.load.spritesheet('iso-terrain-sheet', 'assets/tiles/iso-terrain-sheet.png', {
+      frameWidth: ISO_TILE_WIDTH,
+      frameHeight: ISO_TILE_HEIGHT,
+    })
+
+    // Legacy square terrain sheet (kept for fallback/tooling)
     this.load.spritesheet('terrain-sheet', 'assets/tiles/terrain-sheet.png', {
       frameWidth: TILE_SIZE,
       frameHeight: TILE_SIZE,

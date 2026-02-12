@@ -7,7 +7,7 @@
 
 import Phaser from 'phaser'
 import type { Agent } from '@botworld/shared'
-import { TILE_SIZE, worldToScreen } from '../utils/coordinates.js'
+import { ISO_TILE_WIDTH, ISO_TILE_HEIGHT, worldToScreen } from '../utils/coordinates.js'
 
 // ── Configuration ──
 
@@ -144,8 +144,8 @@ export class InteractionEffects {
   /** Agent moved — spawn dust particles at old position */
   onMoved(from: { x: number; y: number }): void {
     const sp = worldToScreen(from.x, from.y)
-    const cx = sp.x + TILE_SIZE / 2
-    const cy = sp.y + TILE_SIZE / 2 + 4
+    const cx = sp.x + ISO_TILE_WIDTH / 2
+    const cy = sp.y + ISO_TILE_HEIGHT / 2 + 4
     for (let i = 0; i < 3; i++) {
       const dust = this.scene.add.circle(
         cx + Phaser.Math.Between(-4, 4),
@@ -228,8 +228,8 @@ export class InteractionEffects {
       if (state.zone) continue // already created
 
       const sp = worldToScreen(state.position.x, state.position.y)
-      const cx = sp.x + TILE_SIZE / 2
-      const cy = sp.y + TILE_SIZE / 2
+      const cx = sp.x + ISO_TILE_WIDTH / 2
+      const cy = sp.y + ISO_TILE_HEIGHT / 2
 
       const gfx = this.scene.add.graphics()
       gfx.fillStyle(0xFF4444, 0.08)
@@ -347,14 +347,14 @@ export class InteractionEffects {
     const to = worldToScreen(agent.currentAction.targetPosition.x, agent.currentAction.targetPosition.y)
 
     this.dashedLine(
-      from.x + TILE_SIZE / 2, from.y + TILE_SIZE / 2,
-      to.x + TILE_SIZE / 2, to.y + TILE_SIZE / 2,
+      from.x + ISO_TILE_WIDTH / 2, from.y + ISO_TILE_HEIGHT / 2,
+      to.x + ISO_TILE_WIDTH / 2, to.y + ISO_TILE_HEIGHT / 2,
       0x4488FF, 0.4, 1.5,
     )
 
     // Destination circle
     this.pathGfx.lineStyle(1, 0x4488FF, 0.5)
-    this.pathGfx.strokeCircle(to.x + TILE_SIZE / 2, to.y + TILE_SIZE / 2, 6)
+    this.pathGfx.strokeCircle(to.x + ISO_TILE_WIDTH / 2, to.y + ISO_TILE_HEIGHT / 2, 6)
   }
 
   /** Remove expired state */
