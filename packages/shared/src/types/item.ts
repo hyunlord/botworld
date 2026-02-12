@@ -330,3 +330,128 @@ export interface FamousItemEntry {
   ownerName?: string
   highlight: string            // why it's famous
 }
+
+// ──────────────────────────────────────────────
+// Advanced Crafting System
+// ──────────────────────────────────────────────
+
+export type RecipeCategory =
+  | 'smelting' | 'smithing' | 'woodworking' | 'leatherwork' | 'textiles'
+  | 'alchemy' | 'cooking' | 'brewing' | 'construction' | 'enchanting'
+  | 'jewelry' | 'pottery' | 'farming'
+
+export type FacilityType =
+  | 'smelter' | 'blacksmith' | 'workshop' | 'alchemy_lab'
+  | 'bakery' | 'brewery' | 'loom' | 'kiln' | 'sawmill'
+  | 'tannery' | 'mill' | 'enchanting_table' | 'ancient_forge'
+  | 'kitchen' | 'farm' | 'fish_pond' | 'beehive'
+
+export type DiscoveryMethod =
+  | 'known' | 'recipe_scroll' | 'experimentation' | 'npc_teaching'
+  | 'library_research' | 'cultural_tradition' | 'quest_reward'
+
+export type CropType =
+  | 'grain' | 'potato' | 'carrot' | 'cotton' | 'herb'
+  | 'flax' | 'grape' | 'apple' | 'cherry'
+
+export type FarmStructureType =
+  | 'crop_field' | 'orchard' | 'beehive' | 'fish_pond'
+  | 'pasture' | 'greenhouse'
+
+// ── Advanced Recipe ──
+
+export interface AdvancedRecipe {
+  id: string
+  name: string
+  category: RecipeCategory
+  tier: number                    // 1-5
+  inputs: RecipeInput[]
+  output: RecipeOutput
+  facility?: FacilityType         // required building/facility
+  facilityLevel?: number          // minimum facility level
+  requiredSkill: string           // skill type
+  requiredSkillLevel: number
+  craftingTime: number            // ticks
+  discoveryMethod: DiscoveryMethod
+  baseFailChance: number          // 0-1
+  description: string
+}
+
+export interface RecipeInput {
+  itemId: string                  // template ID
+  quantity: number
+}
+
+export interface RecipeOutput {
+  itemId: string                  // template ID
+  quantity: number
+  qualityAffectedBySkill: boolean
+  qualityAffectedByFacility: boolean
+}
+
+// ── Recipe Discovery ──
+
+export interface RecipeKnowledge {
+  recipeId: string
+  discoveredAt: number            // tick
+  discoveryMethod: DiscoveryMethod
+  timesUsed: number
+  lastUsedAt?: number
+}
+
+// ── Farming ──
+
+export interface CropPlot {
+  id: string
+  farmId: string                  // building ID
+  cropType: CropType
+  plantedAt: number               // tick
+  growthProgress: number          // 0-100
+  maturityTicks: number           // ticks to mature
+  waterLevel: number              // 0-100
+  quality: number                 // 0-100 (affects yield)
+  isReady: boolean
+  season: string
+  position: { x: number; y: number }
+}
+
+export interface FarmState {
+  farmId: string
+  plots: CropPlot[]
+  structures: FarmStructure[]
+  lastTickedAt: number
+}
+
+export interface FarmStructure {
+  id: string
+  type: FarmStructureType
+  position: { x: number; y: number }
+  level: number
+  production?: {
+    itemId: string
+    interval: number              // ticks between production
+    lastProducedAt: number
+  }
+}
+
+// ── Production Automation ──
+
+export interface ProductionOrder {
+  recipeId: string
+  auto: boolean                   // repeat automatically
+  priority: number                // 1 = highest
+  dailyLimit: number              // max per day (0 = unlimited)
+  produced: number                // count today
+  active: boolean
+}
+
+export interface ProductionQueue {
+  buildingId: string
+  orders: ProductionOrder[]
+  workerId?: string               // assigned worker agent/NPC
+  currentOrder?: {
+    recipeId: string
+    progress: number              // 0-100
+    startedAt: number
+  }
+}

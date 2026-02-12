@@ -30,6 +30,9 @@ import { PackManager } from '../creatures/pack-manager.js'
 import { DenManager } from '../creatures/den-manager.js'
 import { AdvancedCombatEngine } from '../combat/combat-engine.js'
 import { FormationSystem } from '../combat/formation-system.js'
+import { RecipeManager } from '../crafting/recipe-manager.js'
+import { FarmingSystem } from '../crafting/farming-system.js'
+import { ProductionManager } from '../crafting/production-manager.js'
 
 export class WorldEngine {
   readonly eventBus = new EventBus()
@@ -60,6 +63,9 @@ export class WorldEngine {
   readonly denManager: DenManager
   readonly advancedCombat: AdvancedCombatEngine
   readonly formationSystem: FormationSystem
+  readonly recipeManager: RecipeManager
+  readonly farmingSystem: FarmingSystem
+  readonly productionManager: ProductionManager
   clock: WorldClock
 
   private tickInterval: ReturnType<typeof setInterval> | null = null
@@ -176,6 +182,11 @@ export class WorldEngine {
     // Advanced combat system
     this.advancedCombat = new AdvancedCombatEngine(this.eventBus)
     this.formationSystem = new FormationSystem()
+
+    // Crafting systems
+    this.recipeManager = new RecipeManager(this.eventBus)
+    this.farmingSystem = new FarmingSystem(this.eventBus)
+    this.productionManager = new ProductionManager(this.eventBus)
   }
 
   start(): void {
@@ -555,6 +566,8 @@ export class WorldEngine {
       packs: this.packManager.getAllPacks(),
       dens: this.denManager.getAllDens(),
       advancedCombats: this.advancedCombat.getActiveCombats().length,
+      farms: this.farmingSystem.getAllFarms().length,
+      productionQueues: this.productionManager.getActiveQueues().length,
     }
   }
 }

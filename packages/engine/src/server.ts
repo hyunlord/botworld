@@ -29,6 +29,7 @@ import { createPoliticsRouter } from './api/politics.js'
 import { createHistoryRouter } from './api/history.js'
 import { createBuildingsRouter } from './api/buildings.js'
 import { createCreaturesRouter } from './api/creatures.js'
+import { createCraftingRouter } from './api/crafting.js'
 import { NotificationManager } from './systems/notifications.js'
 import { MetricsCollector } from './monitoring/metrics.js'
 import { createHealthRouter } from './monitoring/health-check.js'
@@ -165,6 +166,7 @@ async function main() {
     (id: string) => world.agentManager.getAgent(id)?.name ?? world.npcManager.getNpc(id)?.name ?? id,
   ))
   app.use('/api', createCreaturesRouter(world))
+  app.use('/api', createCraftingRouter(world))
 
   // Admin routes (X-Admin-Key auth)
   app.use('/api', createAdminRouter(world, metrics))

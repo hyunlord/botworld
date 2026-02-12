@@ -1,6 +1,6 @@
 import type { Agent, AgentAction, Memory } from './agent.js'
 import type { Position, WorldClock, WeatherState } from './world.js'
-import type { Item, MarketOrder } from './item.js'
+import type { Item, MarketOrder, RecipeCategory, FacilityType, DiscoveryMethod, CropType } from './item.js'
 import type { CharacterAppearance, CharacterClass, Race } from './character.js'
 import type { WorldEventType, WorldEventCategory, WorldEventEffect } from './world-event.js'
 import type { MonsterType, CombatRound, CombatOutcome, CombatType, CombatActionType, BodyPartType, ConditionType, FormationType, CombatSide, CombatRole } from './combat.js'
@@ -88,6 +88,15 @@ export type WorldEvent =
   | FormationChangedEvent
   | CombatSurrenderEvent
   | SiegeCombatPhaseEvent
+  | RecipeDiscoveredEvent
+  | AdvancedCraftStartedEvent
+  | AdvancedCraftCompletedEvent
+  | AdvancedCraftFailedEvent
+  | FarmingPlantedEvent
+  | FarmingReadyEvent
+  | FarmingHarvestedEvent
+  | FarmingProducedEvent
+  | ProductionCompletedEvent
 
 export interface AgentMovedEvent {
   type: 'agent:moved'
@@ -821,5 +830,91 @@ export interface SiegeCombatPhaseEvent {
   description: string
   wallHp?: number
   gateHp?: number
+  timestamp: number
+}
+
+// ── Crafting/Industry Events ──
+
+export interface RecipeDiscoveredEvent {
+  type: 'recipe:discovered'
+  agentId: string
+  recipeId: string
+  recipeName: string
+  method: DiscoveryMethod
+  timestamp: number
+}
+
+export interface AdvancedCraftStartedEvent {
+  type: 'craft:started'
+  agentId: string
+  agentName: string
+  recipeId: string
+  recipeName: string
+  facility?: FacilityType
+  timestamp: number
+}
+
+export interface AdvancedCraftCompletedEvent {
+  type: 'craft:completed'
+  agentId: string
+  agentName: string
+  recipeId: string
+  recipeName: string
+  outputItemId: string
+  outputName: string
+  quality: string
+  facility?: FacilityType
+  timestamp: number
+}
+
+export interface AdvancedCraftFailedEvent {
+  type: 'craft:failed'
+  agentId: string
+  recipeId: string
+  recipeName: string
+  reason: string
+  timestamp: number
+}
+
+export interface FarmingPlantedEvent {
+  type: 'farming:planted'
+  farmId: string
+  cropType: string
+  plotId: string
+  position: { x: number; y: number }
+  timestamp: number
+}
+
+export interface FarmingReadyEvent {
+  type: 'farming:ready'
+  farmId: string
+  cropType: string
+  plotId: string
+  timestamp: number
+}
+
+export interface FarmingHarvestedEvent {
+  type: 'farming:harvested'
+  farmId: string
+  cropType: string
+  quantity: number
+  timestamp: number
+}
+
+export interface FarmingProducedEvent {
+  type: 'farming:produced'
+  farmId: string
+  structureType: string
+  itemId: string
+  timestamp: number
+}
+
+export interface ProductionCompletedEvent {
+  type: 'production:completed'
+  buildingId: string
+  recipeId: string
+  recipeName: string
+  quantity: number
+  workerId?: string
   timestamp: number
 }
