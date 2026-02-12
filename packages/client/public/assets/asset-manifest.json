@@ -1,0 +1,169 @@
+{
+  "_description": "Comprehensive asset manifest for Botworld visual strategy",
+  "_lastUpdated": "2026-02-12",
+  "_principle": "One high-quality reference style, everything else matched to it",
+
+  "terrain": {
+    "format": "spritesheet 1024x448, 16col x 14row, 64x32 diamond tiles",
+    "file": "tiles/iso-terrain-sheet.png",
+    "mapping": "tiles/iso-terrain-tiles.json",
+    "generator": "scripts/generate-iso-terrain-v3.js",
+    "totalSlots": 224,
+    "namedTiles": 206,
+    "blankReserved": 18,
+    "quality": "premium_procedural_v3",
+    "categories": {
+      "grass": {
+        "existing": ["grass_lush_01-08", "grass_dry_01-03", "grass_dark_01-05", "grass_autumn_01-03"],
+        "status": "complete"
+      },
+      "dirt": {
+        "existing": ["dirt_01-03", "dirt_path_01-03"],
+        "status": "complete"
+      },
+      "sand": {
+        "existing": ["sand_01-05", "sand_wet_01-02", "beach_shell_01-02"],
+        "status": "complete"
+      },
+      "snow": {
+        "existing": ["snow_01-05", "snow_dirty_01-02"],
+        "status": "complete"
+      },
+      "stone": {
+        "existing": ["stone_01-05", "stone_cobble_01-03", "mossy_stone_01-02", "gravel_01-03"],
+        "status": "complete"
+      },
+      "farmland": {
+        "existing": ["farmland_01-03", "farmland_wet_01-02"],
+        "status": "complete"
+      },
+      "swamp": {
+        "existing": ["swamp_01-02", "marsh_01-02"],
+        "status": "complete"
+      },
+      "cave": {
+        "existing": ["cave_01-02"],
+        "status": "complete"
+      },
+      "water": {
+        "existing": ["water_deep_01-06", "water_shallow_01-06", "water_shore_N/S/E/W", "water_shore_NE/NW/SE/SW", "water_shore_inner_NE/NW/SE/SW", "water_river_H/V/turns/cross", "water_hot_01-02", "water_reef_01-02", "ice_01-03"],
+        "status": "complete"
+      },
+      "roads": {
+        "existing": ["road_dirt_H/V/cross/turns/T/ends", "road_stone_H/V/cross/turns/T/ends"],
+        "status": "complete"
+      },
+      "cliffs": {
+        "existing": ["cliff_face_N/S/E/W", "cliff_top_01-03", "cliff_edge_N/S/E/W", "cliff_corner_NE/NW/SE/SW", "mountain_rock_01-03", "mountain_snow_01-03"],
+        "status": "complete"
+      },
+      "transitions": {
+        "existing": ["grass_dirt", "grass_sand", "grass_snow", "sand_water", "dirt_sand", "dirt_snow", "snow_stone", "grass_swamp (all N/S/E/W)"],
+        "status": "complete"
+      },
+      "special": {
+        "existing": ["forest_floor_01-03", "meadow_01-03", "cherry_ground_01-02", "ruins_floor_01-03", "magic_ground_01-02", "volcanic_01-02", "lava_rock_01-02", "dock_wood_01-02", "bridge_stone_01-02"],
+        "status": "complete"
+      }
+    }
+  },
+
+  "objects": {
+    "format": "individual PNGs, 64xN transparent",
+    "directory": "objects/",
+    "generator": "scripts/generate-iso-objects.js",
+    "totalSprites": 71,
+    "quality": "premium_procedural",
+    "categories": {
+      "trees": {
+        "existing": ["tree_oak_01-03", "tree_pine_01-03", "tree_dead_01-02", "tree_palm_01-02", "tree_oak_autumn_01-02", "tree_pine_snow_01-02", "tree_willow_01", "tree_cherry_01", "tree_giant_01"],
+        "status": "complete"
+      },
+      "bushes": {
+        "existing": ["bush_green_01-03", "bush_berry_01-02", "bush_flower_01-03", "fern_01-02", "mushroom_01-03", "reed_01-02", "cactus_01-02", "vine_01-02"],
+        "status": "complete"
+      },
+      "rocks": {
+        "existing": ["rock_small_01-03", "rock_large_01-02", "rock_mossy_01-02", "ore_iron_01-02", "ore_gold_01-02", "crystal_01-02"],
+        "status": "complete"
+      },
+      "decorations": {
+        "existing": ["grass_tuft_01-05", "flower_patch_01-04", "pebbles_01-03", "fallen_log_01-02", "puddle_01-02", "sign_post_01-02", "bones_01-02", "mushroom_ring_01", "campfire_remains_01"],
+        "status": "complete"
+      }
+    }
+  },
+
+  "buildings": {
+    "format": "individual PNGs, iso perspective, various sizes",
+    "directory": "buildings/",
+    "metadata": "buildings/iso-building-metadata.json",
+    "generator": "scripts/generate-iso-buildings.js",
+    "totalBuildings": 31,
+    "quality": "premium_procedural",
+    "existing": [
+      "bldg_tavern", "bldg_marketplace", "bldg_blacksmith", "bldg_workshop",
+      "bldg_library", "bldg_temple", "bldg_farm", "bldg_mine", "bldg_mine_entrance",
+      "bldg_inn", "bldg_watchtower", "bldg_guild_hall", "bldg_fountain",
+      "bldg_ruins", "bldg_port", "bldg_fishing_hut", "bldg_witch_hut",
+      "bldg_village_house_01-04", "bldg_village_house_large_01-02",
+      "bldg_windmill_01", "bldg_dock_01", "bldg_bridge_stone_01",
+      "bldg_wall_section_01-04", "bldg_gate_01"
+    ],
+    "status": "complete"
+  },
+
+  "characters": {
+    "format": "spritesheets 32x48 frames, 3col x 4row (12 frames per direction set)",
+    "directory": "characters/",
+    "categories": {
+      "races": {
+        "existing_base": ["human", "elf", "dwarf", "orc", "beastkin", "undead", "fairy", "dragonkin"],
+        "spritesheet_status": "fallback_procedural",
+        "needed": "8-direction walk (3 frames) + idle per race"
+      },
+      "npcs": {
+        "existing": ["merchant", "innkeeper", "guildmaster", "guard", "wanderer"],
+        "spritesheet_status": "fallback_procedural"
+      },
+      "monsters": {
+        "existing": ["goblin", "wolf", "skeleton", "slime"],
+        "missing": ["bandit", "troll", "ghost", "dragon_whelp"],
+        "spritesheet_status": "fallback_procedural"
+      }
+    }
+  },
+
+  "resources": {
+    "format": "individual PNGs",
+    "directory": "resources/",
+    "existing": [
+      "res_wood", "res_stone", "res_food", "res_gold", "res_herb", "res_ore",
+      "res_fiber", "res_crystal", "res_iron",
+      "tree_oak", "tree_pine", "tree_palm",
+      "rock_small", "rock_large", "bush_berry", "mushroom",
+      "herb_green", "herb_rare", "flower_red", "flower_blue",
+      "wheat", "vegetable", "fish_spot", "ore_iron", "ore_gold", "ore_crystal"
+    ],
+    "status": "complete"
+  },
+
+  "upgradeStrategy": {
+    "completed": [
+      "Terrain v3: 206 named tiles with warm fantasy palettes, domain-warped noise, pixel-art details",
+      "Objects: 71 sprites including all tree variants, minerals, and decorations",
+      "Buildings: 31 iso buildings including village houses, windmill, dock, bridge, walls, gate",
+      "Code integration: getGroundTileIndex() updated for v3 tile indices, boot-scene loads all assets"
+    ],
+    "remaining": [
+      "Characters: Full 8-direction spritesheets for all races, NPCs, monsters (currently procedural fallback)",
+      "Monsters: Add bandit, troll, ghost, dragon_whelp sprites",
+      "External asset integration: Download and integrate premium asset packs as visual reference"
+    ],
+    "researchFindings": {
+      "recommended_primary": "Kenney Isometric Collection (CC0) - already proven with existing pipeline",
+      "recommended_supplement": "Yar's Isometric 64x64 (CC-BY) - most complete outdoor system",
+      "recommended_characters": "DENZI's 64x64 (CC-BY-SA) - character sprites and monsters"
+    }
+  }
+}

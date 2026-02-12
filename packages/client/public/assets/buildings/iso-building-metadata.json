@@ -1,0 +1,219 @@
+{
+  "bldg_tavern": {
+    "width": 96,
+    "height": 96,
+    "perspective": "isometric_2.5D",
+    "baseTileWidth": 64,
+    "baseTileHeight": 32
+  },
+  "bldg_marketplace": {
+    "width": 160,
+    "height": 128,
+    "perspective": "isometric_2.5D",
+    "baseTileWidth": 64,
+    "baseTileHeight": 32
+  },
+  "bldg_blacksmith": {
+    "width": 96,
+    "height": 96,
+    "perspective": "isometric_2.5D",
+    "baseTileWidth": 64,
+    "baseTileHeight": 32
+  },
+  "bldg_workshop": {
+    "width": 96,
+    "height": 96,
+    "perspective": "isometric_2.5D",
+    "baseTileWidth": 64,
+    "baseTileHeight": 32
+  },
+  "bldg_library": {
+    "width": 128,
+    "height": 128,
+    "perspective": "isometric_2.5D",
+    "baseTileWidth": 64,
+    "baseTileHeight": 32
+  },
+  "bldg_temple": {
+    "width": 128,
+    "height": 128,
+    "perspective": "isometric_2.5D",
+    "baseTileWidth": 64,
+    "baseTileHeight": 32
+  },
+  "bldg_farm": {
+    "width": 160,
+    "height": 128,
+    "perspective": "isometric_2.5D",
+    "baseTileWidth": 64,
+    "baseTileHeight": 32
+  },
+  "bldg_mine": {
+    "width": 96,
+    "height": 96,
+    "perspective": "isometric_2.5D",
+    "baseTileWidth": 64,
+    "baseTileHeight": 32
+  },
+  "bldg_mine_entrance": {
+    "width": 96,
+    "height": 96,
+    "perspective": "isometric_2.5D",
+    "baseTileWidth": 64,
+    "baseTileHeight": 32
+  },
+  "bldg_inn": {
+    "width": 128,
+    "height": 128,
+    "perspective": "isometric_2.5D",
+    "baseTileWidth": 64,
+    "baseTileHeight": 32
+  },
+  "bldg_watchtower": {
+    "width": 96,
+    "height": 128,
+    "perspective": "isometric_2.5D",
+    "baseTileWidth": 64,
+    "baseTileHeight": 32
+  },
+  "bldg_guild_hall": {
+    "width": 128,
+    "height": 128,
+    "perspective": "isometric_2.5D",
+    "baseTileWidth": 64,
+    "baseTileHeight": 32
+  },
+  "bldg_fountain": {
+    "width": 96,
+    "height": 96,
+    "perspective": "isometric_2.5D",
+    "baseTileWidth": 64,
+    "baseTileHeight": 32
+  },
+  "bldg_ruins": {
+    "width": 128,
+    "height": 96,
+    "perspective": "isometric_2.5D",
+    "baseTileWidth": 64,
+    "baseTileHeight": 32
+  },
+  "bldg_port": {
+    "width": 160,
+    "height": 96,
+    "perspective": "isometric_2.5D",
+    "baseTileWidth": 64,
+    "baseTileHeight": 32
+  },
+  "bldg_fishing_hut": {
+    "width": 96,
+    "height": 96,
+    "perspective": "isometric_2.5D",
+    "baseTileWidth": 64,
+    "baseTileHeight": 32
+  },
+  "bldg_witch_hut": {
+    "width": 96,
+    "height": 96,
+    "perspective": "isometric_2.5D",
+    "baseTileWidth": 64,
+    "baseTileHeight": 32
+  },
+  "bldg_village_house_01": {
+    "width": 128,
+    "height": 120,
+    "perspective": "isometric_2.5D",
+    "baseTileWidth": 64,
+    "baseTileHeight": 32
+  },
+  "bldg_village_house_02": {
+    "width": 128,
+    "height": 120,
+    "perspective": "isometric_2.5D",
+    "baseTileWidth": 64,
+    "baseTileHeight": 32
+  },
+  "bldg_village_house_03": {
+    "width": 128,
+    "height": 120,
+    "perspective": "isometric_2.5D",
+    "baseTileWidth": 64,
+    "baseTileHeight": 32
+  },
+  "bldg_village_house_04": {
+    "width": 128,
+    "height": 120,
+    "perspective": "isometric_2.5D",
+    "baseTileWidth": 64,
+    "baseTileHeight": 32
+  },
+  "bldg_village_house_large_01": {
+    "width": 192,
+    "height": 140,
+    "perspective": "isometric_2.5D",
+    "baseTileWidth": 64,
+    "baseTileHeight": 32
+  },
+  "bldg_village_house_large_02": {
+    "width": 192,
+    "height": 140,
+    "perspective": "isometric_2.5D",
+    "baseTileWidth": 64,
+    "baseTileHeight": 32
+  },
+  "bldg_windmill_01": {
+    "width": 128,
+    "height": 160,
+    "perspective": "isometric_2.5D",
+    "baseTileWidth": 64,
+    "baseTileHeight": 32
+  },
+  "bldg_dock_01": {
+    "width": 256,
+    "height": 120,
+    "perspective": "isometric_2.5D",
+    "baseTileWidth": 64,
+    "baseTileHeight": 32
+  },
+  "bldg_bridge_stone_01": {
+    "width": 128,
+    "height": 80,
+    "perspective": "isometric_2.5D",
+    "baseTileWidth": 64,
+    "baseTileHeight": 32
+  },
+  "bldg_wall_section_01": {
+    "width": 96,
+    "height": 80,
+    "perspective": "isometric_2.5D",
+    "baseTileWidth": 64,
+    "baseTileHeight": 32
+  },
+  "bldg_wall_section_02": {
+    "width": 96,
+    "height": 80,
+    "perspective": "isometric_2.5D",
+    "baseTileWidth": 64,
+    "baseTileHeight": 32
+  },
+  "bldg_wall_section_03": {
+    "width": 96,
+    "height": 80,
+    "perspective": "isometric_2.5D",
+    "baseTileWidth": 64,
+    "baseTileHeight": 32
+  },
+  "bldg_wall_section_04": {
+    "width": 96,
+    "height": 80,
+    "perspective": "isometric_2.5D",
+    "baseTileWidth": 64,
+    "baseTileHeight": 32
+  },
+  "bldg_gate_01": {
+    "width": 128,
+    "height": 160,
+    "perspective": "isometric_2.5D",
+    "baseTileWidth": 64,
+    "baseTileHeight": 32
+  }
+}

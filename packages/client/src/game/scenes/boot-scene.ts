@@ -49,7 +49,7 @@ export class BootScene extends Phaser.Scene {
       this.load.image(`tile_new_${name}`, `assets/tiles/${name}.png`)
     }
 
-    // ── New POI building sprites (15 types) ──
+    // ── New POI building sprites (15 legacy + 14 new) ──
     const newBuildings = [
       'tavern', 'marketplace', 'blacksmith', 'library', 'temple',
       'farm', 'mine_entrance', 'fishing_hut', 'watchtower', 'guild_hall',
@@ -57,6 +57,55 @@ export class BootScene extends Phaser.Scene {
     ]
     for (const name of newBuildings) {
       this.load.image(`bldg_${name}`, `assets/buildings/${name}.png`)
+    }
+
+    // ── Iso building sprites (bldg_ prefixed files) ──
+    const isoBuildings = [
+      'bldg_village_house_01', 'bldg_village_house_02', 'bldg_village_house_03', 'bldg_village_house_04',
+      'bldg_village_house_large_01', 'bldg_village_house_large_02',
+      'bldg_windmill_01', 'bldg_dock_01', 'bldg_bridge_stone_01',
+      'bldg_wall_section_01', 'bldg_wall_section_02', 'bldg_wall_section_03', 'bldg_wall_section_04',
+      'bldg_gate_01', 'bldg_workshop',
+    ]
+    for (const name of isoBuildings) {
+      this.load.image(name, `assets/buildings/${name}.png`)
+    }
+
+    // ── Isometric object sprites ──
+    const isoObjects = [
+      // Trees
+      'tree_oak_01', 'tree_oak_02', 'tree_oak_03',
+      'tree_pine_01', 'tree_pine_02', 'tree_pine_03',
+      'tree_dead_01', 'tree_dead_02',
+      'tree_palm_01', 'tree_palm_02',
+      'tree_oak_autumn_01', 'tree_oak_autumn_02',
+      'tree_pine_snow_01', 'tree_pine_snow_02',
+      'tree_willow_01', 'tree_cherry_01', 'tree_giant_01',
+      // Bushes & plants
+      'bush_green_01', 'bush_green_02', 'bush_green_03',
+      'bush_berry_01', 'bush_berry_02',
+      'bush_flower_01', 'bush_flower_02', 'bush_flower_03',
+      'fern_01', 'fern_02', 'mushroom_01', 'mushroom_02', 'mushroom_03',
+      'reed_01', 'reed_02', 'cactus_01', 'cactus_02',
+      // Rocks & minerals
+      'rock_small_01', 'rock_small_02', 'rock_small_03',
+      'rock_large_01', 'rock_large_02',
+      'rock_mossy_01', 'rock_mossy_02',
+      'ore_iron_01', 'ore_iron_02', 'ore_gold_01', 'ore_gold_02',
+      'crystal_01', 'crystal_02',
+      // Decorations
+      'grass_tuft_01', 'grass_tuft_02', 'grass_tuft_03', 'grass_tuft_04', 'grass_tuft_05',
+      'flower_patch_01', 'flower_patch_02', 'flower_patch_03', 'flower_patch_04',
+      'pebbles_01', 'pebbles_02', 'pebbles_03',
+      'fallen_log_01', 'fallen_log_02',
+      'puddle_01', 'puddle_02',
+      'sign_post_01', 'sign_post_02',
+      'vine_01', 'vine_02',
+      'bones_01', 'bones_02',
+      'mushroom_ring_01', 'campfire_remains_01',
+    ]
+    for (const name of isoObjects) {
+      this.load.image(`obj_${name}`, `assets/objects/${name}.png`)
     }
 
     // ── New resource objects (17 types) ──
@@ -455,6 +504,22 @@ export class BootScene extends Phaser.Scene {
       bldg_ruins:        { base: 0x6a6a6a, roof: 0x5a5a5a, w: 96,  h: 64 },
       bldg_witch_hut:    { base: 0x3a4a3a, roof: 0x5a3a5a, w: 64,  h: 64 },
       bldg_port:         { base: 0x5a6a7a, roof: 0x3a5a6a, w: 128, h: 64 },
+      // New iso buildings
+      bldg_village_house_01: { base: 0x8a6a4a, roof: 0xb85c3a, w: 128, h: 120 },
+      bldg_village_house_02: { base: 0xe0dcc8, roof: 0x946434, w: 128, h: 120 },
+      bldg_village_house_03: { base: 0x8a6a4a, roof: 0x4a5a7a, w: 128, h: 120 },
+      bldg_village_house_04: { base: 0x828288, roof: 0xc87832, w: 128, h: 120 },
+      bldg_village_house_large_01: { base: 0x8a6a4a, roof: 0xb85c3a, w: 192, h: 140 },
+      bldg_village_house_large_02: { base: 0x8a6a4a, roof: 0x946434, w: 192, h: 140 },
+      bldg_windmill_01:  { base: 0x828288, roof: 0x946434, w: 128, h: 160 },
+      bldg_dock_01:      { base: 0x8a6a4a, roof: 0x6a7a8a, w: 256, h: 120 },
+      bldg_bridge_stone_01: { base: 0x828288, roof: 0x828288, w: 128, h: 80 },
+      bldg_wall_section_01: { base: 0x828288, roof: 0x6e6e73, w: 96, h: 80 },
+      bldg_wall_section_02: { base: 0x828288, roof: 0x6e6e73, w: 96, h: 80 },
+      bldg_wall_section_03: { base: 0x828288, roof: 0x6e6e73, w: 96, h: 80 },
+      bldg_wall_section_04: { base: 0x828288, roof: 0x6e6e73, w: 96, h: 80 },
+      bldg_gate_01:      { base: 0x828288, roof: 0x6e6e73, w: 128, h: 160 },
+      bldg_workshop:     { base: 0x8a6a4a, roof: 0x946434, w: 96, h: 96 },
     }
 
     for (const [key, colors] of Object.entries(newBuildings)) {

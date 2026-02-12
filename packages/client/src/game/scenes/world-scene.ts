@@ -42,7 +42,58 @@ interface RenderedChunk {
   objectSprites: Phaser.GameObjects.GameObject[]
 }
 
-// ── Ground tile index mapping (terrain-sheet.png spritesheet) ──
+// ── Ground tile index mapping (iso-terrain-sheet.png v3 spritesheet) ──
+// Tile indices match generate-iso-terrain-v3.js output → iso-terrain-tiles.json
+
+// v3 tile index constants for readability
+const T = {
+  // Row 0: Grass & dirt (0-15)
+  grass_lush_01: 0, grass_lush_02: 1, grass_lush_03: 2, grass_lush_04: 3, grass_lush_05: 4,
+  grass_dry_01: 5, grass_dry_02: 6, grass_dry_03: 7,
+  grass_dark_01: 8, grass_dark_02: 9, grass_dark_03: 10,
+  dirt_01: 11, dirt_02: 12, dirt_03: 13,
+  dirt_path_01: 14, dirt_path_02: 15,
+  // Row 1: Sand, snow, stone (16-31)
+  sand_01: 16, sand_02: 17, sand_03: 18,
+  sand_wet_01: 19, sand_wet_02: 20,
+  snow_01: 21, snow_02: 22, snow_03: 23,
+  snow_dirty_01: 24, snow_dirty_02: 25,
+  stone_01: 26, stone_02: 27, stone_03: 28,
+  stone_cobble_01: 29, stone_cobble_02: 30, stone_cobble_03: 31,
+  // Row 2: Farmland, swamp, cave, water (32-47)
+  farmland_01: 32, farmland_02: 33, farmland_03: 34,
+  swamp_01: 35, swamp_02: 36,
+  cave_01: 37, cave_02: 38,
+  water_deep_01: 39, water_deep_02: 40, water_deep_03: 41,
+  water_shallow_01: 42, water_shallow_02: 43, water_shallow_03: 44,
+  water_shore_N: 45, water_shore_S: 46, water_shore_E: 47,
+  // Row 3: Water shores, rivers (48-63)
+  water_shore_W: 48,
+  water_shore_NE: 49, water_shore_NW: 50, water_shore_SE: 51, water_shore_SW: 52,
+  water_shore_inner_NE: 53, water_shore_inner_NW: 54, water_shore_inner_SE: 55, water_shore_inner_SW: 56,
+  water_river_H: 57, water_river_V: 58,
+  water_river_turn_NE: 59, water_river_turn_NW: 60, water_river_turn_SE: 61, water_river_turn_SW: 62,
+  water_river_cross: 63,
+  // Row 4: Roads (64-79)
+  road_dirt_H: 64, road_dirt_V: 65, road_dirt_cross: 66,
+  road_dirt_turn_NE: 67, road_dirt_turn_NW: 68, road_dirt_turn_SE: 69, road_dirt_turn_SW: 70,
+  road_stone_H: 71, road_stone_V: 72, road_stone_cross: 73,
+  road_stone_turn_NE: 74, road_stone_turn_NW: 75, road_stone_turn_SE: 76, road_stone_turn_SW: 77,
+  road_stone_end_N: 78, road_stone_end_S: 79,
+  // Row 5: Cliffs, mountains (80-95)
+  cliff_face_N: 80, cliff_face_S: 81, cliff_face_E: 82, cliff_face_W: 83,
+  cliff_top_01: 84, cliff_top_02: 85, cliff_top_03: 86,
+  cliff_edge_N: 87, cliff_edge_S: 88, cliff_edge_E: 89, cliff_edge_W: 90,
+  mountain_rock_01: 91, mountain_rock_02: 92, mountain_rock_03: 93,
+  // Row 9+: Decorative ground
+  forest_floor_01: 144, forest_floor_02: 145, forest_floor_03: 146,
+  meadow_01: 199, meadow_02: 200, meadow_03: 201,
+} as const
+
+/** Pick a variant index from an array based on tile variant/hash */
+function pickVariant(base: number, count: number, variant: number): number {
+  return base + (variant % count)
+}
 
 function getGroundTileIndex(tile: Tile): number {
   const variant = tile.variant ?? 0
@@ -50,33 +101,35 @@ function getGroundTileIndex(tile: Tile): number {
 
   switch (tile.type) {
     case 'grass':
-      if (tile.decoration?.includes('flower') || variant === 2) return 2   // grass_3
-      return variant >= 1 ? 1 : 0  // grass_2 or grass_1
+      if (tile.decoration?.includes('flower')) return pickVariant(T.meadow_01, 3, variant)
+      if (biome === 'dry' || biome === 'plains_edge') return pickVariant(T.grass_dry_01, 3, variant)
+      return pickVariant(T.grass_lush_01, 5, variant)
     case 'forest':
     case 'dense_forest':
-      return 13  // dark_grass (ground beneath tree sprites)
+      return pickVariant(T.grass_dark_01, 3, variant)  // forest floor beneath tree sprites
     case 'water':
-      return 17  // water_shallow
+      return pickVariant(T.water_shallow_01, 3, variant)
     case 'deep_water':
-      return 16  // water_deep
+      return pickVariant(T.water_deep_01, 3, variant)
     case 'river':
-      return 30  // water_river_H
+      return T.water_river_H
     case 'sand':
-      if (biome === 'beach' || biome === 'coast') return 6
-      return variant >= 1 ? 7 : 6  // sand_2 or sand_1
+      if (biome === 'beach' || biome === 'coast') return pickVariant(T.sand_wet_01, 2, variant)
+      return pickVariant(T.sand_01, 3, variant)
     case 'mountain':
-      if (variant >= 2) return 56  // mountain_top
-      return 10  // stone_floor
+      if (variant >= 2) return pickVariant(T.cliff_top_01, 3, variant)
+      return pickVariant(T.mountain_rock_01, 3, variant)
     case 'snow':
-      return variant >= 1 ? 9 : 8  // snow_2 or snow_1
+      if (biome === 'dirty' || biome === 'road') return pickVariant(T.snow_dirty_01, 2, variant)
+      return pickVariant(T.snow_01, 3, variant)
     case 'swamp':
-      return 12
+      return pickVariant(T.swamp_01, 2, variant)
     case 'farmland':
-      return 11
+      return pickVariant(T.farmland_01, 3, variant)
     case 'road':
-      return tile.poiType ? 39 : 32  // road_stone_H or road_dirt_H
+      return tile.poiType ? T.road_stone_H : T.road_dirt_H
     default:
-      return 0  // grass_1 fallback
+      return pickVariant(T.grass_lush_01, 5, variant)  // grass fallback
   }
 }
 
