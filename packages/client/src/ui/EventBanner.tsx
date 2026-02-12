@@ -7,10 +7,10 @@ interface EventBannerProps {
 }
 
 const CATEGORY_COLORS: Record<string, string> = {
-  resource: '#2ecc71',
-  social: '#f1c40f',
-  danger: '#e74c3c',
-  discovery: '#9b59b6',
+  resource: '#4ADE80',
+  social: '#FFD700',
+  danger: '#F87171',
+  discovery: '#C084FC',
 }
 
 const CATEGORY_ICONS: Record<string, string> = {
@@ -111,13 +111,16 @@ const styles: Record<string, React.CSSProperties> = {
     pointerEvents: 'auto',
   },
   banner: {
-    background: 'rgba(13, 17, 23, 0.92)',
-    borderRadius: 8,
+    background: 'rgba(15, 20, 35, 0.92)',
+    borderRadius: 12,
     borderLeft: '4px solid #888',
     padding: '8px 12px',
     cursor: 'pointer',
     backdropFilter: 'blur(8px)',
+    fontFamily: "'Inter', system-ui, -apple-system, sans-serif",
     transition: 'opacity 0.3s',
+    animation: 'fadeSlideIn 0.2s ease-out',
+    boxShadow: '0 4px 24px rgba(0, 0, 0, 0.4)',
   },
   bannerHeader: {
     display: 'flex',
@@ -135,7 +138,7 @@ const styles: Record<string, React.CSSProperties> = {
   closeBtn: {
     background: 'none',
     border: 'none',
-    color: '#667788',
+    color: '#5A6478',
     fontSize: 12,
     cursor: 'pointer',
     padding: '0 4px',
@@ -143,7 +146,7 @@ const styles: Record<string, React.CSSProperties> = {
   },
   description: {
     fontSize: 11,
-    color: '#aabbcc',
+    color: '#A0A8B8',
     marginTop: 4,
     lineHeight: 1.4,
   },
@@ -154,6 +157,6 @@ const styles: Record<string, React.CSSProperties> = {
   },
   metaItem: {
     fontSize: 10,
-    color: '#667788',
+    color: '#5A6478',
   },
 }

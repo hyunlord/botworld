@@ -88,9 +88,9 @@ export function CharacterCard({
 
         {/* Stat bars */}
         <div style={styles.statsSection}>
-          <StatBar icon="\u2764\uFE0F" value={agent.stats.hp} max={agent.stats.maxHp} color={OV.hp} />
-          <StatBar icon="\u26A1" value={agent.stats.energy} max={agent.stats.maxEnergy} color={OV.energy} />
-          <StatBar icon="\uD83C\uDF56" value={agent.stats.hunger} max={agent.stats.maxHunger} color={OV.hunger} />
+          <StatBar icon="\u2764\uFE0F" value={agent.stats.hp} max={agent.stats.maxHp} color={OV.hpGrad} />
+          <StatBar icon="\u26A1" value={agent.stats.energy} max={agent.stats.maxEnergy} color={OV.energyGrad} />
+          <StatBar icon="\uD83C\uDF56" value={agent.stats.hunger} max={agent.stats.maxHunger} color={OV.hungerGrad} />
         </div>
 
         {/* Skills grid */}
@@ -238,6 +238,7 @@ const styles: Record<string, React.CSSProperties> = {
     padding: 16,
     position: 'relative',
     boxShadow: '0 8px 32px rgba(0,0,0,0.5)',
+    animation: 'fadeSlideIn 0.2s ease-out',
   },
   closeBtn: {
     position: 'absolute',
@@ -292,8 +293,8 @@ const styles: Record<string, React.CSSProperties> = {
   },
   classBadge: {
     fontSize: 10,
-    color: '#9ae6b4',
-    background: 'rgba(255,255,255,0.06)',
+    color: OV.green,
+    background: 'rgba(74, 222, 128, 0.12)',
     borderRadius: 4,
     padding: '1px 6px',
     textTransform: 'capitalize' as const,
@@ -327,9 +328,9 @@ const styles: Record<string, React.CSSProperties> = {
   },
   barBg: {
     flex: 1,
-    height: 8,
-    background: 'rgba(255,255,255,0.06)',
-    borderRadius: 4,
+    height: 10,
+    background: 'rgba(255,255,255,0.08)',
+    borderRadius: 5,
     overflow: 'hidden',
   },
   barFill: {
@@ -384,10 +385,10 @@ const styles: Record<string, React.CSSProperties> = {
   },
   chatBubble: {
     fontSize: 11,
-    color: '#9ae6b4',
+    color: OV.green,
     fontStyle: 'italic',
-    background: 'rgba(255,255,255,0.04)',
-    borderRadius: 6,
+    background: 'rgba(74, 222, 128, 0.08)',
+    borderRadius: OV.radiusSm,
     padding: '6px 10px',
     marginBottom: 10,
     lineHeight: 1.4,
@@ -401,14 +402,14 @@ const styles: Record<string, React.CSSProperties> = {
   },
   actionBtn: {
     flex: 1,
-    border: 'none',
+    border: '1px solid rgba(255, 255, 255, 0.1)',
     borderRadius: OV.radiusSm,
     padding: '7px 0',
     fontSize: 12,
     fontWeight: 'bold',
     color: OV.text,
     cursor: 'pointer',
-    fontFamily: 'inherit',
+    fontFamily: OV.font,
     transition: 'background 0.15s',
   },
   details: {
@@ -464,9 +465,9 @@ const styles: Record<string, React.CSSProperties> = {
   },
   traitChip: {
     fontSize: 9,
-    color: '#9ae6b4',
-    background: 'rgba(255,255,255,0.06)',
-    borderRadius: 3,
+    color: OV.green,
+    background: 'rgba(74, 222, 128, 0.1)',
+    borderRadius: 4,
     padding: '2px 6px',
   },
 }

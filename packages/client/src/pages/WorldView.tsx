@@ -12,6 +12,9 @@ import { Minimap } from '../ui/Minimap.js'
 import { EventBanner } from '../ui/EventBanner.js'
 import { SendAgentModal } from '../ui/SendAgentButton.js'
 import { soundManager } from '../game/audio/sound-manager.js'
+import { OV, injectGameStyles } from '../ui/overlay-styles.js'
+
+injectGameStyles()
 
 export function WorldView() {
   const gameRef = useRef<Phaser.Game | null>(null)
@@ -386,28 +389,31 @@ const styles: Record<string, React.CSSProperties> = {
     left: '50%',
     transform: 'translateX(-50%)',
     zIndex: 200,
-    background: 'rgba(15, 20, 30, 0.85)',
-    backdropFilter: 'blur(8px)',
-    borderRadius: 8,
-    border: '1px solid rgba(255, 215, 0, 0.3)',
+    background: OV.bg,
+    backdropFilter: OV.blur,
+    borderRadius: OV.radius,
+    border: `1px solid ${OV.borderActive}`,
     padding: '6px 16px',
     display: 'flex',
     alignItems: 'center',
     gap: 12,
     fontSize: 13,
-    color: '#FFD700',
+    color: OV.accent,
     fontWeight: 'bold',
+    fontFamily: OV.font,
     pointerEvents: 'auto',
-    boxShadow: '0 2px 12px rgba(0,0,0,0.4)',
+    boxShadow: '0 4px 24px rgba(0,0,0,0.4)',
+    animation: 'fadeSlideIn 0.2s ease-out',
   },
   followUnfollowBtn: {
     background: 'rgba(255,255,255,0.1)',
-    border: '1px solid rgba(255,255,255,0.2)',
-    borderRadius: 4,
-    color: '#E8E8E8',
+    border: '1px solid rgba(255,255,255,0.15)',
+    borderRadius: OV.radiusSm,
+    color: OV.text,
     fontSize: 11,
     padding: '3px 10px',
     cursor: 'pointer',
-    fontFamily: 'inherit',
+    fontFamily: OV.font,
+    transition: 'background 0.15s',
   },
 }

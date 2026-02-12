@@ -23,12 +23,12 @@ const KIND_ICONS: Record<EntryKind, string> = {
 }
 
 const KIND_COLORS: Record<EntryKind, string> = {
-  chat: '#ccddee',
-  gather: '#f1c40f',
-  craft: '#e67e22',
-  trade: '#2ecc71',
-  combat: '#e74c3c',
-  event: '#9b59b6',
+  chat: '#60A5FA',
+  gather: '#FFD700',
+  craft: '#F59E0B',
+  trade: '#4ADE80',
+  combat: '#F87171',
+  event: '#C084FC',
 }
 
 function eventToEntry(e: WorldEvent, agentNames: Map<string, string>): FeedEntry | null {
@@ -188,6 +188,7 @@ const styles: Record<string, React.CSSProperties> = {
   panel: {
     width: 320,
     padding: 10,
+    animation: 'fadeSlideIn 0.2s ease-out',
   },
   header: {
     display: 'flex',
@@ -229,6 +230,7 @@ const styles: Record<string, React.CSSProperties> = {
     padding: '2px 4px',
     borderRadius: 4,
     transition: 'opacity 0.3s',
+    animation: 'slideInLeft 0.2s ease-out',
   },
   entryName: {
     color: OV.accent,

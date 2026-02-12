@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { OV, glassPanel, interactive } from './overlay-styles.js'
+import { OV, glassPanel, interactive, gameButton } from './overlay-styles.js'
 
 export function SendAgentModal({ onClose }: { onClose: () => void }) {
   const [copied, setCopied] = useState(false)
@@ -68,6 +68,7 @@ const styles: Record<string, React.CSSProperties> = {
     padding: 24,
     position: 'relative',
     boxShadow: '0 12px 48px rgba(0,0,0,0.6)',
+    animation: 'fadeSlideIn 0.2s ease-out',
   },
   closeBtn: {
     position: 'absolute',
@@ -111,15 +112,9 @@ const styles: Record<string, React.CSSProperties> = {
     fontFamily: 'monospace',
   },
   copyBtn: {
-    background: OV.accent,
-    color: '#000',
-    border: 'none',
-    borderRadius: 4,
+    ...gameButton,
     padding: '5px 14px',
     fontSize: 12,
-    fontWeight: 'bold',
-    cursor: 'pointer',
-    fontFamily: 'inherit',
     float: 'right' as const,
   },
   steps: {
@@ -152,14 +147,14 @@ const styles: Record<string, React.CSSProperties> = {
   },
   doneBtn: {
     width: '100%',
-    background: 'rgba(255,255,255,0.1)',
+    background: 'rgba(255,255,255,0.08)',
     color: OV.text,
-    border: 'none',
+    border: '1px solid rgba(255, 255, 255, 0.1)',
     borderRadius: OV.radiusSm,
     padding: '10px 0',
     fontSize: 13,
     cursor: 'pointer',
-    fontFamily: 'inherit',
+    fontFamily: OV.font,
     transition: 'background 0.15s',
   },
 }

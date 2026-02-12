@@ -70,7 +70,7 @@ export function Minimap({
     ctx.fill()
 
     // Subtle terrain background
-    ctx.fillStyle = 'rgba(40, 60, 40, 0.3)'
+    ctx.fillStyle = 'rgba(30, 45, 60, 0.3)'
     ctx.beginPath()
     ctx.roundRect(PADDING / 2, PADDING / 2, size - PADDING, size - PADDING, 6)
     ctx.fill()
