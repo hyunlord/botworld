@@ -9,6 +9,8 @@ import { ShadowSystem } from '../effects/shadow-system.js'
 import { WaterAnimation } from '../effects/water-animation.js'
 import { AmbientParticles } from '../effects/ambient-particles.js'
 import { PostProcessing } from '../effects/post-processing.js'
+import { LightingSystem } from '../effects/lighting-system.js'
+import { SeasonSystem } from '../effects/season-system.js'
 import { soundManager } from '../audio/sound-manager.js'
 import { InteractionEffects } from '../systems/interaction-effects.js'
 import { EventVisuals } from '../systems/event-visuals.js'
@@ -260,6 +262,8 @@ export class WorldScene extends Phaser.Scene {
   private waterAnimation: WaterAnimation | null = null
   private ambientParticles: AmbientParticles | null = null
   private postProcessing: PostProcessing | null = null
+  private lightingSystem: LightingSystem | null = null
+  private seasonSystem: SeasonSystem | null = null
 
   // Hover interaction state
   private hoveredAgentId: string | null = null
@@ -335,6 +339,8 @@ export class WorldScene extends Phaser.Scene {
     this.waterAnimation = new WaterAnimation(this)
     this.ambientParticles = new AmbientParticles(this)
     this.postProcessing = new PostProcessing(this)
+    this.lightingSystem = new LightingSystem(this)
+    this.seasonSystem = new SeasonSystem()
 
     // Initialize audio on first user interaction (Web Audio requirement)
     this.input.once('pointerdown', () => {
@@ -470,6 +476,8 @@ export class WorldScene extends Phaser.Scene {
 
     this.ambientParticles?.update()
     this.postProcessing?.update()
+    this.lightingSystem?.update()
+    this.seasonSystem?.update()
   }
 
   // --- Chunk data management ---
@@ -600,6 +608,8 @@ export class WorldScene extends Phaser.Scene {
     // Propagate time-of-day to atmosphere systems
     this.ambientParticles?.setTimeOfDay(clock.timeOfDay)
     this.postProcessing?.setTimeOfDay(clock.timeOfDay)
+    this.lightingSystem?.setTimeOfDay(clock.timeOfDay)
+    this.seasonSystem?.setGameDay(clock.day)
   }
 
   setWeather(weather: WeatherState): void {
@@ -851,6 +861,14 @@ export class WorldScene extends Phaser.Scene {
     }
 
     this.dayNightCycle.setBuildingLights(buildings)
+
+    // Also register with RenderTexture lighting system
+    if (this.lightingSystem) {
+      this.lightingSystem.clearLights()
+      for (const b of buildings) {
+        this.lightingSystem.addLight(b.key, b.screenX, b.screenY, 'window')
+      }
+    }
   }
 
   private getVisibleChunkKeys(): Set<string> {
@@ -984,8 +1002,13 @@ export class WorldScene extends Phaser.Scene {
             .setFlipX((hash % 3) === 0)
           objectSprites.push(resSprite)
 
-          // Vegetation sway for trees/bushes, bob for ores/minerals
+          // Register vegetation with season system for seasonal tinting
           const isVegetation = ['wood', 'food', 'herb'].includes(tile.resource.type)
+          if (isVegetation && this.seasonSystem) {
+            this.seasonSystem.registerTree(resSprite)
+          }
+
+          // Vegetation sway for trees/bushes, bob for ores/minerals
           if (isVegetation) {
             this.tweens.add({
               targets: resSprite,
