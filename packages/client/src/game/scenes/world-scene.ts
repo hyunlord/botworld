@@ -13,6 +13,27 @@ const AGENT_SCALE = 0.6
 const RESOURCE_SCALE = 0.35
 const BUILDING_SCALE = 1.0
 
+// Building pixel dimensions (must match generate-building-sprites.js output)
+const BUILDING_SIZES: Record<string, { w: number; h: number }> = {
+  tavern:        { w: 96,  h: 64 },
+  marketplace:   { w: 128, h: 96 },
+  blacksmith:    { w: 64,  h: 64 },
+  workshop:      { w: 64,  h: 64 },
+  library:       { w: 96,  h: 96 },
+  temple:        { w: 96,  h: 64 },
+  farm:          { w: 128, h: 96 },
+  mine:          { w: 64,  h: 64 },
+  mine_entrance: { w: 64,  h: 64 },
+  inn:           { w: 96,  h: 64 },
+  watchtower:    { w: 64,  h: 64 },
+  guild_hall:    { w: 96,  h: 96 },
+  fountain:      { w: 64,  h: 64 },
+  ruins:         { w: 96,  h: 64 },
+  port:          { w: 128, h: 64 },
+  fishing_hut:   { w: 64,  h: 64 },
+  witch_hut:     { w: 64,  h: 64 },
+}
+
 
 interface RenderedChunk {
   objectSprites: Phaser.GameObjects.GameObject[]
@@ -602,9 +623,11 @@ export class WorldScene extends Phaser.Scene {
         for (const tile of row) {
           if (tile.poiType) {
             const pos = worldToScreen(tile.position.x, tile.position.y)
+            const bldgSize = BUILDING_SIZES[tile.poiType]
+            const offsetX = bldgSize ? (bldgSize.w / 2) : TILE_SIZE / 2
             buildings.push({
               key: `${tile.position.x},${tile.position.y}`,
-              screenX: pos.x + TILE_SIZE / 2,
+              screenX: pos.x + offsetX,
               screenY: pos.y,
             })
           }
@@ -669,7 +692,10 @@ export class WorldScene extends Phaser.Scene {
         // POI building overlay
         if (tile.poiType) {
           const bldgKey = resolveBuildingTexture(tile.poiType, this.textures)
-          const bldgSprite = this.add.image(centerX, pos.y + TILE_SIZE, bldgKey)
+          const bldgSize = BUILDING_SIZES[tile.poiType]
+          // For multi-tile buildings, offset so sprite centers on the footprint
+          const offsetX = bldgSize ? (bldgSize.w / 2) : TILE_SIZE / 2
+          const bldgSprite = this.add.image(pos.x + offsetX, pos.y + TILE_SIZE, bldgKey)
             .setOrigin(0.5, 1.0)
             .setScale(BUILDING_SCALE)
             .setDepth(tile.position.y + 0.3)

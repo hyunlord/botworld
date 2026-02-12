@@ -365,39 +365,53 @@ export class BootScene extends Phaser.Scene {
       g.destroy()
     }
 
-    // New building fallbacks at 64x64
-    const newBuildings: Record<string, { base: number; roof: number }> = {
-      bldg_tavern:       { base: 0x6b4a3a, roof: 0xb85c3a },
-      bldg_marketplace:  { base: 0x8a6a4a, roof: 0xc9a84c },
-      bldg_blacksmith:   { base: 0x5a5a5a, roof: 0x7a8a6a },
-      bldg_library:      { base: 0x4a5a7a, roof: 0x6a7aaa },
-      bldg_temple:       { base: 0x8a8aaa, roof: 0xc0c0d0 },
-      bldg_farm:         { base: 0x6b8f3f, roof: 0xaa8844 },
-      bldg_mine_entrance:{ base: 0x5a4a3a, roof: 0x3a3a3a },
-      bldg_fishing_hut:  { base: 0x6a7a8a, roof: 0x4a6a7a },
-      bldg_watchtower:   { base: 0x7a6a5a, roof: 0x5a5a5a },
-      bldg_guild_hall:   { base: 0x6a5a7a, roof: 0x8a7a9a },
-      bldg_inn:          { base: 0x7a5a3a, roof: 0xaa7a4a },
-      bldg_fountain:     { base: 0x6a8aaa, roof: 0x4a7a9a },
-      bldg_ruins:        { base: 0x6a6a6a, roof: 0x5a5a5a },
-      bldg_witch_hut:    { base: 0x3a4a3a, roof: 0x5a3a5a },
-      bldg_port:         { base: 0x5a6a7a, roof: 0x3a5a6a },
+    // New building fallbacks at correct per-building sizes
+    const newBuildings: Record<string, { base: number; roof: number; w: number; h: number }> = {
+      bldg_tavern:       { base: 0x6b4a3a, roof: 0xb85c3a, w: 96,  h: 64 },
+      bldg_marketplace:  { base: 0x8a6a4a, roof: 0xc9a84c, w: 128, h: 96 },
+      bldg_blacksmith:   { base: 0x5a5a5a, roof: 0x7a8a6a, w: 64,  h: 64 },
+      bldg_library:      { base: 0x4a5a7a, roof: 0x6a7aaa, w: 96,  h: 96 },
+      bldg_temple:       { base: 0x8a8aaa, roof: 0xc0c0d0, w: 96,  h: 64 },
+      bldg_farm:         { base: 0x6b8f3f, roof: 0xaa8844, w: 128, h: 96 },
+      bldg_mine_entrance:{ base: 0x5a4a3a, roof: 0x3a3a3a, w: 64,  h: 64 },
+      bldg_fishing_hut:  { base: 0x6a7a8a, roof: 0x4a6a7a, w: 64,  h: 64 },
+      bldg_watchtower:   { base: 0x7a6a5a, roof: 0x5a5a5a, w: 64,  h: 64 },
+      bldg_guild_hall:   { base: 0x6a5a7a, roof: 0x8a7a9a, w: 96,  h: 96 },
+      bldg_inn:          { base: 0x7a5a3a, roof: 0xaa7a4a, w: 96,  h: 64 },
+      bldg_fountain:     { base: 0x6a8aaa, roof: 0x4a7a9a, w: 64,  h: 64 },
+      bldg_ruins:        { base: 0x6a6a6a, roof: 0x5a5a5a, w: 96,  h: 64 },
+      bldg_witch_hut:    { base: 0x3a4a3a, roof: 0x5a3a5a, w: 64,  h: 64 },
+      bldg_port:         { base: 0x5a6a7a, roof: 0x3a5a6a, w: 128, h: 64 },
     }
 
     for (const [key, colors] of Object.entries(newBuildings)) {
       if (this.textures.exists(key)) continue
 
+      const { w, h } = colors
       const g = this.add.graphics()
+      // Base structure scaled to building dimensions
+      const baseX = Math.round(w * 0.06)
+      const baseY = Math.round(h * 0.3)
+      const baseW = Math.round(w * 0.88)
+      const baseH = Math.round(h * 0.6)
       g.fillStyle(colors.base, 1)
-      g.fillRoundedRect(4, 20, 56, 40, 4)
+      g.fillRoundedRect(baseX, baseY, baseW, baseH, 4)
+      // Roof
+      const roofX = Math.round(w * 0.03)
+      const roofY = Math.round(h * 0.12)
+      const roofW = Math.round(w * 0.94)
+      const roofH = Math.round(h * 0.25)
       g.fillStyle(colors.roof, 1)
-      g.fillRoundedRect(2, 8, 60, 18, 4)
+      g.fillRoundedRect(roofX, roofY, roofW, roofH, 4)
       g.fillStyle(0xffffff, 0.12)
-      g.fillRect(4, 8, 56, 6)
+      g.fillRect(roofX + 2, roofY, roofW - 4, Math.round(roofH * 0.35))
+      // Door
+      const doorW = Math.round(w * 0.16)
+      const doorH = Math.round(h * 0.28)
       g.fillStyle(0x000000, 0.3)
-      g.fillRoundedRect(24, 40, 16, 20, 3)
+      g.fillRoundedRect(Math.round((w - doorW) / 2), baseY + baseH - doorH, doorW, doorH, 3)
 
-      g.generateTexture(key, 64, 64)
+      g.generateTexture(key, w, h)
       g.destroy()
     }
   }

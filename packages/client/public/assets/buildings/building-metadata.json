@@ -1,0 +1,92 @@
+{
+  "tavern": {
+    "width": 96,
+    "height": 64,
+    "tilesW": 3,
+    "tilesH": 2
+  },
+  "marketplace": {
+    "width": 128,
+    "height": 96,
+    "tilesW": 4,
+    "tilesH": 3
+  },
+  "blacksmith": {
+    "width": 64,
+    "height": 64,
+    "tilesW": 2,
+    "tilesH": 2
+  },
+  "library": {
+    "width": 96,
+    "height": 96,
+    "tilesW": 3,
+    "tilesH": 3
+  },
+  "temple": {
+    "width": 96,
+    "height": 64,
+    "tilesW": 3,
+    "tilesH": 2
+  },
+  "farm": {
+    "width": 128,
+    "height": 96,
+    "tilesW": 4,
+    "tilesH": 3
+  },
+  "mine_entrance": {
+    "width": 64,
+    "height": 64,
+    "tilesW": 2,
+    "tilesH": 2
+  },
+  "inn": {
+    "width": 96,
+    "height": 64,
+    "tilesW": 3,
+    "tilesH": 2
+  },
+  "watchtower": {
+    "width": 64,
+    "height": 64,
+    "tilesW": 2,
+    "tilesH": 2
+  },
+  "guild_hall": {
+    "width": 96,
+    "height": 96,
+    "tilesW": 3,
+    "tilesH": 3
+  },
+  "fountain": {
+    "width": 64,
+    "height": 64,
+    "tilesW": 2,
+    "tilesH": 2
+  },
+  "ruins": {
+    "width": 96,
+    "height": 64,
+    "tilesW": 3,
+    "tilesH": 2
+  },
+  "port": {
+    "width": 128,
+    "height": 64,
+    "tilesW": 4,
+    "tilesH": 2
+  },
+  "fishing_hut": {
+    "width": 64,
+    "height": 64,
+    "tilesW": 2,
+    "tilesH": 2
+  },
+  "witch_hut": {
+    "width": 64,
+    "height": 64,
+    "tilesW": 2,
+    "tilesH": 2
+  }
+}
