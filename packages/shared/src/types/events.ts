@@ -7,7 +7,7 @@ import type { MonsterType, CombatRound, CombatOutcome } from './combat.js'
 import type { RelationshipInteraction, RelationshipTag, RumorType, SecretType, SocialStatus } from './relationship.js'
 import type { GuildType, SettlementType, DiplomacyStatus, TreatyType, WarGoal } from './politics.js'
 import type { HistoryEventType } from './history.js'
-import type { Season, AnimalType } from './ecosystem.js'
+import type { Season, AnimalType, CreatureType, CreatureTier, DenType } from './ecosystem.js'
 import type { BuildingType, BuildingState, SiegeWeaponType } from './building.js'
 
 /** All event types in the world */
@@ -72,6 +72,14 @@ export type WorldEvent =
   | BuildingRepairedEvent
   | SiegeStartedEvent
   | SiegeEndedEvent
+  | CreatureSpawnedEvent
+  | CreatureDiedEvent
+  | PackFormedEvent
+  | PackHuntEvent
+  | PackDisbandedEvent
+  | DenDiscoveredEvent
+  | DenClearedEvent
+  | DenRespawnedEvent
 
 export interface AgentMovedEvent {
   type: 'agent:moved'
@@ -628,5 +636,87 @@ export interface SiegeEndedEvent {
   type: 'siege:ended'
   siegeId: string
   result: 'attacker_won' | 'defender_won' | 'draw' | 'abandoned'
+  timestamp: number
+}
+
+// ── Creature Events ──
+
+export interface CreatureSpawnedEvent {
+  type: 'creature:spawned'
+  creatureId: string
+  templateId: string
+  creatureType: CreatureType
+  tier: CreatureTier
+  name: string
+  position: Position
+  timestamp: number
+}
+
+export interface CreatureDiedEvent {
+  type: 'creature:died'
+  creatureId: string
+  templateId: string
+  name: string
+  killedBy: string | null
+  loot: string[]
+  position: Position
+  timestamp: number
+}
+
+export interface PackFormedEvent {
+  type: 'pack:formed'
+  packId: string
+  packType: string
+  leaderId: string
+  memberCount: number
+  territory: { x: number; y: number }
+  timestamp: number
+}
+
+export interface PackHuntEvent {
+  type: 'pack:hunt'
+  packId: string
+  packType: string
+  targetId: string
+  targetName: string
+  position: Position
+  timestamp: number
+}
+
+export interface PackDisbandedEvent {
+  type: 'pack:disbanded'
+  packId: string
+  packType: string
+  reason: string
+  timestamp: number
+}
+
+export interface DenDiscoveredEvent {
+  type: 'den:discovered'
+  denId: string
+  denType: DenType
+  name: string
+  tier: CreatureTier
+  position: Position
+  discoveredBy: string
+  timestamp: number
+}
+
+export interface DenClearedEvent {
+  type: 'den:cleared'
+  denId: string
+  denType: DenType
+  name: string
+  clearedBy: string
+  bossName?: string
+  timestamp: number
+}
+
+export interface DenRespawnedEvent {
+  type: 'den:respawned'
+  denId: string
+  denType: DenType
+  name: string
+  newTier: CreatureTier
   timestamp: number
 }

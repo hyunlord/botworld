@@ -25,6 +25,9 @@ import { WorldHistoryManager } from '../world/world-history.js'
 import { EcosystemManager } from '../world/ecosystem-manager.js'
 import { BuildingManager } from '../buildings/building-manager.js'
 import { SiegeSystem } from '../buildings/siege-system.js'
+import { CreatureManager } from '../creatures/creature-manager.js'
+import { PackManager } from '../creatures/pack-manager.js'
+import { DenManager } from '../creatures/den-manager.js'
 
 export class WorldEngine {
   readonly eventBus = new EventBus()
@@ -50,6 +53,9 @@ export class WorldEngine {
   readonly ecosystemManager: EcosystemManager
   readonly buildingManager: BuildingManager
   readonly siegeSystem: SiegeSystem
+  readonly creatureManager: CreatureManager
+  readonly packManager: PackManager
+  readonly denManager: DenManager
   clock: WorldClock
 
   private tickInterval: ReturnType<typeof setInterval> | null = null
@@ -154,6 +160,14 @@ export class WorldEngine {
 
     // Wire buildings to NPC manager for AI context
     this.npcManager.setBuildingManager(this.buildingManager)
+
+    // Creature system (unified animals + monsters)
+    this.creatureManager = new CreatureManager(this.eventBus, this.tileMap)
+    this.packManager = new PackManager(this.eventBus)
+    this.denManager = new DenManager(this.eventBus)
+
+    // Wire creatures to NPC manager for AI context
+    this.npcManager.setCreatureManager(this.creatureManager)
   }
 
   start(): void {
@@ -276,6 +290,26 @@ export class WorldEngine {
             event.timestamp,
           )
         }
+      }
+    })
+
+    // Dragon kill → world history recording
+    this.eventBus.on('creature:died', (event) => {
+      if (event.type !== 'creature:died') return
+      const creatureEvent = event as any
+      if (creatureEvent.templateId === 'dragon' || creatureEvent.templateId === 'ancient_golem' || creatureEvent.templateId === 'world_serpent' || creatureEvent.templateId === 'demon_lord') {
+        const pos = creatureEvent.position
+        const location = pos ? `(${pos.x}, ${pos.y})` : 'unknown location'
+        this.historyManager.record(
+          creatureEvent.timestamp,
+          this.clock.day,
+          'battle',
+          `${creatureEvent.name} Slain`,
+          `The mighty ${creatureEvent.name} was defeated at ${location}`,
+          creatureEvent.killedBy ? [creatureEvent.killedBy] : [],
+          location,
+          creatureEvent.templateId === 'dragon' ? 9 : 10,
+        )
       }
     })
 
@@ -442,6 +476,15 @@ export class WorldEngine {
     // 10.95. Siege system tick
     this.siegeSystem.tick(this.clock, this.buildingManager)
 
+    // 10.96. Creature system tick
+    this.creatureManager.tick(this.clock)
+    this.packManager.tick(
+      this.clock,
+      (id) => this.creatureManager.getCreature(id),
+      () => this.creatureManager.getAllCreatures(),
+    )
+    this.denManager.tick(this.clock)
+
     // 11. Weather system tick
     const weatherChanged = this.weather.tick(this.clock)
     if (weatherChanged) {
@@ -500,6 +543,9 @@ export class WorldEngine {
       animals: this.ecosystemManager.getAnimals(),
       buildings: this.buildingManager.getAllBuildings(),
       activeSieges: this.siegeSystem.getActiveSieges(),
+      creatures: this.creatureManager.getAllCreatures(),
+      packs: this.packManager.getAllPacks(),
+      dens: this.denManager.getAllDens(),
     }
   }
 }

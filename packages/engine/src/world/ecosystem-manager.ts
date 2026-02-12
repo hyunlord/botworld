@@ -42,6 +42,14 @@ const ANIMAL_CONFIGS: Record<AnimalType, AnimalConfig> = {
   chicken: { biomes: ['farmland'], hostile: false, hp: 3, loot: ['meat', 'egg'], maxPop: 6 },
   cow: { biomes: ['farmland', 'meadow'], hostile: false, hp: 20, loot: ['meat', 'milk', 'hide'], maxPop: 4 },
   fish: { biomes: ['water', 'river'], hostile: false, hp: 2, loot: ['fish'], maxPop: 12 },
+  sheep: { biomes: ['farmland', 'meadow'], hostile: false, hp: 15, loot: ['meat', 'wool'], maxPop: 4 },
+  butterfly: { biomes: ['grass', 'meadow', 'forest'], hostile: false, hp: 1, loot: [], maxPop: 10 },
+  bear: { biomes: ['forest', 'mountain'], hostile: true, hp: 60, loot: ['meat', 'hide', 'claw'], maxPop: 3 },
+  eagle: { biomes: ['mountain'], hostile: false, hp: 20, loot: ['feather'], maxPop: 4 },
+  horse: { biomes: ['grass', 'meadow'], hostile: false, hp: 30, loot: ['meat', 'hide'], maxPop: 4 },
+  giant_spider: { biomes: ['cave', 'dense_forest'], hostile: true, hp: 40, loot: ['spider_silk', 'venom'], maxPop: 5 },
+  dire_wolf: { biomes: ['snow', 'mountain'], hostile: true, hp: 70, loot: ['hide', 'fang'], maxPop: 3 },
+  griffin: { biomes: ['mountain'], hostile: true, hp: 120, loot: ['feather'], maxPop: 1 },
 }
 
 export class EcosystemManager {

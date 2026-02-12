@@ -2,11 +2,16 @@
 // Ecosystem — resource regeneration, animals, seasons
 // ──────────────────────────────────────────────
 
+import type { LootEntry } from './combat.js'
+
 export type Season = 'spring' | 'summer' | 'autumn' | 'winter'
 
 export type ResourceState = 'mature' | 'stump' | 'sapling' | 'depleted' | 'regrowing'
 
-export type AnimalType = 'rabbit' | 'deer' | 'wolf' | 'boar' | 'chicken' | 'cow' | 'fish'
+export type AnimalType =
+  | 'rabbit' | 'chicken' | 'cow' | 'sheep' | 'fish' | 'butterfly'
+  | 'deer' | 'boar' | 'bear' | 'eagle' | 'horse' | 'wolf'
+  | 'giant_spider' | 'dire_wolf' | 'griffin'
 
 export interface AnimalInstance {
   id: string
@@ -85,3 +90,110 @@ export function getSeasonalModifiers(season: Season): SeasonalModifiers {
       }
   }
 }
+
+// ── Creature Unified Types ──
+
+export type CreatureType = 'animal' | 'monster' | 'beast' | 'undead' | 'demon' | 'dragon' | 'elemental'
+export type CreatureBehavior = 'passive' | 'neutral' | 'territorial' | 'aggressive' | 'predator' | 'boss'
+export type CreatureState = 'roaming' | 'hunting' | 'resting' | 'guarding' | 'fleeing' | 'dead'
+export type CreatureTier = 1 | 2 | 3 | 4 | 5
+export type ActiveTime = 'day' | 'night' | 'both'
+
+export interface Creature {
+  id: string
+  templateId: string
+  name: string
+  customName?: string
+  tier: CreatureTier
+  creatureType: CreatureType
+  behavior: CreatureBehavior
+  position: { x: number; y: number }
+  hp: number
+  maxHp: number
+  attack: number
+  defense: number
+  speed: number
+  stats: {
+    strength: number
+    agility: number
+    intelligence: number
+    perception: number
+  }
+  lootTable: LootEntry[]
+  habitat: string[]
+  activeTime: ActiveTime
+  packId?: string
+  denId?: string
+  respawnTick?: number
+  state: CreatureState
+  lastActionTick: number
+  // Animal-specific
+  isAnimal: boolean
+  canBeTamed?: boolean
+  produces?: { item: string; interval: number; lastProduced: number }
+  // Monster-specific
+  abilities?: string[]
+  weaknesses?: string[]
+  immunities?: string[]
+}
+
+// ── Pack Types ──
+
+export interface Pack {
+  id: string
+  packType: 'wolf_pack' | 'goblin_tribe' | 'orc_warband' | 'bandit_gang'
+  leaderId: string
+  memberIds: string[]
+  territoryCenter: { x: number; y: number }
+  territoryRadius: number
+  morale: number  // 0-100
+  state: 'idle' | 'hunting' | 'patrolling' | 'raiding' | 'fleeing' | 'resting'
+  targetId?: string
+  lastActionTick: number
+}
+
+// ── Den Types ──
+
+export type DenType =
+  | 'goblin_camp' | 'wolf_den' | 'bandit_hideout' | 'spider_nest'
+  | 'orc_fortress' | 'undead_crypt' | 'dragon_lair' | 'ancient_ruins_dungeon'
+
+export interface DenRoom {
+  id: string
+  name: string
+  floor: number
+  connections: string[]  // room IDs
+  creatures: string[]    // creature IDs
+  loot: { itemType: string; quantity: number }[]
+  traps: { type: string; damage: number; disarmDifficulty: number }[]
+  isBossRoom: boolean
+  isCleared: boolean
+}
+
+export interface Den {
+  id: string
+  denType: DenType
+  name: string
+  position: { x: number; y: number }
+  tier: CreatureTier
+  rooms: DenRoom[]
+  bossId?: string
+  creatureIds: string[]
+  discovered: boolean
+  cleared: boolean
+  respawnTimer: number
+  respawnAt?: number
+  lastClearedAt?: number
+}
+
+// ── Biome Spawn Config ──
+
+export interface BiomeSpawnEntry {
+  templateId: string
+  weight: number
+  minTier: CreatureTier
+  maxTier: CreatureTier
+  timeRestriction?: ActiveTime
+}
+
+export type BiomeSpawnTable = Record<string, BiomeSpawnEntry[]>

@@ -30,17 +30,6 @@ const MONSTER_TEMPLATES: MonsterTemplate[] = [
     minLevel: 1, weight: 25,
   },
   {
-    type: 'wolf',
-    name: '늑대',
-    baseHp: 50, baseAttack: 9, baseDefense: 2,
-    aggroRadius: 6, respawnTicks: 200,
-    loot: [
-      { itemType: 'wolf_pelt', chance: 0.5, quantityMin: 1, quantityMax: 1 },
-      { itemType: 'raw_meat', chance: 0.7, quantityMin: 1, quantityMax: 2 },
-    ],
-    minLevel: 2, weight: 20,
-  },
-  {
     type: 'skeleton',
     name: '스켈레톤',
     baseHp: 55, baseAttack: 8, baseDefense: 5,

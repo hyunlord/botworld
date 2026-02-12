@@ -61,6 +61,8 @@ export interface NPCContext {
   kingdomContext?: string
   /** Building context (optional, enriched when building manager is wired) */
   buildingContext?: string
+  /** Creature context (optional, enriched when creature manager is wired) */
+  nearbyCreatures?: string
 }
 
 // ── Rate limiter ──

@@ -4,14 +4,14 @@ import type { Item } from './item.js'
 // ── Monster Types ──
 
 export type MonsterType =
-  | 'goblin'
-  | 'wolf'
-  | 'skeleton'
-  | 'bandit'
-  | 'slime'
-  | 'troll'
-  | 'ghost'
-  | 'dragon_whelp'
+  | 'slime' | 'rat' | 'bat' | 'skeleton' | 'zombie'
+  | 'goblin' | 'goblin_shaman' | 'goblin_chief'
+  | 'orc_warrior' | 'orc_berserker'
+  | 'bandit' | 'bandit_leader'
+  | 'harpy' | 'troll' | 'ghost' | 'wraith'
+  | 'ogre' | 'wyvern' | 'basilisk' | 'minotaur' | 'lich'
+  | 'dragon_whelp' | 'dragon' | 'ancient_golem'
+  | 'world_serpent' | 'demon_lord'
 
 export interface LootEntry {
   itemType: string

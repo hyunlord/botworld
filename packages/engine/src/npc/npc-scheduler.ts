@@ -27,6 +27,7 @@ import type { SettlementManager } from '../politics/settlement-manager.js'
 import type { KingdomManager } from '../politics/kingdom-manager.js'
 import type { EcosystemManager } from '../world/ecosystem-manager.js'
 import type { BuildingManager } from '../buildings/building-manager.js'
+import type { CreatureManager } from '../creatures/creature-manager.js'
 
 // ── Configuration ──
 
@@ -264,6 +265,7 @@ export class NPCScheduler {
   private kingdomManager: KingdomManager | null = null
   private ecosystemManager: EcosystemManager | null = null
   private buildingManager: BuildingManager | null = null
+  private creatureManager: CreatureManager | null = null
 
   /** Wire politics systems for LLM context enrichment */
   setPoliticsSystems(
@@ -284,6 +286,11 @@ export class NPCScheduler {
   /** Wire building manager for building context */
   setBuildingManager(bm: BuildingManager): void {
     this.buildingManager = bm
+  }
+
+  /** Wire creature manager for creature context */
+  setCreatureManager(cm: CreatureManager): void {
+    this.creatureManager = cm
   }
 
   /** Register an NPC for scheduled LLM decisions */
@@ -471,6 +478,11 @@ export class NPCScheduler {
       }
     }
 
+    // Creature context
+    const nearbyCreatures = this.creatureManager
+      ? this.creatureManager.formatForLLM(ref.agent.position, 15)
+      : ''
+
     return {
       npcName: ref.agent.name,
       npcRole: runtime.role,
@@ -513,6 +525,7 @@ export class NPCScheduler {
       settlementContext,
       kingdomContext,
       buildingContext,
+      nearbyCreatures,
     }
   }
 
