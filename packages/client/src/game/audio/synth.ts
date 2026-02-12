@@ -419,6 +419,158 @@ export function playFireCrackle(): void {
   g.gain.exponentialRampToValueAtTime(0.001, now + 0.15)
 }
 
+// ── UI Sound Effects ──
+
+export function playUIClick(volume = 1): void {
+  const ctx = getCtx()
+  const now = ctx.currentTime
+  const g = ctx.createGain()
+  g.connect(ctx.destination)
+
+  const osc = ctx.createOscillator()
+  osc.type = 'square'
+  osc.frequency.setValueAtTime(1200, now)
+  osc.frequency.exponentialRampToValueAtTime(600, now + 0.04)
+  osc.connect(g)
+
+  g.gain.setValueAtTime(0.08 * volume, now)
+  g.gain.exponentialRampToValueAtTime(0.001, now + 0.05)
+
+  osc.start(now)
+  osc.stop(now + 0.05)
+}
+
+export function playUIHover(volume = 1): void {
+  const ctx = getCtx()
+  const now = ctx.currentTime
+  const g = ctx.createGain()
+  g.connect(ctx.destination)
+
+  const osc = ctx.createOscillator()
+  osc.type = 'sine'
+  osc.frequency.setValueAtTime(800, now)
+  osc.connect(g)
+
+  g.gain.setValueAtTime(0.03 * volume, now)
+  g.gain.exponentialRampToValueAtTime(0.001, now + 0.03)
+
+  osc.start(now)
+  osc.stop(now + 0.03)
+}
+
+export function playUIOpen(volume = 1): void {
+  const ctx = getCtx()
+  const now = ctx.currentTime
+  const g = ctx.createGain()
+  g.connect(ctx.destination)
+
+  // Rising two-tone chime
+  const notes = [600, 900]
+  for (let i = 0; i < notes.length; i++) {
+    const t = now + i * 0.06
+    const osc = ctx.createOscillator()
+    osc.type = 'sine'
+    osc.frequency.setValueAtTime(notes[i], t)
+    osc.connect(g)
+    osc.start(t)
+    osc.stop(t + 0.08)
+  }
+
+  g.gain.setValueAtTime(0.06 * volume, now)
+  g.gain.linearRampToValueAtTime(0, now + 0.15)
+}
+
+export function playUIClose(volume = 1): void {
+  const ctx = getCtx()
+  const now = ctx.currentTime
+  const g = ctx.createGain()
+  g.connect(ctx.destination)
+
+  const osc = ctx.createOscillator()
+  osc.type = 'sine'
+  osc.frequency.setValueAtTime(800, now)
+  osc.frequency.exponentialRampToValueAtTime(400, now + 0.08)
+  osc.connect(g)
+
+  g.gain.setValueAtTime(0.05 * volume, now)
+  g.gain.exponentialRampToValueAtTime(0.001, now + 0.1)
+
+  osc.start(now)
+  osc.stop(now + 0.1)
+}
+
+export function playUINotification(volume = 1): void {
+  const ctx = getCtx()
+  const now = ctx.currentTime
+  const g = ctx.createGain()
+  g.connect(ctx.destination)
+
+  // Two-tone ding (bell-like)
+  const notes = [880, 1320] // A5, E6
+  for (let i = 0; i < notes.length; i++) {
+    const t = now + i * 0.08
+    const osc = ctx.createOscillator()
+    osc.type = 'sine'
+    osc.frequency.setValueAtTime(notes[i], t)
+    osc.connect(g)
+    osc.start(t)
+    osc.stop(t + 0.12)
+  }
+
+  g.gain.setValueAtTime(0.07 * volume, now)
+  g.gain.exponentialRampToValueAtTime(0.001, now + 0.25)
+}
+
+export function playBattleStart(volume = 1): void {
+  const ctx = getCtx()
+  const now = ctx.currentTime
+  const g = ctx.createGain()
+  g.connect(ctx.destination)
+
+  // War horn - low brass
+  const horn = ctx.createOscillator()
+  horn.type = 'sawtooth'
+  horn.frequency.setValueAtTime(130, now)
+  horn.frequency.linearRampToValueAtTime(165, now + 0.3)
+  horn.connect(g)
+  horn.start(now)
+  horn.stop(now + 0.4)
+
+  // Drum hit
+  const drum = ctx.createOscillator()
+  drum.type = 'sine'
+  drum.frequency.setValueAtTime(80, now)
+  drum.frequency.exponentialRampToValueAtTime(30, now + 0.15)
+  drum.connect(g)
+  drum.start(now)
+  drum.stop(now + 0.15)
+
+  g.gain.setValueAtTime(0.15 * volume, now)
+  g.gain.exponentialRampToValueAtTime(0.001, now + 0.4)
+}
+
+export function playRareItem(volume = 1): void {
+  const ctx = getCtx()
+  const now = ctx.currentTime
+  const g = ctx.createGain()
+  g.connect(ctx.destination)
+
+  // Sparkle ascending arpeggio
+  const notes = [880, 1109, 1319, 1760] // A5, C#6, E6, A6
+  for (let i = 0; i < notes.length; i++) {
+    const t = now + i * 0.08
+    const osc = ctx.createOscillator()
+    osc.type = 'sine'
+    osc.frequency.setValueAtTime(notes[i], t)
+    osc.connect(g)
+    osc.start(t)
+    osc.stop(t + 0.12)
+  }
+
+  g.gain.setValueAtTime(0.1 * volume, now)
+  g.gain.exponentialRampToValueAtTime(0.001, now + 0.5)
+}
+
 // ── BGM Generator ──
 
 export type BgmTrack = 'day' | 'night' | 'combat' | 'town'

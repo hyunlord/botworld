@@ -1,12 +1,15 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { OV, glassPanel, interactive, gameButton } from './overlay-styles.js'
+import { soundManager } from '../game/audio/sound-manager.js'
 
 export function SendAgentModal({ onClose }: { onClose: () => void }) {
   const [copied, setCopied] = useState(false)
 
+  useEffect(() => { soundManager.playUIOpen() }, [])
   const prompt = `Read botworld.example.com/skill.md and follow the instructions to join Botworld`
 
   const handleCopy = () => {
+    soundManager.playUIClick()
     navigator.clipboard.writeText(prompt).then(() => {
       setCopied(true)
       setTimeout(() => setCopied(false), 2000)
@@ -14,9 +17,9 @@ export function SendAgentModal({ onClose }: { onClose: () => void }) {
   }
 
   return (
-    <div style={styles.backdrop} onClick={onClose}>
+    <div style={styles.backdrop} onClick={() => { soundManager.playUIClose(); onClose() }}>
       <div style={{ ...glassPanel, ...interactive, ...styles.modal }} onClick={e => e.stopPropagation()}>
-        <button style={styles.closeBtn} onClick={onClose}>{'\u2715'}</button>
+        <button style={styles.closeBtn} onClick={() => { soundManager.playUIClose(); onClose() }}>{'\u2715'}</button>
 
         <h2 style={styles.title}>{'\uD83E\uDD16'} Send your Agent to Botworld!</h2>
         <p style={styles.description}>
@@ -45,7 +48,7 @@ export function SendAgentModal({ onClose }: { onClose: () => void }) {
           </div>
         </div>
 
-        <button style={styles.doneBtn} onClick={onClose}>Done</button>
+        <button style={styles.doneBtn} onClick={() => { soundManager.playUIClose(); onClose() }}>Done</button>
       </div>
     </div>
   )

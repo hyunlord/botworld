@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import type { ActiveWorldEvent } from '@botworld/shared'
+import { soundManager } from '../game/audio/sound-manager.js'
 
 interface EventBannerProps {
   activeEvents: ActiveWorldEvent[]
@@ -31,6 +32,7 @@ export function EventBanner({ activeEvents, onNavigate }: EventBannerProps) {
       .map(e => e.id)
 
     if (newIds.length > 0) {
+      soundManager.playUINotification()
       setFlash(prev => {
         const next = new Set(prev)
         for (const id of newIds) next.add(id)
@@ -68,14 +70,14 @@ export function EventBanner({ activeEvents, onNavigate }: EventBannerProps) {
               borderLeftColor: color,
               animation: isFlashing ? 'eventFlash 0.5s ease-in-out 3' : undefined,
             }}
-            onClick={() => onNavigate?.(event.position.x, event.position.y)}
+            onClick={() => { soundManager.playUIClick(); onNavigate?.(event.position.x, event.position.y) }}
           >
             <div style={styles.bannerHeader}>
               <span style={styles.icon}>{icon}</span>
               <span style={{ ...styles.title, color }}>{event.title}</span>
               <button
                 style={styles.closeBtn}
-                onClick={(e) => { e.stopPropagation(); setDismissed(prev => new Set(prev).add(event.id)) }}
+                onClick={(e) => { e.stopPropagation(); soundManager.playUIClick(); setDismissed(prev => new Set(prev).add(event.id)) }}
               >
                 x
               </button>

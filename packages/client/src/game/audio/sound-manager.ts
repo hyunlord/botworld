@@ -12,6 +12,8 @@ import {
   playFireCrackle, playThunder,
   startRainAmbient, stopRainAmbient, setRainVolume,
   startWindAmbient, stopWindAmbient, setWindVolume,
+  playUIClick, playUIHover, playUIOpen, playUIClose,
+  playUINotification, playBattleStart, playRareItem,
   type BgmTrack,
 } from './synth.js'
 
@@ -34,7 +36,7 @@ export class SoundManager {
 
   constructor() {
     this.bgmVolume = this.loadNumber(STORAGE_KEY_BGM, 0.3)
-    this.sfxVolume = this.loadNumber(STORAGE_KEY_SFX, 0.5)
+    this.sfxVolume = this.loadNumber(STORAGE_KEY_SFX, 0.3)
     this.muted = localStorage.getItem(STORAGE_KEY_MUTED) === 'true'
   }
 
@@ -177,6 +179,43 @@ export class SoundManager {
   playThunder(): void {
     if (this.muted || !this.initialized) return
     playThunder()
+  }
+
+  // ── UI SFX ──
+
+  playUIClick(): void {
+    if (this.muted || !this.initialized) return
+    playUIClick(this.sfxVolume)
+  }
+
+  playUIHover(): void {
+    if (this.muted || !this.initialized) return
+    playUIHover(this.sfxVolume)
+  }
+
+  playUIOpen(): void {
+    if (this.muted || !this.initialized) return
+    playUIOpen(this.sfxVolume)
+  }
+
+  playUIClose(): void {
+    if (this.muted || !this.initialized) return
+    playUIClose(this.sfxVolume)
+  }
+
+  playUINotification(): void {
+    if (this.muted || !this.initialized) return
+    playUINotification(this.sfxVolume)
+  }
+
+  playBattleStart(): void {
+    if (this.muted || !this.initialized) return
+    playBattleStart(this.sfxVolume)
+  }
+
+  playRareItem(): void {
+    if (this.muted || !this.initialized) return
+    playRareItem(this.sfxVolume)
   }
 
   // ── Weather Ambient ──

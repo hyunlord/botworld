@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import type { WorldEvent } from '@botworld/shared'
 import { OV, glassPanel, interactive } from './overlay-styles.js'
+import { soundManager } from '../game/audio/sound-manager.js'
 
 type EntryKind = 'chat' | 'gather' | 'craft' | 'trade' | 'combat' | 'event'
 
@@ -75,6 +76,7 @@ export function EventFeed({ events, agentNames, onNavigate, onSelectAgent }: Eve
   const [entries, setEntries] = useState<FeedEntry[]>([])
   const [unreadCount, setUnreadCount] = useState(0)
   const lastCountRef = useRef(0)
+  const lastNotifRef = useRef(0)
 
   useEffect(() => {
     const newEntries = events.map(e => eventToEntry(e, agentNames)).filter((e): e is FeedEntry => e !== null)
@@ -82,6 +84,11 @@ export function EventFeed({ events, agentNames, onNavigate, onSelectAgent }: Eve
       setEntries(prev => [...prev, ...newEntries].slice(-50))
       if (!expanded) {
         setUnreadCount(prev => prev + newEntries.length)
+        const now = Date.now()
+        if (now - lastNotifRef.current > 5000) {
+          lastNotifRef.current = now
+          soundManager.playUINotification()
+        }
       }
     }
   }, [events, agentNames])
@@ -106,7 +113,7 @@ export function EventFeed({ events, agentNames, onNavigate, onSelectAgent }: Eve
       <div style={styles.wrapper}>
         <button
           style={{ ...glassPanel, ...interactive, ...styles.toggleBtn }}
-          onClick={() => setExpanded(true)}
+          onClick={() => { soundManager.playUIOpen(); setExpanded(true) }}
           title="Show event feed"
         >
           <span style={styles.toggleIcon}>{'\uD83D\uDCAC'}</span>
@@ -123,7 +130,7 @@ export function EventFeed({ events, agentNames, onNavigate, onSelectAgent }: Eve
       <div style={{ ...glassPanel, ...interactive, ...styles.panel }}>
         <div style={styles.header}>
           <span style={styles.headerTitle}>Live Feed</span>
-          <button style={styles.collapseBtn} onClick={() => setExpanded(false)}>{'\u25BC'}</button>
+          <button style={styles.collapseBtn} onClick={() => { soundManager.playUIClose(); setExpanded(false) }}>{'\u25BC'}</button>
         </div>
         <div style={styles.entries}>
           {visible.length === 0 && (
@@ -137,7 +144,7 @@ export function EventFeed({ events, agentNames, onNavigate, onSelectAgent }: Eve
                 cursor: (entry.agentId || entry.position) ? 'pointer' : 'default',
                 opacity: i < 2 ? 0.6 : 1,  // older entries fade
               }}
-              onClick={() => handleEntryClick(entry)}
+              onClick={() => { soundManager.playUIClick(); handleEntryClick(entry) }}
             >
               <span style={{ color: KIND_COLORS[entry.kind] }}>{KIND_ICONS[entry.kind]}</span>
               <span style={styles.entryName}>{entry.agentName}:</span>

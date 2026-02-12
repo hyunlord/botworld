@@ -93,10 +93,10 @@ export function BottomHUD({
         {/* Right: Controls */}
         <div style={styles.right}>
           <div style={styles.audioContainer}>
-            <button onClick={handleMute} style={styles.iconBtn} title={muted ? 'Unmute' : 'Mute'}>
+            <button onClick={() => { soundManager.playUIClick(); handleMute() }} style={styles.iconBtn} title={muted ? 'Unmute' : 'Mute'}>
               {muted ? '\uD83D\uDD07' : '\uD83D\uDD0A'}
             </button>
-            <button onClick={() => setShowAudio(!showAudio)} style={styles.iconBtn} title="Audio settings">
+            <button onClick={() => { soundManager.playUIClick(); setShowAudio(!showAudio) }} style={styles.iconBtn} title="Audio settings">
               \u25BE
             </button>
             {showAudio && (
@@ -117,7 +117,7 @@ export function BottomHUD({
             )}
           </div>
 
-          <button onClick={togglePause} style={{
+          <button onClick={() => { soundManager.playUIClick(); togglePause() }} style={{
             ...styles.ctrlBtn,
             background: speedState.paused ? OV.hp : 'rgba(255,255,255,0.1)',
           }}>
@@ -126,7 +126,7 @@ export function BottomHUD({
 
           <div style={styles.speedGroup}>
             {SPEED_OPTIONS.map(s => (
-              <button key={s} onClick={() => socketClient.setSpeed(s)} style={{
+              <button key={s} onClick={() => { soundManager.playUIClick(); socketClient.setSpeed(s) }} style={{
                 ...styles.speedBtn,
                 background: speedState.speed === s && !speedState.paused ? OV.accent : 'rgba(255,255,255,0.08)',
                 color: speedState.speed === s && !speedState.paused ? '#000' : OV.textDim,
@@ -136,7 +136,7 @@ export function BottomHUD({
             ))}
           </div>
 
-          <button onClick={onSendAgent} style={styles.sendBtn}>
+          <button onClick={() => { soundManager.playUIClick(); onSendAgent() }} style={styles.sendBtn}>
             \uD83E\uDD16 Send Agent
           </button>
         </div>

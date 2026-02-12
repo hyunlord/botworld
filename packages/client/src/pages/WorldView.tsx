@@ -224,7 +224,7 @@ export function WorldView() {
         const pos = event.position as { x: number; y: number }
         scene.showCombatEffect(pos.x, pos.y)
         soundManager.setCombat(true)
-        soundManager.playAttack()
+        soundManager.playBattleStart()
       }
       if (event.type === 'combat:round' && 'round' in event) {
         soundManager.playAttack()

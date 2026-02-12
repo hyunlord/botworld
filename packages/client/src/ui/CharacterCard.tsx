@@ -1,8 +1,9 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import type { Agent, CharacterAppearance, CharacterClass, Race } from '@botworld/shared'
 import { getCompoundEmotions } from '@botworld/shared'
 import { OV, glassPanel, interactive } from './overlay-styles.js'
 import { RACE_ICONS, CLASS_ICONS, ACTION_ICONS } from './constants.js'
+import { soundManager } from '../game/audio/sound-manager.js'
 
 interface CharacterData {
   appearance: CharacterAppearance
@@ -31,6 +32,7 @@ export function CharacterCard({
   agent, characterData, onFollow, onUnfollow, isFollowing, recentChat, onClose,
 }: CharacterCardProps) {
   const [showDetails, setShowDetails] = useState(false)
+  useEffect(() => { soundManager.playUIOpen() }, [])
 
   const compound = getCompoundEmotions(agent.currentMood)
   const dominantEmotion = Object.entries(agent.currentMood)
@@ -59,7 +61,7 @@ export function CharacterCard({
     <div style={styles.backdrop} onClick={onClose}>
       <div style={{ ...glassPanel, ...interactive, ...styles.card }} onClick={e => e.stopPropagation()}>
         {/* Close button */}
-        <button style={styles.closeBtn} onClick={onClose}>\u2715</button>
+        <button style={styles.closeBtn} onClick={() => { soundManager.playUIClose(); onClose() }}>\u2715</button>
 
         {/* Header: avatar area + name */}
         <div style={styles.header}>
@@ -132,7 +134,7 @@ export function CharacterCard({
         {/* Action buttons */}
         <div style={styles.actions}>
           <button
-            onClick={() => isFollowing ? onUnfollow() : onFollow(agent.id)}
+            onClick={() => { soundManager.playUIClick(); isFollowing ? onUnfollow() : onFollow(agent.id) }}
             style={{
               ...styles.actionBtn,
               background: isFollowing ? OV.hp : 'rgba(255,255,255,0.1)',
@@ -141,7 +143,7 @@ export function CharacterCard({
             {isFollowing ? '\uD83D\uDCCD Unfollow' : '\uD83D\uDCCD Follow'}
           </button>
           <button
-            onClick={() => setShowDetails(!showDetails)}
+            onClick={() => { soundManager.playUIClick(); setShowDetails(!showDetails) }}
             style={{ ...styles.actionBtn, background: 'rgba(255,255,255,0.1)' }}
           >
             {showDetails ? '\u25B2 Less' : '\uD83D\uDD0D Details'}
