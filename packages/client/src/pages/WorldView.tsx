@@ -10,6 +10,7 @@ import { CharacterCard } from '../ui/CharacterCard.js'
 import { EventFeed } from '../ui/EventFeed.js'
 import { Minimap } from '../ui/Minimap.js'
 import { EventBanner } from '../ui/EventBanner.js'
+import { PoliticsPanel } from '../ui/PoliticsPanel.js'
 import { SendAgentModal } from '../ui/SendAgentButton.js'
 import { soundManager } from '../game/audio/sound-manager.js'
 import { OV, injectGameStyles } from '../ui/overlay-styles.js'
@@ -314,6 +315,9 @@ export function WorldView() {
         selectedAgentId={selectedAgent?.id ?? null}
         onNavigate={(x, y) => sceneRef.current?.centerOnTile(x, y)}
       />
+
+      {/* Politics Panel (top-right, collapsible) */}
+      <PoliticsPanel agentNames={agentNames} />
 
       {/* Event Feed (bottom-right, collapsible) */}
       <EventFeed

@@ -55,6 +55,10 @@ export interface NPCContext {
   rumorContext?: string
   secretContext?: string
   reputationContext?: string
+  /** Politics context (optional, enriched when politics systems are wired) */
+  guildContext?: string
+  settlementContext?: string
+  kingdomContext?: string
 }
 
 // ── Rate limiter ──
@@ -266,6 +270,17 @@ function buildContextMessage(ctx: NPCContext): string {
   }
   if (ctx.reputationContext) {
     lines.push(`\n${ctx.reputationContext}`)
+  }
+
+  // Politics context (guild, settlement, kingdom)
+  if (ctx.guildContext) {
+    lines.push(`\n${ctx.guildContext}`)
+  }
+  if (ctx.settlementContext) {
+    lines.push(`\n${ctx.settlementContext}`)
+  }
+  if (ctx.kingdomContext) {
+    lines.push(`\n${ctx.kingdomContext}`)
   }
 
   if (ctx.routineHint) {

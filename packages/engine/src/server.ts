@@ -25,6 +25,7 @@ import { createCombatRouter } from './api/combat.js'
 import { createFreeActionsRouter } from './api/free-actions.js'
 import { createItemsRouter } from './api/items.js'
 import { createSocialRouter } from './api/social.js'
+import { createPoliticsRouter } from './api/politics.js'
 import { NotificationManager } from './systems/notifications.js'
 import { MetricsCollector } from './monitoring/metrics.js'
 import { createHealthRouter } from './monitoring/health-check.js'
@@ -150,6 +151,10 @@ async function main() {
   app.use('/api/actions', createFreeActionsRouter(world, chatRelay))
   app.use('/api', createItemsRouter(world.itemManager, world.agentManager, world.npcManager))
   app.use('/api', createSocialRouter(world.relationshipManager, world.rumorSystem, world.secretSystem, world.reputationSystem))
+  app.use('/api', createPoliticsRouter(
+    world.guildManager, world.settlementManager, world.kingdomManager,
+    (id: string) => world.agentManager.getAgent(id)?.name ?? world.npcManager.getNpc(id)?.name ?? id,
+  ))
 
   // Admin routes (X-Admin-Key auth)
   app.use('/api', createAdminRouter(world, metrics))

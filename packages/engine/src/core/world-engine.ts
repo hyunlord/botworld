@@ -18,6 +18,9 @@ import { RelationshipManager } from '../social/relationship-manager.js'
 import { RumorSystem } from '../social/rumor-system.js'
 import { SecretSystem } from '../social/secret-system.js'
 import { ReputationSystem } from '../social/reputation-system.js'
+import { GuildManager } from '../politics/guild-manager.js'
+import { SettlementManager } from '../politics/settlement-manager.js'
+import { KingdomManager } from '../politics/kingdom-manager.js'
 
 export class WorldEngine {
   readonly eventBus = new EventBus()
@@ -36,6 +39,9 @@ export class WorldEngine {
   readonly rumorSystem: RumorSystem
   readonly secretSystem: SecretSystem
   readonly reputationSystem: ReputationSystem
+  readonly guildManager: GuildManager
+  readonly settlementManager: SettlementManager
+  readonly kingdomManager: KingdomManager
   clock: WorldClock
 
   private tickInterval: ReturnType<typeof setInterval> | null = null
@@ -101,6 +107,23 @@ export class WorldEngine {
 
     // Wire social systems to NPC manager for LLM context enrichment
     this.npcManager.setSocialSystems(this.relationshipManager, this.rumorSystem, this.secretSystem, this.reputationSystem)
+
+    // Politics systems
+    this.guildManager = new GuildManager(this.eventBus)
+    this.settlementManager = new SettlementManager(this.eventBus)
+    this.kingdomManager = new KingdomManager(this.eventBus)
+
+    // Wire politics dependencies
+    this.guildManager.setRelationshipManager(this.relationshipManager)
+    this.guildManager.setReputationSystem(this.reputationSystem)
+    this.settlementManager.setRelationshipManager(this.relationshipManager)
+    this.settlementManager.setReputationSystem(this.reputationSystem)
+    this.kingdomManager.setSettlementManager(this.settlementManager)
+    this.kingdomManager.setRelationshipManager(this.relationshipManager)
+    this.kingdomManager.setReputationSystem(this.reputationSystem)
+
+    // Wire politics to NPC manager for LLM context enrichment
+    this.npcManager.setPoliticsSystems(this.guildManager, this.settlementManager, this.kingdomManager)
   }
 
   start(): void {
@@ -357,6 +380,16 @@ export class WorldEngine {
     this.rumorSystem.tick(this.clock)
     this.reputationSystem.tick(this.clock, [...this.agentManager.getAllAgents(), ...this.npcManager.getAllNpcs()])
 
+    // 10.7. Politics systems tick (guild drama, settlement elections, treaty expiry)
+    const allAgentsForPolitics = [...this.agentManager.getAllAgents(), ...this.npcManager.getAllNpcs()]
+    const nameResolver = (id: string) => {
+      const a = this.agentManager.getAgent(id) ?? this.npcManager.getNpc(id)
+      return a?.name ?? id
+    }
+    this.guildManager.tick(this.clock, allAgentsForPolitics)
+    this.settlementManager.tick(this.clock, allAgentsForPolitics, nameResolver)
+    this.kingdomManager.tick(this.clock)
+
     // 11. Weather system tick
     const weatherChanged = this.weather.tick(this.clock)
     if (weatherChanged) {
@@ -405,6 +438,11 @@ export class WorldEngine {
       worldEvents: this.worldEvents.getActiveEvents(),
       monsters: this.combat.getAliveMonsters(),
       recentEvents: this.eventBus.getRecentEvents(20),
+      guilds: this.guildManager.getAllGuilds(),
+      settlements: this.settlementManager.getAllSettlements(),
+      kingdoms: this.kingdomManager.getAllKingdoms(),
+      wars: this.kingdomManager.getAllWars().filter(w => w.status === 'active'),
+      treaties: this.kingdomManager.getAllTreaties().filter(t => t.status === 'active'),
     }
   }
 }

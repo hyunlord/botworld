@@ -5,6 +5,7 @@ import type { CharacterAppearance, CharacterClass, Race } from './character.js'
 import type { WorldEventType, WorldEventCategory, WorldEventEffect } from './world-event.js'
 import type { MonsterType, CombatRound, CombatOutcome } from './combat.js'
 import type { RelationshipInteraction, RelationshipTag, RumorType, SecretType, SocialStatus } from './relationship.js'
+import type { GuildType, SettlementType, DiplomacyStatus, TreatyType, WarGoal } from './politics.js'
 
 /** All event types in the world */
 export type WorldEvent =
@@ -41,6 +42,19 @@ export type WorldEvent =
   | SecretRevealedEvent
   | ReputationChangedEvent
   | SocialStatusChangedEvent
+  | GuildCreatedEvent
+  | GuildMemberJoinedEvent
+  | GuildMemberLeftEvent
+  | GuildDramaEvent
+  | SettlementCreatedEvent
+  | SettlementGrewEvent
+  | ElectionStartedEvent
+  | ElectionEndedEvent
+  | SettlementLawEnactedEvent
+  | KingdomFoundedEvent
+  | TreatySignedEvent
+  | WarDeclaredEvent
+  | WarEndedEvent
 
 export interface AgentMovedEvent {
   type: 'agent:moved'
@@ -336,5 +350,134 @@ export interface SocialStatusChangedEvent {
   agentId: string
   oldStatus: SocialStatus
   newStatus: SocialStatus
+  timestamp: number
+}
+
+// ── Politics Events ──
+
+export interface GuildCreatedEvent {
+  type: 'guild:created'
+  guildId: string
+  guildName: string
+  guildType: GuildType
+  founderId: string
+  memberIds: string[]
+  timestamp: number
+}
+
+export interface GuildMemberJoinedEvent {
+  type: 'guild:member_joined'
+  guildId: string
+  guildName: string
+  agentId: string
+  rank: string
+  timestamp: number
+}
+
+export interface GuildMemberLeftEvent {
+  type: 'guild:member_left'
+  guildId: string
+  guildName: string
+  agentId: string
+  reason: 'left' | 'kicked' | 'betrayed'
+  timestamp: number
+}
+
+export interface GuildDramaEvent {
+  type: 'guild:drama'
+  guildId: string
+  guildName: string
+  dramaType: 'coup' | 'split' | 'merge' | 'betrayal'
+  description: string
+  involvedAgentIds: string[]
+  timestamp: number
+}
+
+export interface SettlementCreatedEvent {
+  type: 'settlement:created'
+  settlementId: string
+  settlementName: string
+  settlementType: SettlementType
+  poiId: string
+  timestamp: number
+}
+
+export interface SettlementGrewEvent {
+  type: 'settlement:grew'
+  settlementId: string
+  settlementName: string
+  oldType: SettlementType
+  newType: SettlementType
+  population: number
+  timestamp: number
+}
+
+export interface ElectionStartedEvent {
+  type: 'election:started'
+  settlementId: string
+  settlementName: string
+  candidates: { agentId: string; platform: string }[]
+  timestamp: number
+}
+
+export interface ElectionEndedEvent {
+  type: 'election:ended'
+  settlementId: string
+  settlementName: string
+  winnerId: string
+  winnerName: string
+  voteCount: number
+  totalVotes: number
+  timestamp: number
+}
+
+export interface SettlementLawEnactedEvent {
+  type: 'settlement:law_enacted'
+  settlementId: string
+  settlementName: string
+  lawType: string
+  description: string
+  timestamp: number
+}
+
+export interface KingdomFoundedEvent {
+  type: 'kingdom:founded'
+  kingdomId: string
+  kingdomName: string
+  rulerId: string
+  rulerName: string
+  settlementIds: string[]
+  timestamp: number
+}
+
+export interface TreatySignedEvent {
+  type: 'treaty:signed'
+  treatyId: string
+  treatyType: TreatyType
+  partyAId: string
+  partyAName: string
+  partyBId: string
+  partyBName: string
+  terms: string[]
+  timestamp: number
+}
+
+export interface WarDeclaredEvent {
+  type: 'war:declared'
+  warId: string
+  attackerId: string
+  attackerName: string
+  defenderId: string
+  defenderName: string
+  casusBelli: string
+  goal: WarGoal
+  timestamp: number
+}
+
+export interface WarEndedEvent {
+  type: 'war:ended'
+  warId: string
+  winnerId: string | null
+  terms: string[] | null
   timestamp: number
 }

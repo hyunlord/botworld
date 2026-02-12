@@ -22,6 +22,9 @@ import type { RelationshipManager } from '../social/relationship-manager.js'
 import type { RumorSystem } from '../social/rumor-system.js'
 import type { SecretSystem } from '../social/secret-system.js'
 import type { ReputationSystem } from '../social/reputation-system.js'
+import type { GuildManager } from '../politics/guild-manager.js'
+import type { SettlementManager } from '../politics/settlement-manager.js'
+import type { KingdomManager } from '../politics/kingdom-manager.js'
 
 // ── Configuration ──
 
@@ -253,6 +256,22 @@ export class NPCScheduler {
     this.reputationSystem = rep
   }
 
+  // ── Politics system references ──
+  private guildManager: GuildManager | null = null
+  private settlementManager: SettlementManager | null = null
+  private kingdomManager: KingdomManager | null = null
+
+  /** Wire politics systems for LLM context enrichment */
+  setPoliticsSystems(
+    gm: GuildManager,
+    sm: SettlementManager,
+    km: KingdomManager,
+  ): void {
+    this.guildManager = gm
+    this.settlementManager = sm
+    this.kingdomManager = km
+  }
+
   /** Register an NPC for scheduled LLM decisions */
   register(npcId: string, role: NpcRole, name: string): void {
     // Stagger initial timing so NPCs don't all fire at once
@@ -417,6 +436,17 @@ export class NPCScheduler {
       ? this.reputationSystem.formatForLLM(ref.agent.id)
       : undefined
 
+    // Build politics context if politics systems are available
+    const guildContext = this.guildManager
+      ? this.guildManager.formatForLLM(ref.agent.id, getAgentName)
+      : undefined
+    const settlementContext = this.settlementManager
+      ? this.settlementManager.formatForLLM(ref.agent.id)
+      : undefined
+    const kingdomContext = this.kingdomManager
+      ? this.kingdomManager.formatForLLM(ref.agent.id, getAgentName)
+      : undefined
+
     return {
       npcName: ref.agent.name,
       npcRole: runtime.role,
@@ -453,6 +483,9 @@ export class NPCScheduler {
       rumorContext,
       secretContext,
       reputationContext,
+      guildContext,
+      settlementContext,
+      kingdomContext,
     }
   }
 

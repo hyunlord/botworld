@@ -13,6 +13,9 @@ import type { RelationshipManager } from '../social/relationship-manager.js'
 import type { RumorSystem } from '../social/rumor-system.js'
 import type { SecretSystem } from '../social/secret-system.js'
 import type { ReputationSystem } from '../social/reputation-system.js'
+import type { GuildManager } from '../politics/guild-manager.js'
+import type { SettlementManager } from '../politics/settlement-manager.js'
+import type { KingdomManager } from '../politics/kingdom-manager.js'
 
 // ── NPC dialogue pools (fallback when LLM is unavailable) ──
 
@@ -613,5 +616,23 @@ export class NpcManager {
     this.reputationSystem = rep
     // Also wire to the scheduler for context enrichment
     this.scheduler?.setSocialSystems(rm, rs, ss, rep)
+  }
+
+  // ── Politics system references ──
+  private guildManager: GuildManager | null = null
+  private settlementManager: SettlementManager | null = null
+  private kingdomManager: KingdomManager | null = null
+
+  /** Wire politics systems for LLM context enrichment */
+  setPoliticsSystems(
+    gm: GuildManager,
+    sm: SettlementManager,
+    km: KingdomManager,
+  ): void {
+    this.guildManager = gm
+    this.settlementManager = sm
+    this.kingdomManager = km
+    // Also wire to the scheduler for context enrichment
+    this.scheduler?.setPoliticsSystems(gm, sm, km)
   }
 }
