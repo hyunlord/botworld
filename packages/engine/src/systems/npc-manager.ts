@@ -7,8 +7,9 @@ import type { PointOfInterest } from '../world/tile-map.js'
 import { EventBus } from '../core/event-bus.js'
 import { TileMap } from '../world/tile-map.js'
 import { findPath } from '../world/pathfinding.js'
+import { NPCScheduler } from '../npc/npc-scheduler.js'
 
-// ── NPC dialogue pools ──
+// ── NPC dialogue pools (fallback when LLM is unavailable) ──
 
 const MERCHANT_LINES = [
   'Welcome! What would you like to buy?',
@@ -125,11 +126,82 @@ export class NpcManager {
     merchant: 0, innkeeper: 0, guild_master: 0, wanderer: 0, guard: 0,
   }
 
+  /** LLM-powered scheduler (initialized after construction) */
+  private scheduler: NPCScheduler | null = null
+
+  /** Whether LLM brain is enabled (OPENROUTER_API_KEY is set) */
+  private llmEnabled = false
+
   constructor(
     private eventBus: EventBus,
     private tileMap: TileMap,
     private clockGetter: () => WorldClock,
-  ) {}
+  ) {
+    this.llmEnabled = !!process.env.OPENROUTER_API_KEY
+    if (this.llmEnabled) {
+      console.log('[NpcManager] LLM brain enabled (OPENROUTER_API_KEY detected)')
+    } else {
+      console.log('[NpcManager] LLM brain disabled — using scripted dialogue fallback')
+    }
+  }
+
+  /** Initialize the LLM scheduler with external dependencies.
+   *  Called by WorldEngine after all systems are constructed. */
+  initScheduler(
+    getAllAgents: () => Agent[],
+    getWeather: () => string,
+    getRecentEvents: () => string[],
+  ): void {
+    if (!this.llmEnabled) return
+
+    this.scheduler = new NPCScheduler(
+      this.eventBus,
+      this.tileMap,
+      () => {
+        // Provide NPC refs to scheduler (path, homePosition, etc.)
+        const refs = new Map<string, { agent: Agent; homePosition: Position; path: Position[]; pathIndex: number }>()
+        for (const [id, rt] of this.npcs) {
+          refs.set(id, {
+            agent: rt.agent,
+            homePosition: rt.homePosition,
+            path: rt.path,
+            pathIndex: rt.pathIndex,
+          })
+        }
+        return refs
+      },
+      getAllAgents,
+      getWeather,
+      getRecentEvents,
+    )
+
+    // Register already-spawned NPCs
+    for (const [id, rt] of this.npcs) {
+      this.scheduler.register(id, rt.role, rt.agent.name)
+    }
+
+    // Listen for chat events to feed conversation context to NPCs
+    this.eventBus.on('agent:spoke', (event) => {
+      if (event.type !== 'agent:spoke') return
+      const speaker = this.npcs.get(event.agentId)?.agent
+      const speakerName = speaker?.name ?? event.agentId.slice(0, 8)
+      // Don't feed NPC's own speech back to scheduler
+      if (!this.npcs.has(event.agentId)) {
+        const pos = this.findAgentPosition(event.agentId)
+        if (pos) {
+          this.scheduler!.feedChat(event.agentId, speakerName, event.message, pos)
+        }
+      }
+    })
+  }
+
+  /** Find any agent's position (NPCs or player agents via the provided getter) */
+  private findAgentPosition(agentId: string): Position | null {
+    const npc = this.npcs.get(agentId)
+    if (npc) return npc.agent.position
+    // Search among all agents via event bus (not ideal, but avoids circular dep)
+    return null
+  }
 
   /** Spawn NPCs at POIs after world generation */
   spawnFromPOIs(pois: PointOfInterest[]): Agent[] {
@@ -223,6 +295,11 @@ export class NpcManager {
 
     this.npcs.set(id, runtime)
 
+    // Register with scheduler if active
+    if (this.scheduler) {
+      this.scheduler.register(id, role, name)
+    }
+
     this.eventBus.emit({
       type: 'agent:spawned',
       agent,
@@ -303,57 +380,64 @@ export class NpcManager {
 
   /** Process NPC behaviors each tick */
   tick(clock: WorldClock): void {
+    // 1. Process movement for all NPCs with active paths (from LLM or wanderer logic)
     for (const runtime of this.npcs.values()) {
-      // Wanderer movement
-      if (runtime.role === 'wanderer') {
-        this.tickWanderer(runtime, clock)
+      // Process path movement (shared by both LLM and rule-based behavior)
+      if (runtime.path.length > 0 && runtime.pathIndex < runtime.path.length) {
+        if (clock.tick % 3 === 0) {
+          const prevPos = { ...runtime.agent.position }
+          runtime.agent.position = runtime.path[runtime.pathIndex]
+          runtime.pathIndex++
+
+          this.eventBus.emit({
+            type: 'agent:moved',
+            agentId: runtime.agent.id,
+            from: prevPos,
+            to: runtime.agent.position,
+            timestamp: clock.tick,
+          })
+        }
       }
 
-      // Idle chatter (NPCs occasionally speak)
-      if (clock.tick - runtime.lastSpokeTick >= runtime.chatterCooldown) {
-        this.idleChatter(runtime, clock)
+      // Wanderer path refill (when path is exhausted, pick next POI)
+      if (runtime.role === 'wanderer' && (runtime.path.length === 0 || runtime.pathIndex >= runtime.path.length)) {
+        this.refillWandererPath(runtime)
+      }
+    }
+
+    // 2. LLM-powered decisions (async, non-blocking)
+    if (this.scheduler) {
+      this.scheduler.tick(clock).catch(err => {
+        console.error('[NpcManager] Scheduler tick error:', (err as Error).message)
+      })
+    }
+
+    // 3. Scripted idle chatter fallback (only when LLM is not active)
+    if (!this.scheduler) {
+      for (const runtime of this.npcs.values()) {
+        if (clock.tick - runtime.lastSpokeTick >= runtime.chatterCooldown) {
+          this.idleChatter(runtime, clock)
+        }
       }
     }
   }
 
-  private tickWanderer(runtime: NpcRuntime, clock: WorldClock): void {
+  /** Refill wanderer path to next POI */
+  private refillWandererPath(runtime: NpcRuntime): void {
     const { agent } = runtime
+    const pois = this.tileMap.pois
+    if (pois.length < 2) return
 
-    // If no path, pick a new POI destination
-    if (runtime.path.length === 0 || runtime.pathIndex >= runtime.path.length) {
-      const pois = this.tileMap.pois
-      if (pois.length < 2) return
+    runtime.wanderTargetIndex = (runtime.wanderTargetIndex + 1) % pois.length
+    const target = pois[runtime.wanderTargetIndex]
 
-      // Pick next POI in sequence (cycling through all POIs)
+    if (target.position.x === agent.position.x && target.position.y === agent.position.y) {
       runtime.wanderTargetIndex = (runtime.wanderTargetIndex + 1) % pois.length
-      const target = pois[runtime.wanderTargetIndex]
-
-      // Don't path to current position
-      if (target.position.x === agent.position.x && target.position.y === agent.position.y) {
-        runtime.wanderTargetIndex = (runtime.wanderTargetIndex + 1) % pois.length
-        return
-      }
-
-      runtime.path = findPath(this.tileMap, agent.position, target.position)
-      runtime.pathIndex = 0
-
-      if (runtime.path.length === 0) return
+      return
     }
 
-    // Move one step every 3 ticks (slower than player agents)
-    if (clock.tick % 3 === 0 && runtime.pathIndex < runtime.path.length) {
-      const prevPos = { ...agent.position }
-      agent.position = runtime.path[runtime.pathIndex]
-      runtime.pathIndex++
-
-      this.eventBus.emit({
-        type: 'agent:moved',
-        agentId: agent.id,
-        from: prevPos,
-        to: agent.position,
-        timestamp: clock.tick,
-      })
-    }
+    runtime.path = findPath(this.tileMap, agent.position, target.position)
+    runtime.pathIndex = 0
   }
 
   private idleChatter(runtime: NpcRuntime, clock: WorldClock): void {
@@ -372,5 +456,10 @@ export class NpcManager {
       message: line,
       timestamp: clock.tick,
     })
+  }
+
+  /** Feed a chat message to the scheduler (for NPC conversation awareness) */
+  feedChatToScheduler(speakerId: string, speakerName: string, message: string, position: Position): void {
+    this.scheduler?.feedChat(speakerId, speakerName, message, position)
   }
 }

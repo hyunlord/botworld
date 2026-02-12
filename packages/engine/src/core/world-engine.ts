@@ -46,6 +46,21 @@ export class WorldEngine {
       this.npcManager.spawnFromPOIs(this.tileMap.pois)
     }
 
+    // Initialize NPC LLM scheduler with cross-system dependencies
+    this.npcManager.initScheduler(
+      () => [...this.agentManager.getAllAgents(), ...this.npcManager.getAllNpcs()],
+      () => this.weather.getState().current,
+      () => this.eventBus.getRecentEvents(5)
+        .filter(e => e.type === 'world_event:started' || e.type === 'combat:started' || e.type === 'monster:spawned')
+        .map(e => {
+          if (e.type === 'world_event:started') return e.title
+          if (e.type === 'monster:spawned') return `A ${e.monsterType} appeared nearby`
+          if (e.type === 'combat:started') return `Combat broke out nearby`
+          return ''
+        })
+        .filter(Boolean),
+    )
+
     console.log('[WorldEngine] Starting simulation...')
     this.restartInterval()
   }
