@@ -1,6 +1,7 @@
 import { useEffect, useRef, useCallback } from 'react'
 import type { Agent } from '@botworld/shared'
 import { POI_COLORS } from './constants.js'
+import { OV } from './overlay-styles.js'
 
 interface MinimapProps {
   agents: Agent[]
@@ -10,18 +11,20 @@ interface MinimapProps {
   size?: number
 }
 
-const PADDING = 12
+const PADDING = 14
+
+// Biome-like terrain colors for background (placeholder, since we don't have full terrain data)
+const TERRAIN_BG = '#1a2a1a'
 
 export function Minimap({
   agents,
   pois,
   selectedAgentId,
   onNavigate,
-  size = 180,
+  size = 160,
 }: MinimapProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
 
-  // Compute bounding box of all points
   const getBounds = useCallback(() => {
     let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity
 
@@ -39,14 +42,12 @@ export function Minimap({
       if (p.y > maxY) maxY = p.y
     }
 
-    // Fallback if nothing to show
     if (!isFinite(minX)) {
       return { minX: -10, minY: -10, maxX: 10, maxY: 10 }
     }
 
-    // Add some padding around bounds
-    const padX = Math.max((maxX - minX) * 0.1, 5)
-    const padY = Math.max((maxY - minY) * 0.1, 5)
+    const padX = Math.max((maxX - minX) * 0.12, 5)
+    const padY = Math.max((maxY - minY) * 0.12, 5)
     return { minX: minX - padX, minY: minY - padY, maxX: maxX + padX, maxY: maxY + padY }
   }, [agents, pois])
 
@@ -62,10 +63,16 @@ export function Minimap({
     canvas.height = size * dpr
     ctx.scale(dpr, dpr)
 
-    // Background
-    ctx.fillStyle = 'rgba(13, 17, 23, 0.85)'
+    // Background with rounded corners
+    ctx.fillStyle = OV.bg
     ctx.beginPath()
-    ctx.roundRect(0, 0, size, size, 8)
+    ctx.roundRect(0, 0, size, size, 10)
+    ctx.fill()
+
+    // Subtle terrain background
+    ctx.fillStyle = 'rgba(40, 60, 40, 0.3)'
+    ctx.beginPath()
+    ctx.roundRect(PADDING / 2, PADDING / 2, size - PADDING, size - PADDING, 6)
     ctx.fill()
 
     const bounds = getBounds()
@@ -78,22 +85,45 @@ export function Minimap({
       cy: PADDING + ((wy - bounds.minY) / rangeY) * drawSize,
     })
 
-    // Draw POIs (squares)
+    // Draw POIs (small colored squares with subtle glow)
     for (const poi of pois) {
       const { cx, cy } = toCanvas(poi.x, poi.y)
-      ctx.fillStyle = POI_COLORS[poi.type] ?? '#888888'
+      const color = POI_COLORS[poi.type] ?? '#888888'
+      // Glow
+      ctx.shadowColor = color
+      ctx.shadowBlur = 4
+      ctx.fillStyle = color
       ctx.fillRect(cx - 3, cy - 3, 6, 6)
+      ctx.shadowBlur = 0
     }
 
     // Draw agents (dots)
     for (const agent of agents) {
       const { cx, cy } = toCanvas(agent.position.x, agent.position.y)
       const isSelected = agent.id === selectedAgentId
-      ctx.fillStyle = isSelected ? '#e2b714' : '#63b3ed'
-      ctx.beginPath()
-      ctx.arc(cx, cy, isSelected ? 4 : 2.5, 0, Math.PI * 2)
-      ctx.fill()
+      if (isSelected) {
+        // Gold glow for selected
+        ctx.shadowColor = OV.accent
+        ctx.shadowBlur = 6
+        ctx.fillStyle = OV.accent
+        ctx.beginPath()
+        ctx.arc(cx, cy, 4, 0, Math.PI * 2)
+        ctx.fill()
+        ctx.shadowBlur = 0
+      } else {
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.7)'
+        ctx.beginPath()
+        ctx.arc(cx, cy, 2, 0, Math.PI * 2)
+        ctx.fill()
+      }
     }
+
+    // Border
+    ctx.strokeStyle = OV.border
+    ctx.lineWidth = 1
+    ctx.beginPath()
+    ctx.roundRect(0.5, 0.5, size - 1, size - 1, 10)
+    ctx.stroke()
   }, [agents, pois, selectedAgentId, size, getBounds])
 
   const handleClick = (e: React.MouseEvent<HTMLCanvasElement>) => {
@@ -121,13 +151,13 @@ export function Minimap({
       onClick={handleClick}
       style={{
         position: 'absolute',
-        top: 12,
+        bottom: 64,
         left: 12,
-        zIndex: 50,
+        zIndex: 100,
         width: size,
         height: size,
         cursor: 'crosshair',
-        borderRadius: 8,
+        borderRadius: 10,
         pointerEvents: 'auto',
       }}
       title="Click to navigate"
