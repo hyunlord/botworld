@@ -11,6 +11,9 @@ import { QuestManager } from '../systems/quest-manager.js'
 import { WorldEventSystem } from '../systems/world-events.js'
 import { CombatSystem } from '../systems/combat.js'
 import { NpcEventReactions } from '../npc/npc-event-reactions.js'
+import { ItemManager } from '../items/item-manager.js'
+import { ItemNamer } from '../items/item-namer.js'
+import { craftingSystem } from '../systems/crafting.js'
 
 export class WorldEngine {
   readonly eventBus = new EventBus()
@@ -23,6 +26,8 @@ export class WorldEngine {
   readonly worldEvents: WorldEventSystem
   readonly combat: CombatSystem
   readonly npcEventReactions: NpcEventReactions
+  readonly itemManager: ItemManager
+  readonly itemNamer: ItemNamer
   clock: WorldClock
 
   private tickInterval: ReturnType<typeof setInterval> | null = null
@@ -63,6 +68,21 @@ export class WorldEngine {
     this.worldEvents = new WorldEventSystem(this.eventBus, this.tileMap, () => this.clock)
     this.combat = new CombatSystem(this.eventBus, this.tileMap, () => this.clock)
     this.npcEventReactions = new NpcEventReactions(this.eventBus, this.npcManager, this.planExecutor, this.tileMap)
+
+    // Item system
+    this.itemManager = new ItemManager(this.eventBus, () => this.clock)
+    this.itemNamer = new ItemNamer(this.itemManager, this.eventBus)
+
+    // Wire crafting system to rich item creation
+    craftingSystem.setItemManager(this.itemManager)
+    craftingSystem.setItemNamer(this.itemNamer)
+    craftingSystem.setTileMap(this.tileMap)
+
+    // Wire combat system to rich loot creation
+    this.combat.setItemManager(this.itemManager)
+
+    // Wire agent manager for trade history tracking
+    this.agentManager.setItemManager(this.itemManager)
   }
 
   start(): void {
@@ -240,6 +260,9 @@ export class WorldEngine {
 
     // 10. Combat system tick (spawn/respawn monsters)
     this.combat.tick(this.clock)
+
+    // 10.5. Item system tick (dynamic pricing)
+    this.itemManager.tick(this.clock)
 
     // 11. Weather system tick
     const weatherChanged = this.weather.tick(this.clock)

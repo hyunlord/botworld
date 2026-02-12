@@ -23,6 +23,7 @@ import { createQuestRouter } from './api/quests.js'
 import { createWorldEventsRouter } from './api/world-events.js'
 import { createCombatRouter } from './api/combat.js'
 import { createFreeActionsRouter } from './api/free-actions.js'
+import { createItemsRouter } from './api/items.js'
 import { NotificationManager } from './systems/notifications.js'
 import { MetricsCollector } from './monitoring/metrics.js'
 import { createHealthRouter } from './monitoring/health-check.js'
@@ -146,6 +147,7 @@ async function main() {
   app.use('/api', createWorldEventsRouter(world))
   app.use('/api', createCombatRouter(world))
   app.use('/api/actions', createFreeActionsRouter(world, chatRelay))
+  app.use('/api', createItemsRouter(world.itemManager, world.agentManager, world.npcManager))
 
   // Admin routes (X-Admin-Key auth)
   app.use('/api', createAdminRouter(world, metrics))

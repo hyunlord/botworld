@@ -14,6 +14,7 @@ import { findPath } from '../world/pathfinding.js'
 import { MemoryStream } from './memory/memory-stream.js'
 import { processInteraction } from '../systems/social/relationship.js'
 import { craftingSystem } from '../systems/crafting.js'
+import type { ItemManager } from '../items/item-manager.js'
 
 interface AgentRuntime {
   agent: Agent
@@ -25,12 +26,17 @@ interface AgentRuntime {
 export class AgentManager {
   private agents = new Map<string, AgentRuntime>()
   private pendingActions = new Map<string, AgentAction>()
+  private itemManager: ItemManager | null = null
 
   constructor(
     private eventBus: EventBus,
     private tileMap: TileMap,
     private clockGetter: () => WorldClock,
   ) {}
+
+  setItemManager(manager: ItemManager): void {
+    this.itemManager = manager
+  }
 
   createAgent(options: {
     name: string
@@ -434,7 +440,10 @@ export class AgentManager {
         if (recipeId) {
           const result = craftingSystem.executeCraft(agent, recipeId, generateId)
           if (result.success && result.item) {
-            agent.inventory.push(result.item)
+            // Rich items are already pushed to inventory by craftRichItem
+            if (!result.richItem) {
+              agent.inventory.push(result.item)
+            }
             agent.xp += result.critical ? 20 : 10
             agent.skills.crafting = Math.min(100, agent.skills.crafting + (result.critical ? 0.5 : 0.2))
 
@@ -525,6 +534,18 @@ export class AgentManager {
                 price: 0,
                 timestamp: clock.tick,
               })
+
+              // Record trade history for rich items
+              if (this.itemManager) {
+                if (forThem.richItemId) {
+                  this.itemManager.recordTrade(forThem.richItemId, agent.name, targetRuntime.agent.name, 0)
+                  this.itemManager.transferOwner(forThem.richItemId, targetRuntime.agent.id)
+                }
+                if (forMe.richItemId) {
+                  this.itemManager.recordTrade(forMe.richItemId, targetRuntime.agent.name, agent.name, 0)
+                  this.itemManager.transferOwner(forMe.richItemId, agent.id)
+                }
+              }
             }
           }
         }

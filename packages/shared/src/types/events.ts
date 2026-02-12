@@ -30,6 +30,10 @@ export type WorldEvent =
   | CombatEndedEvent
   | MonsterSpawnedEvent
   | MonsterDiedEvent
+  | ItemNamingCandidateEvent
+  | ItemNamedEvent
+  | ItemDestroyedEvent
+  | ItemMasterworkCreatedEvent
 
 export interface AgentMovedEvent {
   type: 'agent:moved'
@@ -227,5 +231,42 @@ export interface MonsterDiedEvent {
   monsterType: MonsterType
   killedBy: string
   position: Position
+  timestamp: number
+}
+
+// ── Item System Events ──
+
+export interface ItemNamingCandidateEvent {
+  type: 'item:naming_candidate'
+  itemId: string
+  reason: string
+  timestamp: number
+}
+
+export interface ItemNamedEvent {
+  type: 'item:named'
+  itemId: string
+  customName: string
+  quality: string
+  namedBy?: string
+  timestamp: number
+}
+
+export interface ItemDestroyedEvent {
+  type: 'item:destroyed'
+  itemId: string
+  itemName: string
+  quality: string
+  reason: string
+  timestamp: number
+}
+
+export interface ItemMasterworkCreatedEvent {
+  type: 'item:masterwork_created'
+  itemId: string
+  itemName: string
+  customName: string
+  quality: string
+  crafterName: string
   timestamp: number
 }

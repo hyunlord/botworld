@@ -5,6 +5,7 @@ import type {
 import { generateId } from '@botworld/shared'
 import { EventBus } from '../core/event-bus.js'
 import { TileMap } from '../world/tile-map.js'
+import type { ItemManager } from '../items/item-manager.js'
 
 // ── Monster Templates ──
 
@@ -103,7 +104,7 @@ function randomInt(min: number, max: number): number {
   return Math.floor(Math.random() * (max - min + 1)) + min
 }
 
-function rollLoot(entries: LootEntry[]): Item[] {
+function rollLootLegacy(entries: LootEntry[]): Item[] {
   const items: Item[] = []
   for (const entry of entries) {
     if (Math.random() < entry.chance) {
@@ -149,6 +150,7 @@ export class CombatSystem {
   private eventBus: EventBus
   private tileMap: TileMap
   private clockGetter: () => WorldClock
+  private itemManager: ItemManager | null = null
 
   private monsters: Map<string, Monster> = new Map()
   private activeCombats: Map<string, CombatState> = new Map()
@@ -158,6 +160,10 @@ export class CombatSystem {
     this.eventBus = eventBus
     this.tileMap = tileMap
     this.clockGetter = clockGetter
+  }
+
+  setItemManager(manager: ItemManager): void {
+    this.itemManager = manager
   }
 
   tick(clock: WorldClock): void {
@@ -398,7 +404,7 @@ export class CombatSystem {
       monster.hp = 0
       monster.deathTick = clock.tick
 
-      combat.lootDropped = rollLoot(monster.loot)
+      combat.lootDropped = this.rollLoot(monster)
 
       this.eventBus.emit({
         type: 'monster:died',
@@ -493,5 +499,50 @@ export class CombatSystem {
   /** Get active combats */
   getActiveCombats(): CombatState[] {
     return [...this.activeCombats.values()]
+  }
+
+  /** Roll loot — creates RichItems with DroppedProvenance when ItemManager is available */
+  private rollLoot(monster: Monster): Item[] {
+    if (!this.itemManager) {
+      return rollLootLegacy(monster.loot)
+    }
+
+    const items: Item[] = []
+    for (const entry of monster.loot) {
+      if (Math.random() < entry.chance) {
+        const quantity = randomInt(entry.quantityMin, entry.quantityMax)
+        const richItem = this.itemManager.createItem(
+          entry.itemType,
+          {
+            origin: 'dropped',
+            dropped_by: monster.name,
+            dropped_at: this.clockGetter().tick,
+          },
+          { ownerId: undefined },
+        )
+        if (richItem) {
+          items.push({
+            id: richItem.id,
+            type: 'crafted',
+            name: richItem.customName ?? richItem.name,
+            quantity,
+            rarity: 'common',
+            durability: richItem.durability,
+            maxDurability: richItem.maxDurability,
+            richItemId: richItem.id,
+          })
+        } else {
+          // Fallback for unknown templates
+          items.push({
+            id: generateId(),
+            type: 'crafted',
+            name: entry.itemType.replace(/_/g, ' '),
+            rarity: 'common',
+            quantity,
+          })
+        }
+      }
+    }
+    return items
   }
 }

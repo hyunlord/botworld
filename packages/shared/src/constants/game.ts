@@ -100,3 +100,59 @@ export const RARITY_STAT_MULTIPLIER: Record<string, number> = {
 
 /** Marketplace transaction fee rate */
 export const MARKET_FEE_RATE = 0.05
+
+// ──────────────────────────────────────────────
+// Quality system constants
+// ──────────────────────────────────────────────
+
+/** Quality stat multipliers (applied to base stats) */
+export const QUALITY_STAT_MULTIPLIER: Record<string, number> = {
+  crude: 0.7,
+  basic: 1.0,
+  fine: 1.3,
+  masterwork: 1.6,
+  legendary: 2.0,
+}
+
+/** Quality score → grade thresholds */
+export const QUALITY_THRESHOLDS = {
+  crude: 0,
+  basic: 30,
+  fine: 55,
+  masterwork: 75,
+  legendary: 90,
+} as const
+
+/** Quality score from quality name (for averaging material quality) */
+export const QUALITY_SCORE_VALUE: Record<string, number> = {
+  crude: 20,
+  basic: 40,
+  fine: 60,
+  masterwork: 80,
+  legendary: 95,
+}
+
+/** Tool quality bonus for crafting */
+export const TOOL_QUALITY_BONUS: Record<string, number> = {
+  crude: 0,
+  basic: 10,
+  fine: 20,
+  masterwork: 30,
+  legendary: 40,
+}
+
+/** Quality value multiplier for base_value */
+export const QUALITY_VALUE_MULTIPLIER: Record<string, number> = {
+  crude: 0.5,
+  basic: 1.0,
+  fine: 2.0,
+  masterwork: 5.0,
+  legendary: 15.0,
+}
+
+/** Dynamic pricing: ticks between market value updates */
+export const MARKET_UPDATE_INTERVAL = 100
+
+/** Dynamic pricing: min/max as fraction of base_value */
+export const MARKET_PRICE_MIN_RATIO = 0.5
+export const MARKET_PRICE_MAX_RATIO = 2.0
