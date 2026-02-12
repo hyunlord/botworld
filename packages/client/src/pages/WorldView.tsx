@@ -11,6 +11,7 @@ import { EventFeed } from '../ui/EventFeed.js'
 import { Minimap } from '../ui/Minimap.js'
 import { EventBanner } from '../ui/EventBanner.js'
 import { PoliticsPanel } from '../ui/PoliticsPanel.js'
+import { HistoryPanel } from '../ui/HistoryPanel.js'
 import { SendAgentModal } from '../ui/SendAgentButton.js'
 import { soundManager } from '../game/audio/sound-manager.js'
 import { OV, injectGameStyles } from '../ui/overlay-styles.js'
@@ -318,6 +319,11 @@ export function WorldView() {
 
       {/* Politics Panel (top-right, collapsible) */}
       <PoliticsPanel agentNames={agentNames} />
+
+      {/* History Panel (top-right, below Politics, collapsible) */}
+      <HistoryPanel
+        onNavigate={(x, y) => sceneRef.current?.centerOnTile(x, y)}
+      />
 
       {/* Event Feed (bottom-right, collapsible) */}
       <EventFeed

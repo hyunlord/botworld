@@ -26,6 +26,7 @@ import { createFreeActionsRouter } from './api/free-actions.js'
 import { createItemsRouter } from './api/items.js'
 import { createSocialRouter } from './api/social.js'
 import { createPoliticsRouter } from './api/politics.js'
+import { createHistoryRouter } from './api/history.js'
 import { NotificationManager } from './systems/notifications.js'
 import { MetricsCollector } from './monitoring/metrics.js'
 import { createHealthRouter } from './monitoring/health-check.js'
@@ -155,6 +156,7 @@ async function main() {
     world.guildManager, world.settlementManager, world.kingdomManager,
     (id: string) => world.agentManager.getAgent(id)?.name ?? world.npcManager.getNpc(id)?.name ?? id,
   ))
+  app.use('/api', createHistoryRouter(world))
 
   // Admin routes (X-Admin-Key auth)
   app.use('/api', createAdminRouter(world, metrics))

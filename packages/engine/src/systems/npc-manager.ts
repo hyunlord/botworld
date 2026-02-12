@@ -16,6 +16,7 @@ import type { ReputationSystem } from '../social/reputation-system.js'
 import type { GuildManager } from '../politics/guild-manager.js'
 import type { SettlementManager } from '../politics/settlement-manager.js'
 import type { KingdomManager } from '../politics/kingdom-manager.js'
+import type { EcosystemManager } from '../world/ecosystem-manager.js'
 
 // ── NPC dialogue pools (fallback when LLM is unavailable) ──
 
@@ -634,5 +635,10 @@ export class NpcManager {
     this.kingdomManager = km
     // Also wire to the scheduler for context enrichment
     this.scheduler?.setPoliticsSystems(gm, sm, km)
+  }
+
+  /** Wire ecosystem manager to scheduler */
+  setEcosystemManager(em: EcosystemManager): void {
+    this.scheduler?.setEcosystemManager(em)
   }
 }

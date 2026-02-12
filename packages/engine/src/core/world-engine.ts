@@ -21,6 +21,8 @@ import { ReputationSystem } from '../social/reputation-system.js'
 import { GuildManager } from '../politics/guild-manager.js'
 import { SettlementManager } from '../politics/settlement-manager.js'
 import { KingdomManager } from '../politics/kingdom-manager.js'
+import { WorldHistoryManager } from '../world/world-history.js'
+import { EcosystemManager } from '../world/ecosystem-manager.js'
 
 export class WorldEngine {
   readonly eventBus = new EventBus()
@@ -42,6 +44,8 @@ export class WorldEngine {
   readonly guildManager: GuildManager
   readonly settlementManager: SettlementManager
   readonly kingdomManager: KingdomManager
+  readonly historyManager: WorldHistoryManager
+  readonly ecosystemManager: EcosystemManager
   clock: WorldClock
 
   private tickInterval: ReturnType<typeof setInterval> | null = null
@@ -124,6 +128,21 @@ export class WorldEngine {
 
     // Wire politics to NPC manager for LLM context enrichment
     this.npcManager.setPoliticsSystems(this.guildManager, this.settlementManager, this.kingdomManager)
+
+    // History system
+    this.historyManager = new WorldHistoryManager(
+      this.eventBus,
+      (id: string) => {
+        const a = this.agentManager.getAgent(id) ?? this.npcManager.getNpc(id)
+        return a?.name ?? id
+      },
+    )
+
+    // Ecosystem system
+    this.ecosystemManager = new EcosystemManager(this.eventBus, this.tileMap)
+
+    // Wire ecosystem to NPC manager for seasonal context
+    this.npcManager.setEcosystemManager(this.ecosystemManager)
   }
 
   start(): void {
@@ -284,6 +303,19 @@ export class WorldEngine {
       )
     })
 
+    // Resource depletion → ecosystem regen tracking
+    this.eventBus.on('resource:gathered', (event) => {
+      if (event.type !== 'resource:gathered') return
+      // Check if tile resource is now depleted
+      const tile = this.tileMap.getTile(event.position.x, event.position.y)
+      if (tile?.resource && tile.resource.amount <= 0) {
+        this.ecosystemManager.onResourceDepleted(
+          event.position.x, event.position.y,
+          event.resourceType, event.timestamp,
+        )
+      }
+    })
+
     console.log('[WorldEngine] Starting simulation...')
     this.restartInterval()
   }
@@ -390,6 +422,9 @@ export class WorldEngine {
     this.settlementManager.tick(this.clock, allAgentsForPolitics, nameResolver)
     this.kingdomManager.tick(this.clock)
 
+    // 10.8. Ecosystem tick (resource regen, animals, seasons)
+    this.ecosystemManager.tick(this.clock)
+
     // 11. Weather system tick
     const weatherChanged = this.weather.tick(this.clock)
     if (weatherChanged) {
@@ -443,6 +478,9 @@ export class WorldEngine {
       kingdoms: this.kingdomManager.getAllKingdoms(),
       wars: this.kingdomManager.getAllWars().filter(w => w.status === 'active'),
       treaties: this.kingdomManager.getAllTreaties().filter(t => t.status === 'active'),
+      history: this.historyManager.getBySignificance(4),
+      season: this.ecosystemManager.getSeason(),
+      animals: this.ecosystemManager.getAnimals(),
     }
   }
 }

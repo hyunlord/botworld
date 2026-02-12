@@ -6,6 +6,8 @@ import type { WorldEventType, WorldEventCategory, WorldEventEffect } from './wor
 import type { MonsterType, CombatRound, CombatOutcome } from './combat.js'
 import type { RelationshipInteraction, RelationshipTag, RumorType, SecretType, SocialStatus } from './relationship.js'
 import type { GuildType, SettlementType, DiplomacyStatus, TreatyType, WarGoal } from './politics.js'
+import type { HistoryEventType } from './history.js'
+import type { Season, AnimalType } from './ecosystem.js'
 
 /** All event types in the world */
 export type WorldEvent =
@@ -55,6 +57,12 @@ export type WorldEvent =
   | TreatySignedEvent
   | WarDeclaredEvent
   | WarEndedEvent
+  | HistoryRecordedEvent
+  | CultureGeneratedEvent
+  | SeasonChangedEvent
+  | AnimalSpawnedEvent
+  | AnimalDiedEvent
+  | ResourceStateChangedEvent
 
 export interface AgentMovedEvent {
   type: 'agent:moved'
@@ -479,5 +487,60 @@ export interface WarEndedEvent {
   warId: string
   winnerId: string | null
   terms: string[] | null
+  timestamp: number
+}
+
+// ── History Events ──
+
+export interface HistoryRecordedEvent {
+  type: 'history:recorded'
+  entryId: string
+  historyType: HistoryEventType
+  title: string
+  significance: number
+  timestamp: number
+}
+
+// ── Culture Events ──
+
+export interface CultureGeneratedEvent {
+  type: 'culture:generated'
+  settlementId: string
+  settlementName: string
+  timestamp: number
+}
+
+// ── Ecosystem Events ──
+
+export interface SeasonChangedEvent {
+  type: 'season:changed'
+  oldSeason: Season
+  newSeason: Season
+  day: number
+  timestamp: number
+}
+
+export interface AnimalSpawnedEvent {
+  type: 'animal:spawned'
+  animalId: string
+  animalType: AnimalType
+  position: { x: number; y: number }
+  timestamp: number
+}
+
+export interface AnimalDiedEvent {
+  type: 'animal:died'
+  animalId: string
+  animalType: AnimalType
+  killedBy: string | null
+  loot: string[]
+  timestamp: number
+}
+
+export interface ResourceStateChangedEvent {
+  type: 'resource:state_changed'
+  tileKey: string
+  oldState: string
+  newState: string
   timestamp: number
 }

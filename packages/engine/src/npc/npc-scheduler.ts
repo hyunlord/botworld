@@ -25,6 +25,7 @@ import type { ReputationSystem } from '../social/reputation-system.js'
 import type { GuildManager } from '../politics/guild-manager.js'
 import type { SettlementManager } from '../politics/settlement-manager.js'
 import type { KingdomManager } from '../politics/kingdom-manager.js'
+import type { EcosystemManager } from '../world/ecosystem-manager.js'
 
 // ── Configuration ──
 
@@ -260,6 +261,7 @@ export class NPCScheduler {
   private guildManager: GuildManager | null = null
   private settlementManager: SettlementManager | null = null
   private kingdomManager: KingdomManager | null = null
+  private ecosystemManager: EcosystemManager | null = null
 
   /** Wire politics systems for LLM context enrichment */
   setPoliticsSystems(
@@ -270,6 +272,11 @@ export class NPCScheduler {
     this.guildManager = gm
     this.settlementManager = sm
     this.kingdomManager = km
+  }
+
+  /** Wire ecosystem manager for seasonal context */
+  setEcosystemManager(em: EcosystemManager): void {
+    this.ecosystemManager = em
   }
 
   /** Register an NPC for scheduled LLM decisions */
@@ -478,7 +485,9 @@ export class NPCScheduler {
       recentChat: [...runtime.recentChat],
       emotionState: this.summarizeEmotion(ref.agent),
       inventory: ref.agent.inventory.map(i => `${i.name} x${i.quantity}`),
-      routineHint,
+      routineHint: this.ecosystemManager
+        ? `${routineHint}\n${this.ecosystemManager.formatForLLM()}`
+        : routineHint,
       relationshipContext,
       rumorContext,
       secretContext,

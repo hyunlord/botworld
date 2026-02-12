@@ -7,7 +7,8 @@
  */
 
 import type {
-  Settlement, SettlementType, SettlementLaw, Election, ElectionCandidate,
+  Settlement, SettlementType, SettlementLaw, SettlementTradition, SettlementLegend,
+  Election, ElectionCandidate,
   WorldClock, Agent,
 } from '@botworld/shared'
 import { generateId, getSettlementTypeForPopulation, TICKS_PER_GAME_DAY } from '@botworld/shared'
@@ -68,8 +69,13 @@ export class SettlementManager {
       allegiance: null,
       culture: {
         mainActivity: 'general',
-        festivals: [],
+        languageStyle: '',
+        greeting: '',
+        values: [],
+        taboos: [],
         traditions: [],
+        legends: [],
+        festivals: [],
       },
       residents: [...founderIds],
       currentElection: null,
@@ -254,6 +260,23 @@ export class SettlementManager {
       line += `  Leader: ${isLeader ? 'You' : settlement.leaderId}\n`
     }
 
+    // Culture context
+    if (settlement.culture.languageStyle) {
+      line += `  [Culture] Speaking style: ${settlement.culture.languageStyle}\n`
+      line += `  Greeting: "${settlement.culture.greeting}"\n`
+      line += `  Values: ${settlement.culture.values.join(', ')}\n`
+      line += `  Taboos: ${settlement.culture.taboos.join(', ')}\n`
+    }
+
+    if (settlement.culture.traditions.length > 0) {
+      line += `  Traditions: ${settlement.culture.traditions.map(t => t.name).join(', ')}\n`
+    }
+
+    if (settlement.culture.legends.length > 0) {
+      const recentLegend = settlement.culture.legends[settlement.culture.legends.length - 1]
+      line += `  Local legend: "${recentLegend.title}"\n`
+    }
+
     if (settlement.currentElection) {
       const e = settlement.currentElection
       line += `  [Active Election] Status: ${e.status}`
@@ -269,6 +292,139 @@ export class SettlementManager {
     }
 
     return line
+  }
+
+  /** Generate culture for a settlement based on its biome and characteristics */
+  generateCulture(settlement: Settlement, biome: string, mainResource: string): void {
+    // Language style based on biome
+    const BIOME_STYLES: Record<string, { style: string; greeting: string; values: string[]; taboos: string[] }> = {
+      mountain: {
+        style: 'Formal and stoic, with weight behind every word',
+        greeting: 'Stand strong, friend!',
+        values: ['strength', 'loyalty', 'honor'],
+        taboos: ['cowardice', 'oath breaking'],
+      },
+      forest: {
+        style: 'Quiet and contemplative, often poetic',
+        greeting: 'The trees whisper welcome.',
+        values: ['wisdom', 'harmony', 'patience'],
+        taboos: ['wanton destruction', 'greed'],
+      },
+      coast: {
+        style: 'Free-spirited and cheerful',
+        greeting: 'Fair winds to you!',
+        values: ['freedom', 'adaptability', 'courage'],
+        taboos: ['hoarding', 'dishonesty'],
+      },
+      plains: {
+        style: 'Warm and hospitable, direct',
+        greeting: 'Welcome, traveler!',
+        values: ['hospitality', 'hard work', 'community'],
+        taboos: ['laziness', 'selfishness'],
+      },
+      swamp: {
+        style: 'Mysterious and cryptic',
+        greeting: 'The mist parts for you.',
+        values: ['resourcefulness', 'secrecy', 'survival'],
+        taboos: ['betrayal', 'waste'],
+      },
+      desert: {
+        style: 'Spare and measured, every word counts',
+        greeting: 'Water and shade upon you.',
+        values: ['endurance', 'frugality', 'respect'],
+        taboos: ['water waste', 'false promises'],
+      },
+    }
+
+    // Determine biome category
+    let biomeCategory = 'plains'
+    if (['mountain', 'cliff', 'volcanic', 'tundra'].includes(biome)) biomeCategory = 'mountain'
+    else if (['forest', 'dense_forest'].includes(biome)) biomeCategory = 'forest'
+    else if (['water', 'beach', 'river'].includes(biome)) biomeCategory = 'coast'
+    else if (['swamp'].includes(biome)) biomeCategory = 'swamp'
+    else if (['sand', 'lava'].includes(biome)) biomeCategory = 'desert'
+
+    const cultural = BIOME_STYLES[biomeCategory] ?? BIOME_STYLES.plains
+
+    // Generate traditions based on main resource
+    const traditions: SettlementTradition[] = []
+    if (mainResource === 'wood') {
+      traditions.push({
+        name: 'Timber Festival',
+        description: 'A seasonal celebration of the forest bounty with log-rolling competitions.',
+        frequency: 'seasonal',
+        effects: ['gathering_xp_bonus'],
+      })
+    } else if (mainResource === 'iron' || mainResource === 'stone') {
+      traditions.push({
+        name: 'Forge Day',
+        description: 'Master smiths compete to craft the finest blade.',
+        frequency: 'seasonal',
+        effects: ['crafting_xp_bonus'],
+      })
+    } else if (mainResource === 'food') {
+      traditions.push({
+        name: 'Harvest Feast',
+        description: 'The whole settlement gathers to celebrate the harvest.',
+        frequency: 'seasonal',
+        effects: ['morale_boost'],
+      })
+    } else {
+      traditions.push({
+        name: 'Founders Day',
+        description: 'Commemorating the founding of the settlement with song and story.',
+        frequency: 'annual',
+        effects: ['morale_boost'],
+      })
+    }
+
+    // Add a combat tradition for settlements with defense
+    if (settlement.defenseLevel > 0) {
+      traditions.push({
+        name: "Warrior's Trial",
+        description: 'A tournament to determine the strongest defender.',
+        frequency: 'seasonal',
+        effects: ['combat_xp_bonus'],
+      })
+    }
+
+    settlement.culture = {
+      mainActivity: mainResource === 'food' ? 'farming' : mainResource === 'iron' ? 'mining' : mainResource === 'wood' ? 'logging' : 'trading',
+      languageStyle: cultural.style,
+      greeting: cultural.greeting,
+      values: cultural.values,
+      taboos: cultural.taboos,
+      traditions,
+      legends: [],
+      festivals: traditions.map(t => t.name),
+    }
+
+    this.eventBus.emit({
+      type: 'culture:generated',
+      settlementId: settlement.id,
+      settlementName: settlement.name,
+      timestamp: settlement.createdAt,
+    })
+
+    console.log(`[Settlement] Generated culture for ${settlement.name}: ${cultural.style.slice(0, 40)}...`)
+  }
+
+  /** Add a legend to a settlement's culture based on a world event */
+  addLegend(settlementId: string, title: string, story: string, relatedEventId?: string, tick?: number): void {
+    const settlement = this.settlements.get(settlementId)
+    if (!settlement) return
+
+    settlement.culture.legends.push({
+      title,
+      story,
+      relatedEventId,
+      addedAt: tick ?? 0,
+    })
+
+    // Keep only 10 most recent legends
+    if (settlement.culture.legends.length > 10) {
+      settlement.culture.legends = settlement.culture.legends.slice(-10)
+    }
   }
 
   // ── Private helpers ──
@@ -294,6 +450,14 @@ export class SettlementManager {
           population: settlement.residents.length,
           timestamp: tick,
         })
+
+        // Generate culture when settlement grows to village
+        if (oldType === 'camp' && (newType === 'village' || newType === 'town' || newType === 'city')) {
+          // Determine biome from first tile of POI area (simple heuristic)
+          const biome = 'plains' // default, could be enriched with tile map data
+          const mainResource = settlement.culture.mainActivity === 'general' ? 'food' : settlement.culture.mainActivity
+          this.generateCulture(settlement, biome, mainResource)
+        }
 
         // Upgrade defense for towns and cities
         if (newType === 'town' && settlement.defenseLevel < 1) settlement.defenseLevel = 1

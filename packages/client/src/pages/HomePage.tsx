@@ -12,6 +12,8 @@ interface LiveStats {
   combats: number
   chats: number
   pois: number
+  settlements: number
+  kingdoms: number
 }
 
 interface FeedItem {
@@ -41,6 +43,20 @@ function formatEvent(event: WorldEvent, agentMap: Map<string, string>): string |
       return `${event.name} Lv${event.level}이(가) 출현했다`
     case 'trade:completed':
       return `${name(event.buyerId)}과(와) ${name(event.sellerId)}이(가) 거래했다`
+    case 'guild:created':
+      return `${name(event.founderId)}이(가) ${event.guildName} 길드를 설립했다`
+    case 'settlement:created':
+      return `${event.settlementName} 마을이 건설되었다`
+    case 'settlement:grew':
+      return `${event.settlementName}이(가) ${event.newType}(으)로 성장했다`
+    case 'kingdom:founded':
+      return `${event.kingdomName} 왕국이 건국되었다!`
+    case 'war:declared':
+      return `${event.attackerName}이(가) ${event.defenderName}에게 선전포고!`
+    case 'election:ended':
+      return `${event.winnerName}이(가) ${event.settlementName} 지도자로 선출되었다`
+    case 'treaty:signed':
+      return `${event.partyAName}과(와) ${event.partyBName}이(가) ${event.treatyType} 조약을 체결했다`
     default:
       return null
   }
@@ -50,7 +66,7 @@ export function HomePage() {
   const navigate = useNavigate()
   const [showAgentPanel, setShowAgentPanel] = useState(false)
   const [copied, setCopied] = useState(false)
-  const [stats, setStats] = useState<LiveStats>({ agents: 0, combats: 0, chats: 0, pois: 0 })
+  const [stats, setStats] = useState<LiveStats>({ agents: 0, combats: 0, chats: 0, pois: 0, settlements: 0, kingdoms: 0 })
   const [feed, setFeed] = useState<FeedItem[]>([])
   const agentMapRef = useRef(new Map<string, string>())
   const socketRef = useRef<Socket | null>(null)
@@ -70,7 +86,7 @@ export function HomePage() {
     const socket = io(`${window.location.origin}/spectator`)
     socketRef.current = socket
 
-    socket.on('world:state', (state: { agents: Agent[]; chunks: Record<string, { poi?: { name: string } }> }) => {
+    socket.on('world:state', (state: { agents: Agent[]; chunks: Record<string, { poi?: { name: string } }>; settlements?: unknown[]; kingdoms?: unknown[] }) => {
       // Update agent map
       const map = new Map<string, string>()
       for (const a of state.agents) map.set(a.id, a.name)
@@ -78,7 +94,13 @@ export function HomePage() {
 
       // Count stats
       const poiCount = Object.values(state.chunks).filter(c => c.poi).length
-      setStats(prev => ({ ...prev, agents: state.agents.length, pois: poiCount }))
+      setStats(prev => ({
+        ...prev,
+        agents: state.agents.length,
+        pois: poiCount,
+        settlements: state.settlements?.length ?? prev.settlements,
+        kingdoms: state.kingdoms?.length ?? prev.kingdoms,
+      }))
     })
 
     socket.on('world:agents', (agents: Agent[]) => {
@@ -175,17 +197,27 @@ export function HomePage() {
         <div style={styles.stat}>
           <span style={styles.statIcon}>🤖</span>
           <span style={styles.statNum}>{stats.agents}</span>
-          <span style={styles.statLabel}>에이전트 활동 중</span>
+          <span style={styles.statLabel}>에이전트</span>
         </div>
         <div style={styles.stat}>
           <span style={styles.statIcon}>⚔️</span>
           <span style={styles.statNum}>{stats.combats}</span>
-          <span style={styles.statLabel}>전투 발생</span>
+          <span style={styles.statLabel}>전투</span>
         </div>
         <div style={styles.stat}>
           <span style={styles.statIcon}>💬</span>
           <span style={styles.statNum}>{stats.chats}</span>
-          <span style={styles.statLabel}>대화 진행</span>
+          <span style={styles.statLabel}>대화</span>
+        </div>
+        <div style={styles.stat}>
+          <span style={styles.statIcon}>🏘️</span>
+          <span style={styles.statNum}>{stats.settlements}</span>
+          <span style={styles.statLabel}>마을</span>
+        </div>
+        <div style={styles.stat}>
+          <span style={styles.statIcon}>👑</span>
+          <span style={styles.statNum}>{stats.kingdoms}</span>
+          <span style={styles.statLabel}>왕국</span>
         </div>
         <div style={styles.stat}>
           <span style={styles.statIcon}>🏰</span>

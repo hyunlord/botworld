@@ -81,10 +81,29 @@ export interface SettlementLaw {
   enactedAt: number
 }
 
+export interface SettlementTradition {
+  name: string
+  description: string
+  frequency: 'daily' | 'weekly' | 'seasonal' | 'annual'
+  effects?: string[]
+}
+
+export interface SettlementLegend {
+  title: string
+  story: string
+  relatedEventId?: string
+  addedAt: number
+}
+
 export interface SettlementCulture {
   mainActivity: string
+  languageStyle: string
+  greeting: string
+  values: string[]
+  taboos: string[]
+  traditions: SettlementTradition[]
+  legends: SettlementLegend[]
   festivals: string[]
-  traditions: string[]
 }
 
 export interface ElectionCandidate {
