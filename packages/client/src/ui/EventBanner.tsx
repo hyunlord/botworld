@@ -25,7 +25,7 @@ export function EventBanner({ activeEvents, onNavigate }: EventBannerProps) {
   const [dismissed, setDismissed] = useState<Set<string>>(new Set())
   const [flash, setFlash] = useState<Set<string>>(new Set())
 
-  // Flash new events
+  // Flash new events + auto-dismiss after 5s
   useEffect(() => {
     const newIds = activeEvents
       .filter(e => !flash.has(e.id))
@@ -40,7 +40,7 @@ export function EventBanner({ activeEvents, onNavigate }: EventBannerProps) {
       })
 
       // Remove flash after animation
-      const timer = setTimeout(() => {
+      const flashTimer = setTimeout(() => {
         setFlash(prev => {
           const next = new Set(prev)
           for (const id of newIds) next.delete(id)
@@ -48,7 +48,16 @@ export function EventBanner({ activeEvents, onNavigate }: EventBannerProps) {
         })
       }, 2000)
 
-      return () => clearTimeout(timer)
+      // Auto-dismiss after 5 seconds
+      const dismissTimer = setTimeout(() => {
+        setDismissed(prev => {
+          const next = new Set(prev)
+          for (const id of newIds) next.add(id)
+          return next
+        })
+      }, 5000)
+
+      return () => { clearTimeout(flashTimer); clearTimeout(dismissTimer) }
     }
   }, [activeEvents.map(e => e.id).join(',')])
 

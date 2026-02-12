@@ -16,6 +16,16 @@ const WEATHER_ICONS: Record<string, string> = {
   storm: '⛈️', snow: '🌨️', fog: '🌫️',
 }
 
+const SEASON_ORDER = ['spring', 'summer', 'autumn', 'winter'] as const
+const SEASON_ICONS: Record<string, string> = {
+  spring: '🌸', summer: '☀️', autumn: '🍂', winter: '❄️',
+}
+
+function getSeason(day: number): string {
+  const index = Math.floor((day % 28) / 7)
+  return SEASON_ORDER[index]
+}
+
 const SPEED_OPTIONS = [0.5, 1, 2, 3, 5]
 
 interface BottomHUDProps {
@@ -58,6 +68,8 @@ export function BottomHUD({
           <span style={styles.stat}>
             {TIME_ICONS[clock.timeOfDay] ?? '⏰'} Day {clock.day} {clock.timeOfDay}
           </span>
+          <span style={styles.divider}>|</span>
+          <span style={styles.stat}>{SEASON_ICONS[getSeason(clock.day)] ?? ''} {getSeason(clock.day)}</span>
           <span style={styles.divider}>|</span>
           {weather && (
             <>
