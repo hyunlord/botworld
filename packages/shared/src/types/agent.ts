@@ -15,7 +15,7 @@ export type SkillType =
 
 export type OrgRank = 'leader' | 'officer' | 'member' | 'recruit'
 
-export type NpcRole = 'merchant' | 'innkeeper' | 'guild_master' | 'wanderer' | 'guard'
+export type NpcRole = 'merchant' | 'innkeeper' | 'guild_master' | 'wanderer' | 'guard' | 'blacksmith' | 'scholar' | 'farmer' | 'priest'
 
 export type ActionType =
   | 'idle'
@@ -31,6 +31,8 @@ export type ActionType =
   | 'explore'
   | 'attack'
   | 'flee'
+  | 'build'
+  | 'give'
 
 export interface AgentAction {
   type: ActionType

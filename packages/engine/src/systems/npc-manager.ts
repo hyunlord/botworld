@@ -63,12 +63,52 @@ const GUARD_LINES = [
   'Keep your wits about you in the wilderness.',
 ]
 
+const BLACKSMITH_LINES = [
+  'The forge runs hot today.',
+  '*hammers a glowing ingot*',
+  'Good steel speaks for itself.',
+  'Bring me rare ore and I will make something special.',
+  'This blade still needs tempering...',
+  '*examines a weapon critically*',
+]
+
+const SCHOLAR_LINES = [
+  '*flips through an ancient tome*',
+  'Fascinating... this text mentions a forgotten ruin...',
+  'Knowledge is the truest treasure.',
+  'Have you seen any unusual artifacts in your travels?',
+  '*scribbles notes furiously*',
+  'The old legends speak of this very place...',
+]
+
+const FARMER_LINES = [
+  '*checks the soil* Good earth here.',
+  'Rain would be welcome for the crops.',
+  'The harvest looks promising this season.',
+  'Nothing beats fresh bread from your own wheat.',
+  '*pulls a weed* Persistent little things.',
+  'City folk do not know what real work looks like.',
+]
+
+const PRIEST_LINES = [
+  '*clasps hands in quiet prayer*',
+  'May peace guide your path.',
+  'The spirits are restless today...',
+  'Come, let me bless your journey.',
+  '*lights a candle at the altar*',
+  'All things are connected, traveler.',
+]
+
 const DIALOGUE_POOLS: Record<NpcRole, string[]> = {
   merchant: MERCHANT_LINES,
   innkeeper: INNKEEPER_LINES,
   guild_master: GUILD_MASTER_LINES,
   wanderer: WANDERER_LINES,
   guard: GUARD_LINES,
+  blacksmith: BLACKSMITH_LINES,
+  scholar: SCHOLAR_LINES,
+  farmer: FARMER_LINES,
+  priest: PRIEST_LINES,
 }
 
 // ── NPC names ──
@@ -79,6 +119,10 @@ const NPC_NAMES: Record<NpcRole, string[]> = {
   guild_master: ['Guildmaster Aldric', 'Master Freya', 'Commander Orin'],
   wanderer: ['Wanderer Kael', 'Nomad Lyra', 'Traveler Finn', 'Rover Ashlyn', 'Drifter Cade'],
   guard: ['Guard Captain Rolf', 'Sentinel Mira', 'Watchman Beric', 'Patrol Thea'],
+  blacksmith: ['Forge Master Torvin', 'Smith Brenna', 'Ironhand Garrek'],
+  scholar: ['Scholar Elara', 'Sage Milo', 'Archivist Petra'],
+  farmer: ['Farmer Hilda', 'Grower Tam', 'Fieldhand Rosie'],
+  priest: ['Father Cedric', 'Priestess Yuna', 'Cleric Arn'],
 }
 
 // ── Merchant shop stock ──
@@ -125,6 +169,7 @@ export class NpcManager {
   private npcs = new Map<string, NpcRuntime>()
   private nameCounters: Record<NpcRole, number> = {
     merchant: 0, innkeeper: 0, guild_master: 0, wanderer: 0, guard: 0,
+    blacksmith: 0, scholar: 0, farmer: 0, priest: 0,
   }
 
   /** LLM-powered scheduler (initialized after construction) */
@@ -246,6 +291,28 @@ export class NpcManager {
     const library = pois.find(p => p.type === 'library')
     if (library) {
       spawned.push(this.spawnNpc('guild_master', library.position, library))
+      // Scholar also at the library
+      spawned.push(this.spawnNpc('scholar', { x: library.position.x + 1, y: library.position.y }, library))
+    }
+
+    // Blacksmith at workshops
+    for (const poi of pois) {
+      if (poi.type === 'workshop') {
+        spawned.push(this.spawnNpc('blacksmith', poi.position, poi))
+      }
+    }
+
+    // Farmer at farms
+    for (const poi of pois) {
+      if (poi.type === 'farm') {
+        spawned.push(this.spawnNpc('farmer', poi.position, poi))
+      }
+    }
+
+    // Priest at first tavern (temple placeholder) — only 1
+    const firstTavern = pois.find(p => p.type === 'tavern')
+    if (firstTavern) {
+      spawned.push(this.spawnNpc('priest', { x: firstTavern.position.x - 1, y: firstTavern.position.y }, firstTavern))
     }
 
     console.log(`[NpcManager] Spawned ${spawned.length} NPCs`)
@@ -272,14 +339,17 @@ export class NpcManager {
         attack: DEFAULT_ATTACK + (role === 'guard' ? 5 : 0),
         defense: DEFAULT_DEFENSE + (role === 'guard' ? 3 : 0),
       },
-      level: role === 'guild_master' ? 10 : role === 'guard' ? 5 : 3,
+      level: role === 'guild_master' ? 10 : role === 'guard' ? 5 : role === 'blacksmith' ? 6 : 3,
       xp: 0,
       skills: {
-        gathering: 1, crafting: 1, combat: role === 'guard' ? 8 : 1,
-        diplomacy: role === 'merchant' ? 8 : role === 'innkeeper' ? 6 : 3,
+        gathering: role === 'farmer' ? 8 : 1,
+        crafting: role === 'blacksmith' ? 10 : 1,
+        combat: role === 'guard' ? 8 : 1,
+        diplomacy: role === 'merchant' ? 8 : role === 'innkeeper' ? 6 : role === 'priest' ? 8 : 3,
         leadership: role === 'guild_master' ? 10 : 1,
         trading: role === 'merchant' ? 10 : 1,
-        farming: 1, cooking: role === 'innkeeper' ? 8 : 1,
+        farming: role === 'farmer' ? 10 : 1,
+        cooking: role === 'innkeeper' ? 8 : role === 'farmer' ? 5 : 1,
       },
       inventory: this.createNpcInventory(role),
       memories: [],
@@ -347,6 +417,10 @@ export class NpcManager {
       case 'guild_master': return `${name} oversees the adventurers guild, offering guidance and quests.`
       case 'wanderer': return `${name} wanders the world, sharing stories and information between settlements.`
       case 'guard': return `${name} keeps watch over the settlement, protecting travelers and maintaining order.`
+      case 'blacksmith': return `${name} runs the forge, crafting weapons, armor, and tools from raw materials.`
+      case 'scholar': return `${name} studies ancient texts and records the world's history and legends at the library.`
+      case 'farmer': return `${name} tends the fields, growing crops and providing food to the settlement.`
+      case 'priest': return `${name} tends the temple, offering blessings, healing, and spiritual guidance.`
     }
   }
 

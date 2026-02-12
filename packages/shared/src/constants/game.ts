@@ -58,6 +58,8 @@ export const ENERGY_COST = {
   idle: 0,
   attack: 5,
   flee: 3,
+  build: 4,
+  give: 0,
 } as const
 
 /** Hunger drain per tick */

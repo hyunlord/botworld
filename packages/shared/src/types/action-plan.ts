@@ -11,7 +11,7 @@ import type { ActionType } from './agent.js'
  * Extended action types available in plans.
  * Includes base ActionType plus plan-specific actions.
  */
-export type PlanActionType = ActionType | 'emote' | 'patrol' | 'follow' | 'wait_for'
+export type PlanActionType = ActionType | 'emote' | 'patrol' | 'follow' | 'wait_for' | 'write' | 'steal'
 
 /**
  * A multi-step action plan for an agent or NPC.

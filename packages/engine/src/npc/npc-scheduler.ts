@@ -21,7 +21,7 @@ import type { PlanExecutor } from '../agent/plan-executor.js'
 
 // ── Configuration ──
 
-const BASE_INTERVAL = parseInt(process.env.NPC_ACTION_INTERVAL_BASE ?? '30000', 10)
+const BASE_INTERVAL = parseInt(process.env.NPC_ACTION_INTERVAL_BASE ?? '45000', 10)
 const NEARBY_RADIUS = 8
 
 // ── Types ──
@@ -169,6 +169,38 @@ const AMBIENT_LINES: Record<string, string[]> = {
     'Discipline... that is the key.',
     '*examines a guild notice*',
   ],
+  blacksmith: [
+    '*hammers a glowing ingot*',
+    'This steel needs more carbon...',
+    '*examines blade edge critically*',
+    'Good metal sings when you strike it right.',
+    '*stokes the forge fire*',
+    'Where did I put that mithril...',
+  ],
+  scholar: [
+    '*turns a page carefully*',
+    'Fascinating... absolutely fascinating.',
+    '*scribbles in a notebook*',
+    'The old texts mention this exact pattern...',
+    '*adjusts reading glasses*',
+    'I must cross-reference this with the archives.',
+  ],
+  farmer: [
+    '*checks the soil moisture*',
+    'The crops look good this season.',
+    '*pulls a stubborn weed*',
+    'Rain would be a blessing right about now.',
+    '*wipes brow* Hard work, honest work.',
+    'These tomatoes are coming along nicely.',
+  ],
+  priest: [
+    '*clasps hands in silent prayer*',
+    'May the light guide all travelers.',
+    '*lights incense at the altar*',
+    'I sense a change in the wind...',
+    '*reads from a sacred text*',
+    'Peace be upon this place.',
+  ],
 }
 
 export class NPCScheduler {
@@ -314,9 +346,9 @@ export class NPCScheduler {
   // ── Private helpers ──
 
   private computeInterval(runtime: NPCSchedulerRuntime): number {
-    if (runtime.hasConversation) return 15_000  // Active conversation
-    if (runtime.hasNearby) return BASE_INTERVAL  // Someone nearby
-    return BASE_INTERVAL * 2 + Math.random() * 30_000  // Alone: 60-90s
+    if (runtime.hasConversation) return 15_000  // Active conversation nearby
+    if (runtime.hasNearby) return 15_000         // Agent nearby: respond quickly
+    return 90_000 + Math.random() * 15_000       // Alone: 90-105s (cost saving)
   }
 
   private findNearbyAgents(position: Position, excludeId: string): Agent[] {
@@ -336,14 +368,29 @@ export class NPCScheduler {
     nearby: Agent[],
     routineHint: string,
   ): NPCContext {
+    // Find nearest POI name
+    const poiName = this.findNearestPoiName(ref.agent.position)
+    const gold = ref.agent.inventory
+      .filter(i => i.name.toLowerCase().includes('gold') || i.name.toLowerCase().includes('coin'))
+      .reduce((sum, i) => sum + i.quantity, 0)
+
     return {
       npcName: ref.agent.name,
       npcRole: runtime.role,
       npcBio: ref.agent.bio,
       timeOfDay: clock.timeOfDay,
       day: clock.day,
+      season: '',  // computed in brain from day
       weather: this.getWeather(),
       position: { x: ref.agent.position.x, y: ref.agent.position.y },
+      poiName,
+      hp: ref.agent.stats.hp,
+      maxHp: ref.agent.stats.maxHp,
+      energy: ref.agent.stats.energy,
+      maxEnergy: ref.agent.stats.maxEnergy,
+      hunger: ref.agent.stats.hunger,
+      maxHunger: ref.agent.stats.maxHunger,
+      gold,
       nearbyAgents: nearby.map(a => ({
         id: a.id,
         name: a.name,
@@ -352,6 +399,7 @@ export class NPCScheduler {
         distance: Math.abs(a.position.x - ref.agent.position.x) +
                   Math.abs(a.position.y - ref.agent.position.y),
         isNpc: a.isNpc ?? false,
+        role: a.npcRole,
       })),
       recentEvents: this.getRecentEventDescriptions(),
       recentChat: [...runtime.recentChat],
@@ -359,6 +407,19 @@ export class NPCScheduler {
       inventory: ref.agent.inventory.map(i => `${i.name} x${i.quantity}`),
       routineHint,
     }
+  }
+
+  /** Find the name of the nearest POI to a position */
+  private findNearestPoiName(pos: Position): string | undefined {
+    const pois = this.tileMap.pois
+    let best: { name: string; dist: number } | undefined
+    for (const poi of pois) {
+      const dist = Math.abs(poi.position.x - pos.x) + Math.abs(poi.position.y - pos.y)
+      if (dist <= 5 && (!best || dist < best.dist)) {
+        best = { name: poi.name, dist }
+      }
+    }
+    return best?.name
   }
 
   private summarizeEmotion(agent: Agent): string {

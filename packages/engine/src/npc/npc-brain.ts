@@ -25,8 +25,17 @@ export interface NPCContext {
   npcBio: string
   timeOfDay: string
   day: number
+  season: string
   weather: string
   position: { x: number; y: number }
+  poiName?: string
+  hp: number
+  maxHp: number
+  energy: number
+  maxEnergy: number
+  hunger: number
+  maxHunger: number
+  gold: number
   nearbyAgents: {
     id: string
     name: string
@@ -34,6 +43,7 @@ export interface NPCContext {
     action: string
     distance: number
     isNpc: boolean
+    role?: string
   }[]
   recentEvents: string[]
   recentChat: string[]
@@ -191,18 +201,28 @@ export async function callNPCBrainForPlan(
 
 // ── Context builder ──
 
+const SEASON_ORDER = ['spring', 'summer', 'autumn', 'winter'] as const
+function getSeason(day: number): string {
+  return SEASON_ORDER[Math.floor((day % 28) / 7)]
+}
+
 function buildContextMessage(ctx: NPCContext): string {
+  const season = ctx.season || getSeason(ctx.day)
   const lines: string[] = [
     `[Current Situation]`,
-    `Time: Day ${ctx.day}, ${ctx.timeOfDay}`,
-    `Weather: ${ctx.weather}`,
-    `My position: (${ctx.position.x}, ${ctx.position.y})`,
+    `Time: Day ${ctx.day}, ${ctx.timeOfDay} | Season: ${season} | Weather: ${ctx.weather}`,
+    ctx.poiName ? `Location: ${ctx.poiName} (${ctx.position.x}, ${ctx.position.y})` : `Position: (${ctx.position.x}, ${ctx.position.y})`,
+    `HP: ${ctx.hp}/${ctx.maxHp} | Energy: ${ctx.energy}/${ctx.maxEnergy} | Hunger: ${ctx.hunger}/${ctx.maxHunger}`,
   ]
+
+  if (ctx.gold > 0) {
+    lines.push(`Gold: ${ctx.gold}`)
+  }
 
   if (ctx.nearbyAgents.length > 0) {
     lines.push(`\nNearby characters:`)
     for (const a of ctx.nearbyAgents) {
-      const tag = a.isNpc ? ' (NPC)' : ''
+      const tag = a.isNpc ? (a.role ? ` (${a.role})` : ' (NPC)') : ''
       lines.push(`- ${a.name}${tag} (Lv${a.level}, ${a.action}, ${a.distance} tiles away)`)
     }
   } else {

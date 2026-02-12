@@ -69,12 +69,52 @@ const GUILD_MASTER_ROUTINE: RoutineTable = {
   night:     { hint: 'Close the guild. Study ancient texts. Rest.', fallback: 'rest', useLLM: false },
 }
 
+const BLACKSMITH_ROUTINE: RoutineTable = {
+  dawn:      { hint: 'Light the forge fires. Prepare materials for the day.', fallback: 'idle', useLLM: false },
+  morning:   { hint: 'Work at the forge. Hammer metal, craft items.', fallback: 'idle', useLLM: true },
+  noon:      { hint: 'Brief break. Inspect finished work, eat lunch.', fallback: 'idle', useLLM: true },
+  afternoon: { hint: 'Take orders from visitors. Evaluate materials and equipment.', fallback: 'speak', useLLM: true },
+  evening:   { hint: 'Bank the forge. Organize the workshop, finish orders.', fallback: 'idle', useLLM: true },
+  night:     { hint: 'Rest. Maybe sharpen a personal blade by the hearth.', fallback: 'rest', useLLM: false },
+}
+
+const SCHOLAR_ROUTINE: RoutineTable = {
+  dawn:      { hint: 'Early reading and note-taking in the library.', fallback: 'idle', useLLM: false },
+  morning:   { hint: 'Organize books, catalog new findings, research.', fallback: 'idle', useLLM: true },
+  noon:      { hint: 'Deep research session. Cross-reference ancient texts.', fallback: 'idle', useLLM: true },
+  afternoon: { hint: 'Meet visitors, share knowledge, discuss discoveries.', fallback: 'speak', useLLM: true },
+  evening:   { hint: 'Write reflections, plan expeditions to nearby ruins.', fallback: 'idle', useLLM: true },
+  night:     { hint: 'Read by candlelight, then rest.', fallback: 'rest', useLLM: false },
+}
+
+const FARMER_ROUTINE: RoutineTable = {
+  dawn:      { hint: 'Wake early. Check crops and water plants.', fallback: 'idle', useLLM: false },
+  morning:   { hint: 'Harvest ripe crops, tend fields. Hard work.', fallback: 'idle', useLLM: true },
+  noon:      { hint: 'Break for lunch. Maybe visit the marketplace to sell produce.', fallback: 'speak', useLLM: true },
+  afternoon: { hint: 'Back to fieldwork. Check for pests and weeds.', fallback: 'idle', useLLM: true },
+  evening:   { hint: 'Return home. Prepare a hearty meal.', fallback: 'move_home', useLLM: true },
+  night:     { hint: 'Early to bed. Farmers rise with the sun.', fallback: 'rest', useLLM: false },
+}
+
+const PRIEST_ROUTINE: RoutineTable = {
+  dawn:      { hint: 'Morning prayers and meditation at the temple.', fallback: 'idle', useLLM: false },
+  morning:   { hint: 'Bless visitors, tend the temple grounds.', fallback: 'speak', useLLM: true },
+  noon:      { hint: 'Offer healing to wounded travelers. Share wisdom.', fallback: 'speak', useLLM: true },
+  afternoon: { hint: 'Walk through the settlement. Check on people.', fallback: 'move_wander', useLLM: true },
+  evening:   { hint: 'Evening prayers. Light candles at the temple.', fallback: 'idle', useLLM: true },
+  night:     { hint: 'Contemplation and rest.', fallback: 'rest', useLLM: false },
+}
+
 const ROUTINE_TABLES: Record<NpcRole, RoutineTable> = {
   innkeeper: INNKEEPER_ROUTINE,
   merchant: MERCHANT_ROUTINE,
   guard: GUARD_ROUTINE,
   wanderer: WANDERER_ROUTINE,
   guild_master: GUILD_MASTER_ROUTINE,
+  blacksmith: BLACKSMITH_ROUTINE,
+  scholar: SCHOLAR_ROUTINE,
+  farmer: FARMER_ROUTINE,
+  priest: PRIEST_ROUTINE,
 }
 
 export function getRoutineEntry(role: NpcRole, timeOfDay: string): RoutineEntry {

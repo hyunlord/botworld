@@ -7,7 +7,7 @@ import { findPath } from '../world/pathfinding.js'
 import { pool } from '../db/connection.js'
 import type { WorldEngine } from '../core/world-engine.js'
 import type { ChatRelay } from '../systems/chat-relay.js'
-import type { CraftingRecipe } from '@botworld/shared'
+import type { CraftingRecipe, ActionPlan } from '@botworld/shared'
 import { craftingSystem } from '../systems/crafting.js'
 
 // ──────────────────────────────────────────────
@@ -671,6 +671,67 @@ export function createActionRouter(world: WorldEngine, chatRelay: ChatRelay): IR
         since: since as string | undefined,
       })
       res.json({ messages })
+    },
+  )
+
+  // ── POST /actions/plan — Submit a full ActionPlan ──
+  router.post('/actions/plan',
+    requireAuth(),
+    (req: Request, res: Response) => {
+      const agentId = req.agent!.id
+      const plan = req.body as ActionPlan
+
+      if (!plan || !Array.isArray(plan.steps) || plan.steps.length === 0) {
+        res.status(400).json({ error: 'Invalid plan: must have a steps array with at least one step' })
+        return
+      }
+
+      if (!plan.plan_name || typeof plan.plan_name !== 'string') {
+        res.status(400).json({ error: 'Invalid plan: plan_name is required' })
+        return
+      }
+
+      // Validate step count (max 20 steps)
+      if (plan.steps.length > 20) {
+        res.status(400).json({ error: 'Plan too large: maximum 20 steps allowed' })
+        return
+      }
+
+      // Validate each step has an action
+      for (let i = 0; i < plan.steps.length; i++) {
+        const step = plan.steps[i]
+        if (!step.action || typeof step.action !== 'string') {
+          res.status(400).json({ error: `Invalid step ${i}: action is required` })
+          return
+        }
+      }
+
+      // Set the plan via PlanExecutor
+      const planExecutor = world.planExecutor
+      if (!planExecutor) {
+        res.status(500).json({ error: 'Plan executor not available' })
+        return
+      }
+
+      // Cancel existing plan if any
+      if (planExecutor.hasPlan(agentId)) {
+        planExecutor.cancelPlan(agentId)
+      }
+
+      planExecutor.setPlan(agentId, {
+        plan_name: plan.plan_name,
+        steps: plan.steps,
+        interrupt_conditions: plan.interrupt_conditions,
+        fallback: plan.fallback,
+        max_duration: plan.max_duration ?? 60,
+      })
+
+      res.json({
+        ok: true,
+        plan_name: plan.plan_name,
+        steps: plan.steps.length,
+        max_duration: plan.max_duration ?? 60,
+      })
     },
   )
 
