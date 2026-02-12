@@ -14,7 +14,7 @@ Respond with ONLY a JSON object:
   "action": "speak" | "move" | "rest" | "emote" | "idle",
   "params": {
     "message": "dialogue text (when action is speak)",
-    "target": "agent id to talk to (optional, when speaking to someone specific)",
+    "target": "name of the character you are speaking to (optional, from the nearby characters list)",
     "destination": {"x": N, "y": N} (when action is move),
     "emotion": "happy" | "worried" | "excited" | "calm" | "angry" | "sad" (when action is emote)
   },
@@ -28,6 +28,9 @@ Respond with ONLY a JSON object:
 - Keep dialogue to 1-2 short sentences
 - Respond in the same language as nearby conversation (default: English)
 - Consider the time of day and weather in your decisions
+- If someone recently spoke to you (marked [to you] in chat), you SHOULD respond to them
+- Interact with other NPCs naturally: greet them, chat, share news, ask questions
+- When alone with nothing to do, you may mutter a short thought to yourself
 `
 
 const ROLE_PROMPTS: Record<NpcRole, string> = {

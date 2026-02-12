@@ -145,6 +145,9 @@ export class NpcManager {
     }
   }
 
+  /** Getter for all agents (NPCs + players), set during initScheduler */
+  private allAgentsGetter: (() => Agent[]) | null = null
+
   /** Initialize the LLM scheduler with external dependencies.
    *  Called by WorldEngine after all systems are constructed. */
   initScheduler(
@@ -152,6 +155,8 @@ export class NpcManager {
     getWeather: () => string,
     getRecentEvents: () => string[],
   ): void {
+    this.allAgentsGetter = getAllAgents
+
     if (!this.llmEnabled) return
 
     this.scheduler = new NPCScheduler(
@@ -180,26 +185,30 @@ export class NpcManager {
       this.scheduler.register(id, rt.role, rt.agent.name)
     }
 
-    // Listen for chat events to feed conversation context to NPCs
+    // Listen for ALL chat events (including NPC speech) to feed conversation context.
+    // This enables NPC-to-NPC conversations: when NPC A speaks, nearby NPC B hears it
+    // and can respond. feedChat() already excludes the speaker (npcId !== speakerId).
     this.eventBus.on('agent:spoke', (event) => {
       if (event.type !== 'agent:spoke') return
-      const speaker = this.npcs.get(event.agentId)?.agent
-      const speakerName = speaker?.name ?? event.agentId.slice(0, 8)
-      // Don't feed NPC's own speech back to scheduler
-      if (!this.npcs.has(event.agentId)) {
-        const pos = this.findAgentPosition(event.agentId)
-        if (pos) {
-          this.scheduler!.feedChat(event.agentId, speakerName, event.message, pos)
-        }
+      const npcRuntime = this.npcs.get(event.agentId)
+      const speakerName = npcRuntime?.agent.name
+        ?? this.allAgentsGetter?.().find(a => a.id === event.agentId)?.name
+        ?? event.agentId.slice(0, 8)
+      const pos = npcRuntime?.agent.position ?? this.findAgentPosition(event.agentId)
+      if (pos) {
+        this.scheduler!.feedChat(event.agentId, speakerName, event.message, pos, event.targetAgentId)
       }
     })
   }
 
-  /** Find any agent's position (NPCs or player agents via the provided getter) */
+  /** Find any agent's position (NPCs or player agents) */
   private findAgentPosition(agentId: string): Position | null {
     const npc = this.npcs.get(agentId)
     if (npc) return npc.agent.position
-    // Search among all agents via event bus (not ideal, but avoids circular dep)
+    if (this.allAgentsGetter) {
+      const agent = this.allAgentsGetter().find(a => a.id === agentId)
+      if (agent) return agent.position
+    }
     return null
   }
 
@@ -459,7 +468,7 @@ export class NpcManager {
   }
 
   /** Feed a chat message to the scheduler (for NPC conversation awareness) */
-  feedChatToScheduler(speakerId: string, speakerName: string, message: string, position: Position): void {
-    this.scheduler?.feedChat(speakerId, speakerName, message, position)
+  feedChatToScheduler(speakerId: string, speakerName: string, message: string, position: Position, targetId?: string): void {
+    this.scheduler?.feedChat(speakerId, speakerName, message, position, targetId)
   }
 }

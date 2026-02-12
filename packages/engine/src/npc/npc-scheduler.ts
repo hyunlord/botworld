@@ -49,6 +49,51 @@ interface NPCRef {
 
 // ── Scheduler ──
 
+// ── Ambient dialogue pools (when NPC is alone) ──
+
+const AMBIENT_LINES: Record<string, string[]> = {
+  innkeeper: [
+    '*hums while wiping a glass*',
+    'That stew needs more salt...',
+    'I should restock the ale soon.',
+    '*looks out the window* Nice day...',
+    'Wonder when the next travelers will arrive.',
+    '*arranges plates on the counter*',
+  ],
+  merchant: [
+    '*counts coins quietly*',
+    'These prices are fair, very fair...',
+    '*inspects merchandise*',
+    'The roads were rough today.',
+    'I should visit the eastern market next.',
+    '*adjusts a price tag*',
+  ],
+  guard: [
+    '*scans the horizon*',
+    'All clear so far...',
+    '*adjusts armor*',
+    'Quiet night... too quiet.',
+    'Stay vigilant...',
+    '*paces back and forth*',
+  ],
+  wanderer: [
+    '*gazes at the sky*',
+    'Long road ahead...',
+    '*stretches and yawns*',
+    'What a beautiful place.',
+    'I wonder what lies beyond those hills.',
+    '*hums a travel song*',
+  ],
+  guild_master: [
+    '*reads an old tome*',
+    'The guild grows stronger each day.',
+    '*strokes chin thoughtfully*',
+    'There is much to learn still.',
+    'Discipline... that is the key.',
+    '*examines a guild notice*',
+  ],
+}
+
 export class NPCScheduler {
   private runtimes = new Map<string, NPCSchedulerRuntime>()
   private npcRefs: () => Map<string, NPCRef>
@@ -137,7 +182,7 @@ export class NPCScheduler {
   }
 
   /** Feed a chat message to nearby NPCs so they have conversation context */
-  feedChat(speakerId: string, speakerName: string, message: string, position: Position): void {
+  feedChat(speakerId: string, speakerName: string, message: string, position: Position, targetId?: string): void {
     for (const [npcId, runtime] of this.runtimes) {
       const ref = this.npcRefs().get(npcId)
       if (!ref) continue
@@ -145,15 +190,21 @@ export class NPCScheduler {
       const dist = Math.abs(ref.agent.position.x - position.x) +
                    Math.abs(ref.agent.position.y - position.y)
       if (dist <= NEARBY_RADIUS && npcId !== speakerId) {
-        runtime.recentChat.push(`${speakerName}: ${message}`)
+        // Mark if this message is directed at this NPC
+        const prefix = targetId === npcId ? '[to you] ' : ''
+        runtime.recentChat.push(`${prefix}${speakerName}: ${message}`)
         // Keep only last 5 messages
         if (runtime.recentChat.length > 5) {
           runtime.recentChat = runtime.recentChat.slice(-5)
         }
 
         // If someone spoke nearby, reduce interval for quicker response
+        // Respond faster when directly addressed
         runtime.hasConversation = true
-        runtime.currentInterval = Math.min(runtime.currentInterval, 15_000)
+        runtime.currentInterval = Math.min(
+          runtime.currentInterval,
+          targetId === npcId ? 8_000 : 15_000,
+        )
       }
     }
   }
@@ -230,10 +281,14 @@ export class NPCScheduler {
     switch (decision.action) {
       case 'speak': {
         if (decision.params.message) {
+          // Resolve target name to agent ID
+          const nearby = this.findNearbyAgents(agent.position, agent.id)
+          const resolvedTarget = this.resolveTargetId(decision.params.target, nearby)
+
           this.eventBus.emit({
             type: 'agent:spoke',
             agentId: agent.id,
-            targetAgentId: decision.params.target,
+            targetAgentId: resolvedTarget,
             message: decision.params.message,
             timestamp: clock.tick,
           })
@@ -272,14 +327,21 @@ export class NPCScheduler {
         break
       }
 
-      case 'rest': {
-        // NPC just stays still and regenerates
+      case 'rest':
+      case 'idle':
+      default: {
+        // Ambient dialogue: occasionally mutter when alone
+        if (!runtime.hasNearby && Math.random() < 0.25) {
+          const ambient = this.getAmbientLine(runtime.role)
+          this.eventBus.emit({
+            type: 'agent:spoke',
+            agentId: agent.id,
+            message: ambient,
+            timestamp: clock.tick,
+          })
+        }
         break
       }
-
-      case 'idle':
-      default:
-        break
     }
   }
 
@@ -291,7 +353,16 @@ export class NPCScheduler {
   ): void {
     switch (fallback) {
       case 'speak': {
-        // Use existing scripted dialogue (handled by NpcManager.idleChatter)
+        // Emit ambient dialogue since LLM is not available for this slot
+        if (Math.random() < 0.3) {
+          const ambient = this.getAmbientLine(runtime.role)
+          this.eventBus.emit({
+            type: 'agent:spoke',
+            agentId: ref.agent.id,
+            message: ambient,
+            timestamp: clock.tick,
+          })
+        }
         break
       }
       case 'move_home': {
@@ -314,6 +385,36 @@ export class NPCScheduler {
       default:
         break
     }
+  }
+
+  /** Resolve a target string (name or ID) to a valid agent ID */
+  private resolveTargetId(targetStr: string | undefined, nearby: Agent[]): string | undefined {
+    if (!targetStr) return undefined
+    // Already a valid agent ID?
+    if (nearby.some(a => a.id === targetStr)) return targetStr
+    // Exact name match
+    const exact = nearby.find(a => a.name === targetStr)
+    if (exact) return exact.id
+    // Partial name match (case-insensitive)
+    const lower = targetStr.toLowerCase()
+    const partial = nearby.find(a =>
+      a.name.toLowerCase().includes(lower) || lower.includes(a.name.toLowerCase()),
+    )
+    if (partial) return partial.id
+    // First-name match (e.g. "Helga" matches "Helga the Innkeeper")
+    const firstName = lower.split(/\s+/)[0]
+    if (firstName.length >= 3) {
+      const firstMatch = nearby.find(a => a.name.toLowerCase().startsWith(firstName))
+      if (firstMatch) return firstMatch.id
+    }
+    return undefined
+  }
+
+  /** Get a random ambient dialogue line for an NPC role */
+  private getAmbientLine(role: NpcRole): string {
+    const lines = AMBIENT_LINES[role]
+    if (!lines?.length) return '*nods quietly*'
+    return lines[Math.floor(Math.random() * lines.length)]
   }
 
   private emotionToEmote(emotion: string): string {
