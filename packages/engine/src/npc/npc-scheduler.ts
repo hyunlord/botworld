@@ -18,6 +18,10 @@ import type { EventBus } from '../core/event-bus.js'
 import { findPath } from '../world/pathfinding.js'
 import type { TileMap } from '../world/tile-map.js'
 import type { PlanExecutor } from '../agent/plan-executor.js'
+import type { RelationshipManager } from '../social/relationship-manager.js'
+import type { RumorSystem } from '../social/rumor-system.js'
+import type { SecretSystem } from '../social/secret-system.js'
+import type { ReputationSystem } from '../social/reputation-system.js'
 
 // ── Configuration ──
 
@@ -230,6 +234,25 @@ export class NPCScheduler {
     this.planExecutor = executor
   }
 
+  // ── Social system references ──
+  private relationshipManager: RelationshipManager | null = null
+  private rumorSystem: RumorSystem | null = null
+  private secretSystem: SecretSystem | null = null
+  private reputationSystem: ReputationSystem | null = null
+
+  /** Wire social systems for LLM context enrichment */
+  setSocialSystems(
+    rm: RelationshipManager,
+    rs: RumorSystem,
+    ss: SecretSystem,
+    rep: ReputationSystem,
+  ): void {
+    this.relationshipManager = rm
+    this.rumorSystem = rs
+    this.secretSystem = ss
+    this.reputationSystem = rep
+  }
+
   /** Register an NPC for scheduled LLM decisions */
   register(npcId: string, role: NpcRole, name: string): void {
     // Stagger initial timing so NPCs don't all fire at once
@@ -374,6 +397,26 @@ export class NPCScheduler {
       .filter(i => i.name.toLowerCase().includes('gold') || i.name.toLowerCase().includes('coin'))
       .reduce((sum, i) => sum + i.quantity, 0)
 
+    // Build social context if social systems are available
+    const nearbyIds = nearby.map(a => a.id)
+    const getAgentName = (id: string) => {
+      const all = this.getAllAgentsIncludingNpcs()
+      return all.find(a => a.id === id)?.name ?? 'Unknown'
+    }
+
+    const relationshipContext = this.relationshipManager
+      ? this.relationshipManager.formatForLLM(ref.agent.id, nearbyIds, getAgentName)
+      : undefined
+    const rumorContext = this.rumorSystem
+      ? this.rumorSystem.formatForLLM(ref.agent.id, getAgentName)
+      : undefined
+    const secretContext = this.secretSystem
+      ? this.secretSystem.formatForLLM(ref.agent.id, getAgentName)
+      : undefined
+    const reputationContext = this.reputationSystem
+      ? this.reputationSystem.formatForLLM(ref.agent.id)
+      : undefined
+
     return {
       npcName: ref.agent.name,
       npcRole: runtime.role,
@@ -406,6 +449,10 @@ export class NPCScheduler {
       emotionState: this.summarizeEmotion(ref.agent),
       inventory: ref.agent.inventory.map(i => `${i.name} x${i.quantity}`),
       routineHint,
+      relationshipContext,
+      rumorContext,
+      secretContext,
+      reputationContext,
     }
   }
 

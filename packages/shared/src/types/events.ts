@@ -4,6 +4,7 @@ import type { Item, MarketOrder } from './item.js'
 import type { CharacterAppearance, CharacterClass, Race } from './character.js'
 import type { WorldEventType, WorldEventCategory, WorldEventEffect } from './world-event.js'
 import type { MonsterType, CombatRound, CombatOutcome } from './combat.js'
+import type { RelationshipInteraction, RelationshipTag, RumorType, SecretType, SocialStatus } from './relationship.js'
 
 /** All event types in the world */
 export type WorldEvent =
@@ -34,6 +35,12 @@ export type WorldEvent =
   | ItemNamedEvent
   | ItemDestroyedEvent
   | ItemMasterworkCreatedEvent
+  | RelationshipChangedEvent
+  | RumorCreatedEvent
+  | RumorSpreadEvent
+  | SecretRevealedEvent
+  | ReputationChangedEvent
+  | SocialStatusChangedEvent
 
 export interface AgentMovedEvent {
   type: 'agent:moved'
@@ -268,5 +275,66 @@ export interface ItemMasterworkCreatedEvent {
   customName: string
   quality: string
   crafterName: string
+  timestamp: number
+}
+
+// ── Relationship Events ──
+
+export interface RelationshipChangedEvent {
+  type: 'relationship:changed'
+  fromId: string
+  toId: string
+  interaction: RelationshipInteraction
+  trustDelta: number
+  respectDelta: number
+  affectionDelta: number
+  newTags: RelationshipTag[]
+  timestamp: number
+}
+
+export interface RumorCreatedEvent {
+  type: 'rumor:created'
+  rumorId: string
+  rumorType: RumorType
+  aboutId: string
+  originatedFrom: string
+  content: string
+  timestamp: number
+}
+
+export interface RumorSpreadEvent {
+  type: 'rumor:spread'
+  rumorId: string
+  fromAgentId: string
+  toAgentId: string
+  reliability: number
+  timestamp: number
+}
+
+export interface SecretRevealedEvent {
+  type: 'secret:revealed'
+  secretId: string
+  secretType: SecretType
+  ownerId: string
+  revealedBy: string
+  content: string
+  timestamp: number
+}
+
+export interface ReputationChangedEvent {
+  type: 'reputation:changed'
+  agentId: string
+  category: string
+  oldValue: number
+  newValue: number
+  reason: string
+  timestamp: number
+}
+
+export interface SocialStatusChangedEvent {
+  type: 'social_status:changed'
+  agentId: string
+  oldStatus: SocialStatus
+  newStatus: SocialStatus
   timestamp: number
 }

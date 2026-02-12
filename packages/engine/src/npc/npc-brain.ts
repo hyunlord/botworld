@@ -50,6 +50,11 @@ export interface NPCContext {
   emotionState: string
   inventory: string[]
   routineHint: string
+  /** Social context (optional, enriched when social systems are wired) */
+  relationshipContext?: string
+  rumorContext?: string
+  secretContext?: string
+  reputationContext?: string
 }
 
 // ── Rate limiter ──
@@ -249,11 +254,25 @@ function buildContextMessage(ctx: NPCContext): string {
 
   lines.push(`\nMy current mood: ${ctx.emotionState}`)
 
+  // Social context (relationships, rumors, secrets, reputation)
+  if (ctx.relationshipContext) {
+    lines.push(`\n${ctx.relationshipContext}`)
+  }
+  if (ctx.rumorContext) {
+    lines.push(`\n${ctx.rumorContext}`)
+  }
+  if (ctx.secretContext) {
+    lines.push(`\n${ctx.secretContext}`)
+  }
+  if (ctx.reputationContext) {
+    lines.push(`\n${ctx.reputationContext}`)
+  }
+
   if (ctx.routineHint) {
     lines.push(`\n[Daily routine suggestion]: ${ctx.routineHint}`)
   }
 
-  lines.push(`\nDecide your next action. Respond with JSON only.`)
+  lines.push(`\nDecide your next action. Consider your relationships, reputation, and any rumors/secrets you know. Respond with JSON only.`)
 
   return lines.join('\n')
 }

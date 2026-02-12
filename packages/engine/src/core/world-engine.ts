@@ -14,6 +14,10 @@ import { NpcEventReactions } from '../npc/npc-event-reactions.js'
 import { ItemManager } from '../items/item-manager.js'
 import { ItemNamer } from '../items/item-namer.js'
 import { craftingSystem } from '../systems/crafting.js'
+import { RelationshipManager } from '../social/relationship-manager.js'
+import { RumorSystem } from '../social/rumor-system.js'
+import { SecretSystem } from '../social/secret-system.js'
+import { ReputationSystem } from '../social/reputation-system.js'
 
 export class WorldEngine {
   readonly eventBus = new EventBus()
@@ -28,6 +32,10 @@ export class WorldEngine {
   readonly npcEventReactions: NpcEventReactions
   readonly itemManager: ItemManager
   readonly itemNamer: ItemNamer
+  readonly relationshipManager: RelationshipManager
+  readonly rumorSystem: RumorSystem
+  readonly secretSystem: SecretSystem
+  readonly reputationSystem: ReputationSystem
   clock: WorldClock
 
   private tickInterval: ReturnType<typeof setInterval> | null = null
@@ -83,6 +91,16 @@ export class WorldEngine {
 
     // Wire agent manager for trade history tracking
     this.agentManager.setItemManager(this.itemManager)
+
+    // Social systems
+    this.relationshipManager = new RelationshipManager(this.eventBus)
+    this.rumorSystem = new RumorSystem(this.eventBus)
+    this.secretSystem = new SecretSystem(this.eventBus)
+    this.reputationSystem = new ReputationSystem(this.eventBus)
+    this.secretSystem.setRelationshipManager(this.relationshipManager)
+
+    // Wire social systems to NPC manager for LLM context enrichment
+    this.npcManager.setSocialSystems(this.relationshipManager, this.rumorSystem, this.secretSystem, this.reputationSystem)
   }
 
   start(): void {
@@ -171,6 +189,76 @@ export class WorldEngine {
         ]
         console.log(`[WorldEngine] Spawned portal guardian at (${position.x}, ${position.y}) [HP: 500, ATK: 30]`)
       }
+    })
+
+    // ── Social system event wiring ──
+
+    // Trade → relationship + reputation + rumor
+    this.eventBus.on('trade:completed', (event) => {
+      if (event.type !== 'trade:completed') return
+      const { buyerId, sellerId, item, price } = event
+      // Fair trade: both parties get trust/respect boost
+      this.relationshipManager.applyInteraction(
+        buyerId, sellerId, 'fair_trade', event.timestamp,
+        { item: item.name },
+      )
+      // Reputation boost for seller
+      this.reputationSystem.adjustReputation(sellerId, 'trading', 2, `Sold ${item.name}`, event.timestamp)
+    })
+
+    // Combat ended → relationship for allies + reputation + rumor
+    this.eventBus.on('combat:ended', (event) => {
+      if (event.type !== 'combat:ended') return
+      if (event.outcome === 'victory') {
+        // Combat reputation boost
+        this.reputationSystem.adjustReputation(event.agentId, 'combat', 5, `Defeated a monster`, event.timestamp)
+        // Create rumor about combat achievement
+        const agent = this.agentManager.getAgent(event.agentId) ?? this.npcManager.getNpc(event.agentId)
+        if (agent) {
+          this.rumorSystem.createRumor(
+            'achievement',
+            `${agent.name} defeated a monster in combat`,
+            event.agentId,
+            event.agentId,
+            event.timestamp,
+          )
+        }
+      }
+    })
+
+    // Conversation → relationship (mild positive) + rumor spreading
+    this.eventBus.on('agent:spoke', (event) => {
+      if (event.type !== 'agent:spoke') return
+      if (!event.targetAgentId) return
+      // Mild relationship boost from conversation
+      this.relationshipManager.applyInteraction(
+        event.agentId, event.targetAgentId, 'conversation', event.timestamp,
+      )
+      // Spread rumors between conversation participants
+      const speaker = this.agentManager.getAgent(event.agentId) ?? this.npcManager.getNpc(event.agentId)
+      const listener = this.agentManager.getAgent(event.targetAgentId) ?? this.npcManager.getNpc(event.targetAgentId)
+      if (speaker && listener) {
+        this.rumorSystem.spreadRumors(speaker, listener, event.timestamp)
+      }
+    })
+
+    // Crafting → reputation
+    this.eventBus.on('item:crafted', (event) => {
+      if (event.type !== 'item:crafted') return
+      this.reputationSystem.adjustReputation(event.agentId, 'crafting', 3, `Crafted ${event.item.name}`, event.timestamp)
+    })
+
+    // Masterwork → reputation + rumor
+    this.eventBus.on('item:masterwork_created', (event) => {
+      if (event.type !== 'item:masterwork_created') return
+      this.reputationSystem.adjustReputation(event.crafterName, 'crafting', 10, `Created masterwork ${event.itemName}`, event.timestamp)
+      this.rumorSystem.createRumor(
+        'achievement',
+        `${event.crafterName} crafted a ${event.quality} item: ${event.customName}`,
+        event.crafterName,
+        event.crafterName,
+        event.timestamp,
+      )
     })
 
     console.log('[WorldEngine] Starting simulation...')
@@ -263,6 +351,11 @@ export class WorldEngine {
 
     // 10.5. Item system tick (dynamic pricing)
     this.itemManager.tick(this.clock)
+
+    // 10.6. Social systems tick (memory fading, rumor expiry, status recalculation)
+    this.relationshipManager.tick(this.clock)
+    this.rumorSystem.tick(this.clock)
+    this.reputationSystem.tick(this.clock, [...this.agentManager.getAllAgents(), ...this.npcManager.getAllNpcs()])
 
     // 11. Weather system tick
     const weatherChanged = this.weather.tick(this.clock)

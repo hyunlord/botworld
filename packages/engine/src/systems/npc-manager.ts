@@ -9,6 +9,10 @@ import { TileMap } from '../world/tile-map.js'
 import { findPath } from '../world/pathfinding.js'
 import { NPCScheduler } from '../npc/npc-scheduler.js'
 import type { PlanExecutor } from '../agent/plan-executor.js'
+import type { RelationshipManager } from '../social/relationship-manager.js'
+import type { RumorSystem } from '../social/rumor-system.js'
+import type { SecretSystem } from '../social/secret-system.js'
+import type { ReputationSystem } from '../social/reputation-system.js'
 
 // ── NPC dialogue pools (fallback when LLM is unavailable) ──
 
@@ -588,5 +592,26 @@ export class NpcManager {
   /** Wire plan executor to the NPC scheduler */
   setPlanExecutor(executor: PlanExecutor): void {
     this.scheduler?.setPlanExecutor(executor)
+  }
+
+  // ── Social system references ──
+  private relationshipManager: RelationshipManager | null = null
+  private rumorSystem: RumorSystem | null = null
+  private secretSystem: SecretSystem | null = null
+  private reputationSystem: ReputationSystem | null = null
+
+  /** Wire social systems for LLM context enrichment */
+  setSocialSystems(
+    rm: RelationshipManager,
+    rs: RumorSystem,
+    ss: SecretSystem,
+    rep: ReputationSystem,
+  ): void {
+    this.relationshipManager = rm
+    this.rumorSystem = rs
+    this.secretSystem = ss
+    this.reputationSystem = rep
+    // Also wire to the scheduler for context enrichment
+    this.scheduler?.setSocialSystems(rm, rs, ss, rep)
   }
 }
