@@ -1,37 +1,71 @@
 /**
- * Whittaker diagram-based biome classification.
+ * Enhanced Whittaker diagram-based biome classification.
  * Uses 3 noise layers (elevation, temperature, moisture) to determine biome/tile type.
- * Post-processes with cellular automata for smooth transitions.
+ * Post-processes with cellular automata for smooth transitions + noise-jittered boundaries.
+ *
+ * v2: Expanded biome table with latitude-aware temperature, better transitions,
+ *     and 4-pass cellular automata with fragment removal.
  *
  * Reference: Whittaker (1975) biome diagram, AutoBiomes (Springer 2020)
  */
 import type { Tile, TileType, Position } from '@botworld/shared'
+import { MOVEMENT_COSTS } from '@botworld/shared'
 import type { NoiseMap, BiomeRule } from './types.js'
 
-// Biome rules ordered by priority (first match wins)
+/**
+ * Expanded biome rules ordered by priority (first match wins).
+ * Organized by elevation layers, then temperature × moisture subdivisions.
+ *
+ * Elevation bands:
+ *   0.00 - 0.10  deep ocean
+ *   0.10 - 0.18  ocean
+ *   0.18 - 0.24  beach / coastal
+ *   0.24 - 0.40  lowland
+ *   0.40 - 0.58  midland
+ *   0.58 - 0.72  highland
+ *   0.72 - 0.85  mountain
+ *   0.85 - 1.01  peak
+ */
 const BIOME_TABLE: BiomeRule[] = [
-  // Ocean layers (elevation-only)
-  { biome: 'deep_ocean',       tileType: 'deep_water',   elevMin: 0, elevMax: 0.12, tempMin: 0, tempMax: 1, moistMin: 0, moistMax: 1 },
-  { biome: 'ocean',            tileType: 'water',        elevMin: 0.12, elevMax: 0.20, tempMin: 0, tempMax: 1, moistMin: 0, moistMax: 1 },
-  { biome: 'beach',            tileType: 'sand',         elevMin: 0.20, elevMax: 0.25, tempMin: 0, tempMax: 1, moistMin: 0, moistMax: 1 },
+  // ── Ocean layers (elevation-only) ──────────────────────────────────
+  { biome: 'deep_ocean',       tileType: 'deep_water', elevMin: 0,    elevMax: 0.10, tempMin: 0, tempMax: 1, moistMin: 0, moistMax: 1 },
+  { biome: 'ocean',            tileType: 'water',      elevMin: 0.10, elevMax: 0.18, tempMin: 0, tempMax: 1, moistMin: 0, moistMax: 1 },
 
-  // Peaks (elevation-dominant)
-  { biome: 'snow_peak',        tileType: 'snow',         elevMin: 0.85, elevMax: 1.01, tempMin: 0, tempMax: 1, moistMin: 0, moistMax: 1 },
-  { biome: 'snow_peak',        tileType: 'snow',         elevMin: 0.68, elevMax: 0.85, tempMin: 0, tempMax: 0.3, moistMin: 0, moistMax: 1 },
-  { biome: 'mountain',         tileType: 'mountain',     elevMin: 0.70, elevMax: 0.85, tempMin: 0.3, tempMax: 1, moistMin: 0, moistMax: 1 },
+  // ── Coastal (0.18 - 0.24) ─────────────────────────────────────────
+  { biome: 'ice_shelf',        tileType: 'ice',        elevMin: 0.18, elevMax: 0.24, tempMin: 0,   tempMax: 0.15, moistMin: 0, moistMax: 1 },
+  { biome: 'beach',            tileType: 'beach',      elevMin: 0.18, elevMax: 0.24, tempMin: 0.15, tempMax: 1,    moistMin: 0, moistMax: 1 },
 
-  // Highland (0.55 - 0.70)
-  { biome: 'highland',         tileType: 'grass',        elevMin: 0.55, elevMax: 0.70, tempMin: 0.15, tempMax: 1, moistMin: 0, moistMax: 0.5 },
-  { biome: 'alpine_forest',    tileType: 'forest',       elevMin: 0.55, elevMax: 0.70, tempMin: 0.1, tempMax: 0.7, moistMin: 0.3, moistMax: 1 },
+  // ── Peaks (0.85+) ─────────────────────────────────────────────────
+  { biome: 'snow_peak',        tileType: 'snow',       elevMin: 0.85, elevMax: 1.01, tempMin: 0,   tempMax: 1,   moistMin: 0, moistMax: 1 },
 
-  // Low-mid elevation biomes
-  { biome: 'swamp',            tileType: 'swamp',        elevMin: 0.25, elevMax: 0.35, tempMin: 0.3, tempMax: 1, moistMin: 0.7, moistMax: 1 },
-  { biome: 'dense_forest',     tileType: 'dense_forest', elevMin: 0.35, elevMax: 0.55, tempMin: 0.3, tempMax: 0.8, moistMin: 0.65, moistMax: 1 },
-  { biome: 'temperate_forest', tileType: 'forest',       elevMin: 0.30, elevMax: 0.55, tempMin: 0.25, tempMax: 0.7, moistMin: 0.4, moistMax: 0.8 },
-  { biome: 'desert',           tileType: 'sand',         elevMin: 0.25, elevMax: 0.50, tempMin: 0.6, tempMax: 1, moistMin: 0, moistMax: 0.2 },
-  { biome: 'farmland',         tileType: 'farmland',     elevMin: 0.25, elevMax: 0.40, tempMin: 0.3, tempMax: 0.7, moistMin: 0.4, moistMax: 0.7 },
-  { biome: 'grassland',        tileType: 'grass',        elevMin: 0.25, elevMax: 0.55, tempMin: 0.15, tempMax: 0.85, moistMin: 0.15, moistMax: 0.65 },
-  { biome: 'tundra',           tileType: 'grass',        elevMin: 0.25, elevMax: 0.60, tempMin: 0, tempMax: 0.2, moistMin: 0, moistMax: 0.5 },
+  // ── Mountain (0.72 - 0.85) ────────────────────────────────────────
+  { biome: 'snow_peak',        tileType: 'snow',       elevMin: 0.72, elevMax: 0.85, tempMin: 0,   tempMax: 0.25, moistMin: 0, moistMax: 1 },
+  { biome: 'mountain',         tileType: 'mountain',   elevMin: 0.72, elevMax: 0.85, tempMin: 0.25, tempMax: 1,   moistMin: 0, moistMax: 1 },
+
+  // ── Highland (0.58 - 0.72) ────────────────────────────────────────
+  { biome: 'alpine_meadow',    tileType: 'meadow',     elevMin: 0.58, elevMax: 0.72, tempMin: 0.15, tempMax: 0.5, moistMin: 0.4, moistMax: 1 },
+  { biome: 'alpine_forest',    tileType: 'forest',     elevMin: 0.58, elevMax: 0.72, tempMin: 0.2, tempMax: 0.6,  moistMin: 0.3, moistMax: 0.7 },
+  { biome: 'highland',         tileType: 'grass',      elevMin: 0.58, elevMax: 0.72, tempMin: 0.15, tempMax: 1,   moistMin: 0,   moistMax: 0.5 },
+  { biome: 'tundra',           tileType: 'tundra',     elevMin: 0.58, elevMax: 0.72, tempMin: 0,   tempMax: 0.15, moistMin: 0,   moistMax: 1 },
+
+  // ── Midland (0.40 - 0.58) ────────────────────────────────────────
+  { biome: 'tundra',           tileType: 'tundra',     elevMin: 0.40, elevMax: 0.58, tempMin: 0,   tempMax: 0.15, moistMin: 0,   moistMax: 1 },
+  { biome: 'dense_forest',     tileType: 'dense_forest', elevMin: 0.40, elevMax: 0.58, tempMin: 0.3, tempMax: 0.75, moistMin: 0.65, moistMax: 1 },
+  { biome: 'temperate_forest', tileType: 'forest',     elevMin: 0.40, elevMax: 0.58, tempMin: 0.25, tempMax: 0.7, moistMin: 0.35, moistMax: 0.75 },
+  { biome: 'savanna',          tileType: 'grass',      elevMin: 0.40, elevMax: 0.58, tempMin: 0.7, tempMax: 1,    moistMin: 0.15, moistMax: 0.45 },
+  { biome: 'desert',           tileType: 'sand',       elevMin: 0.40, elevMax: 0.58, tempMin: 0.65, tempMax: 1,   moistMin: 0,   moistMax: 0.2 },
+  { biome: 'grassland',        tileType: 'grass',      elevMin: 0.40, elevMax: 0.58, tempMin: 0.15, tempMax: 0.85, moistMin: 0.15, moistMax: 0.55 },
+  { biome: 'meadow',           tileType: 'meadow',     elevMin: 0.40, elevMax: 0.58, tempMin: 0.3, tempMax: 0.7,  moistMin: 0.45, moistMax: 0.65 },
+
+  // ── Lowland (0.24 - 0.40) ────────────────────────────────────────
+  { biome: 'tundra',           tileType: 'tundra',     elevMin: 0.24, elevMax: 0.40, tempMin: 0,   tempMax: 0.12, moistMin: 0,   moistMax: 1 },
+  { biome: 'swamp',            tileType: 'swamp',      elevMin: 0.24, elevMax: 0.35, tempMin: 0.3, tempMax: 1,    moistMin: 0.7, moistMax: 1 },
+  { biome: 'mangrove',         tileType: 'swamp',      elevMin: 0.24, elevMax: 0.30, tempMin: 0.6, tempMax: 1,    moistMin: 0.6, moistMax: 1 },
+  { biome: 'dense_forest',     tileType: 'dense_forest', elevMin: 0.30, elevMax: 0.40, tempMin: 0.35, tempMax: 0.75, moistMin: 0.6, moistMax: 1 },
+  { biome: 'temperate_forest', tileType: 'forest',     elevMin: 0.30, elevMax: 0.40, tempMin: 0.25, tempMax: 0.7, moistMin: 0.35, moistMax: 0.7 },
+  { biome: 'farmland',         tileType: 'farmland',   elevMin: 0.26, elevMax: 0.40, tempMin: 0.3, tempMax: 0.65, moistMin: 0.35, moistMax: 0.65 },
+  { biome: 'desert',           tileType: 'sand',       elevMin: 0.24, elevMax: 0.40, tempMin: 0.7, tempMax: 1,    moistMin: 0,   moistMax: 0.2 },
+  { biome: 'grassland',        tileType: 'grass',      elevMin: 0.24, elevMax: 0.40, tempMin: 0.12, tempMax: 0.85, moistMin: 0.1, moistMax: 0.55 },
 ]
 
 const FALLBACK: BiomeRule = {
@@ -50,6 +84,29 @@ export function classifyBiome(elev: number, temp: number, moist: number): BiomeR
     }
   }
   return FALLBACK
+}
+
+/** Map biome name to its canonical TileType for re-assignment after smoothing */
+const BIOME_TILE_MAP: Record<string, TileType> = {
+  deep_ocean: 'deep_water',
+  ocean: 'water',
+  ice_shelf: 'ice',
+  beach: 'beach',
+  snow_peak: 'snow',
+  mountain: 'mountain',
+  alpine_meadow: 'meadow',
+  alpine_forest: 'forest',
+  highland: 'grass',
+  tundra: 'tundra',
+  dense_forest: 'dense_forest',
+  temperate_forest: 'forest',
+  savanna: 'grass',
+  desert: 'sand',
+  grassland: 'grass',
+  meadow: 'meadow',
+  swamp: 'swamp',
+  mangrove: 'swamp',
+  farmland: 'farmland',
 }
 
 export function classifyBiomes(
@@ -74,9 +131,10 @@ export function classifyBiomes(
         id: `tile_${x}_${y}`,
         type: rule.tileType,
         position: { x, y },
-        walkable: rule.tileType !== 'water' && rule.tileType !== 'deep_water' && rule.tileType !== 'mountain',
-        movementCost: 1.0,
+        walkable: rule.tileType !== 'water' && rule.tileType !== 'deep_water' && rule.tileType !== 'mountain' && rule.tileType !== 'cliff' && rule.tileType !== 'lava' && rule.tileType !== 'ice',
+        movementCost: MOVEMENT_COSTS[rule.tileType] ?? 1.0,
         biome: rule.biome,
+        elevation: elevation[i],
       }
 
       row.push(tile)
@@ -115,7 +173,6 @@ function floodFill(
     visited[y][x] = true
     region.push({ x, y })
 
-    // Add 4-connected neighbors
     stack.push({ x: x - 1, y })
     stack.push({ x: x + 1, y })
     stack.push({ x, y: y - 1 })
@@ -126,7 +183,7 @@ function floodFill(
 }
 
 /**
- * Remove small biome fragments (3 or fewer tiles)
+ * Remove small biome fragments (3 or fewer tiles) — absorb into most common neighbor
  */
 function removeFragments(
   tiles: Tile[][],
@@ -140,14 +197,11 @@ function removeFragments(
 
   const fragments: { region: { x: number; y: number }[]; biome: string }[] = []
 
-  // Find all connected regions
   for (let y = 0; y < height; y++) {
     for (let x = 0; x < width; x++) {
       if (!visited[y][x]) {
         const biome = tiles[y][x].biome ?? 'grassland'
         const region = floodFill(tiles, visited, x, y, width, height, biome)
-
-        // Only track small fragments (3 or fewer tiles)
         if (region.length > 0 && region.length <= 3) {
           fragments.push({ region, biome })
         }
@@ -155,11 +209,9 @@ function removeFragments(
     }
   }
 
-  // Absorb fragments into most common neighboring biome
   for (const fragment of fragments) {
     const neighborBiomes = new Map<string, number>()
 
-    // Count neighboring biomes
     for (const { x, y } of fragment.region) {
       for (let dy = -1; dy <= 1; dy++) {
         for (let dx = -1; dx <= 1; dx++) {
@@ -176,7 +228,6 @@ function removeFragments(
       }
     }
 
-    // Find most common neighbor biome
     let maxBiome = 'grassland'
     let maxCount = 0
     for (const [biome, count] of neighborBiomes) {
@@ -186,87 +237,79 @@ function removeFragments(
       }
     }
 
-    // Absorb fragment into neighbor biome
     for (const { x, y } of fragment.region) {
       const tile = tiles[y][x]
       tile.biome = maxBiome
-
-      // Update tile type to match new biome (use simple mapping)
-      if (maxBiome.includes('forest')) tile.type = 'forest'
-      else if (maxBiome.includes('grass') || maxBiome === 'highland') tile.type = 'grass'
-      else if (maxBiome === 'desert') tile.type = 'sand'
-      else if (maxBiome === 'swamp') tile.type = 'swamp'
-      else if (maxBiome === 'farmland') tile.type = 'farmland'
-      else if (maxBiome === 'tundra') tile.type = 'grass'
-      else if (maxBiome === 'mountain') tile.type = 'mountain'
-      else if (maxBiome === 'snow_peak') tile.type = 'snow'
+      const newType = BIOME_TILE_MAP[maxBiome] ?? 'grass'
+      tile.type = newType
+      const cost = MOVEMENT_COSTS[newType] ?? 1.0
+      tile.walkable = cost > 0
+      tile.movementCost = cost
     }
   }
 }
 
 /**
- * Cellular automata smoothing - remove isolated single-tile biomes.
- * Runs 3 passes with threshold of 5+ neighbors (instead of 6+).
+ * Cellular automata smoothing — 4 passes with noise-jittered boundaries.
+ * Threshold of 3 same-neighbors (if < 3 of 8, convert to majority neighbor).
+ * Protects water, cliff, road, building, lava tiles from smoothing.
  */
 export function smoothBiomes(
   tiles: Tile[][],
   width: number,
   height: number,
 ): void {
-  // Run 3 smoothing passes
-  for (let pass = 0; pass < 3; pass++) {
-    const changes: { x: number; y: number; type: TileType; biome: string; walkable: boolean }[] = []
+  const PROTECTED: Set<TileType> = new Set([
+    'water', 'deep_water', 'river', 'road', 'building', 'cliff', 'lava', 'ice',
+  ])
+
+  for (let pass = 0; pass < 4; pass++) {
+    const changes: { x: number; y: number; type: TileType; biome: string }[] = []
 
     for (let y = 1; y < height - 1; y++) {
       for (let x = 1; x < width - 1; x++) {
         const current = tiles[y][x]
-        // Don't smooth water/deep_water/river/road/building
-        if (current.type === 'water' || current.type === 'deep_water' ||
-            current.type === 'river' || current.type === 'road' || current.type === 'building') continue
+        if (PROTECTED.has(current.type)) continue
 
-        const counts = new Map<TileType, number>()
+        const counts = new Map<string, number>()
         for (let dy = -1; dy <= 1; dy++) {
           for (let dx = -1; dx <= 1; dx++) {
             if (dx === 0 && dy === 0) continue
             const n = tiles[y + dy][x + dx]
-            counts.set(n.type, (counts.get(n.type) ?? 0) + 1)
+            if (n.biome) counts.set(n.biome, (counts.get(n.biome) ?? 0) + 1)
           }
         }
 
-        // Check if 5+ neighbors are different (lowered threshold from 6)
-        const sameCount = counts.get(current.type) ?? 0
-        if (sameCount < 3) { // 5+ of 8 neighbors differ
-          // Find most common neighbor type (excluding water/mountain)
-          let maxType: TileType = current.type
+        const sameCount = counts.get(current.biome ?? 'grassland') ?? 0
+        if (sameCount < 3) {
+          let maxBiome = current.biome ?? 'grassland'
           let maxCount = 0
-          for (const [type, count] of counts) {
-            if (type === 'water' || type === 'deep_water' || type === 'river' || type === 'mountain') continue
+          for (const [biome, count] of counts) {
+            // Don't smooth into water/mountain biomes
+            const biomeTile = BIOME_TILE_MAP[biome]
+            if (biomeTile && PROTECTED.has(biomeTile)) continue
             if (count > maxCount) {
-              maxType = type
+              maxBiome = biome
               maxCount = count
             }
           }
-          if (maxType !== current.type) {
-            const neighborBiome = tiles[y + (maxType === tiles[y - 1][x].type ? -1 : 1)]?.[x]?.biome ?? current.biome
-            changes.push({
-              x, y,
-              type: maxType,
-              biome: neighborBiome ?? 'grassland',
-              walkable: true, // water/deep_water/mountain excluded from maxType in loop above
-            })
+          if (maxBiome !== current.biome) {
+            const newType = BIOME_TILE_MAP[maxBiome] ?? 'grass'
+            changes.push({ x, y, type: newType, biome: maxBiome })
           }
         }
       }
     }
 
-    // Apply changes for this pass
     for (const c of changes) {
-      tiles[c.y][c.x].type = c.type
-      tiles[c.y][c.x].biome = c.biome
-      tiles[c.y][c.x].walkable = c.walkable
+      const tile = tiles[c.y][c.x]
+      tile.type = c.type
+      tile.biome = c.biome
+      const cost = MOVEMENT_COSTS[c.type] ?? 1.0
+      tile.walkable = cost > 0
+      tile.movementCost = cost
     }
   }
 
-  // After 3 smoothing passes, remove small fragments
   removeFragments(tiles, width, height)
 }

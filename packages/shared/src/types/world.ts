@@ -17,6 +17,13 @@ export type TileType =
   | 'road'
   | 'building'
   | 'farmland'
+  | 'tundra'
+  | 'cliff'
+  | 'lava'
+  | 'ice'
+  | 'volcanic'
+  | 'beach'
+  | 'meadow'
 
 export type ResourceType =
   | 'wood'
@@ -33,6 +40,10 @@ export interface Tile {
   walkable: boolean
   movementCost: number
   biome?: string
+  /** Raw elevation 0-1 from noise */
+  elevation?: number
+  /** Discrete elevation level 0-4 (0=water, 1=lowland, 2=midland, 3=highland, 4=peak) */
+  elevationLevel?: number
   resource?: {
     type: ResourceType
     amount: number
@@ -44,6 +55,10 @@ export interface Tile {
   variant?: number
   decoration?: string
   poiType?: ChunkPOI['type']
+  /** River flow direction for animation (e.g. 'N','S','E','W','NE','SE') */
+  riverDirection?: string
+  /** Landmark type if this tile is part of a landmark */
+  landmark?: LandmarkType
 }
 
 export interface ChunkCoord {
@@ -53,6 +68,8 @@ export interface ChunkCoord {
 
 export type POIType = 'marketplace' | 'tavern' | 'workshop' | 'library' | 'farm' | 'mine'
 
+export type LandmarkType = 'volcano' | 'giant_tree' | 'ancient_ruins' | 'cave_entrance' | 'waterfall' | 'oasis' | 'great_lake'
+
 export interface ChunkPOI {
   name: string
   type: POIType
@@ -61,11 +78,22 @@ export interface ChunkPOI {
   biome?: string
 }
 
+export interface ChunkLandmark {
+  type: LandmarkType
+  name: string
+  /** Center position in world coordinates */
+  centerX: number
+  centerY: number
+  /** Radius of the landmark area in tiles */
+  radius: number
+}
+
 export interface ChunkData {
   cx: number
   cy: number
   tiles: Tile[][]
   poi?: ChunkPOI
+  landmark?: ChunkLandmark
   generated: boolean
 }
 

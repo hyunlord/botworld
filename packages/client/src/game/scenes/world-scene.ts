@@ -85,9 +85,18 @@ const T = {
   cliff_top_01: 84, cliff_top_02: 85, cliff_top_03: 86,
   cliff_edge_N: 87, cliff_edge_S: 88, cliff_edge_E: 89, cliff_edge_W: 90,
   mountain_rock_01: 91, mountain_rock_02: 92, mountain_rock_03: 93,
-  // Row 9+: Decorative ground
+  // Row 9+: Extended terrain types
   forest_floor_01: 144, forest_floor_02: 145, forest_floor_03: 146,
-  meadow_01: 199, meadow_02: 200, meadow_03: 201,
+  beach_shell_01: 147, beach_shell_02: 148,
+  gravel_01: 151, gravel_02: 152, gravel_03: 153,
+  lava_rock_01: 154, lava_rock_02: 155,
+  ice_01: 164, ice_02: 165, ice_03: 166,
+  mountain_snow_01: 177, mountain_snow_02: 178, mountain_snow_03: 179,
+  volcanic_01: 180, volcanic_02: 181,
+  bridge_stone_01: 182, bridge_stone_02: 183,
+  ruins_floor_01: 184, ruins_floor_02: 185, ruins_floor_03: 186,
+  magic_ground_01: 187, magic_ground_02: 188,
+  meadow_01: 189, meadow_02: 190, meadow_03: 191,
 } as const
 
 /** Pick a variant index from an array based on tile variant/hash */
@@ -102,11 +111,14 @@ function getGroundTileIndex(tile: Tile): number {
   switch (tile.type) {
     case 'grass':
       if (tile.decoration?.includes('flower')) return pickVariant(T.meadow_01, 3, variant)
+      if (biome === 'savanna' || biome === 'highland') return pickVariant(T.grass_dry_01, 3, variant)
       if (biome === 'dry' || biome === 'plains_edge') return pickVariant(T.grass_dry_01, 3, variant)
       return pickVariant(T.grass_lush_01, 5, variant)
+    case 'meadow':
+      return pickVariant(T.meadow_01, 3, variant)
     case 'forest':
     case 'dense_forest':
-      return pickVariant(T.grass_dark_01, 3, variant)  // forest floor beneath tree sprites
+      return pickVariant(T.forest_floor_01, 3, variant)
     case 'water':
       return pickVariant(T.water_shallow_01, 3, variant)
     case 'deep_water':
@@ -116,12 +128,26 @@ function getGroundTileIndex(tile: Tile): number {
     case 'sand':
       if (biome === 'beach' || biome === 'coast') return pickVariant(T.sand_wet_01, 2, variant)
       return pickVariant(T.sand_01, 3, variant)
+    case 'beach':
+      return variant % 4 === 0
+        ? pickVariant(T.beach_shell_01, 2, variant)
+        : pickVariant(T.sand_wet_01, 2, variant)
     case 'mountain':
-      if (variant >= 2) return pickVariant(T.cliff_top_01, 3, variant)
+      if (biome === 'snow_peak') return pickVariant(T.mountain_snow_01, 3, variant)
       return pickVariant(T.mountain_rock_01, 3, variant)
+    case 'cliff':
+      return pickVariant(T.cliff_top_01, 3, variant)
     case 'snow':
       if (biome === 'dirty' || biome === 'road') return pickVariant(T.snow_dirty_01, 2, variant)
       return pickVariant(T.snow_01, 3, variant)
+    case 'ice':
+      return pickVariant(T.ice_01, 3, variant)
+    case 'tundra':
+      return pickVariant(T.gravel_01, 3, variant)
+    case 'lava':
+      return pickVariant(T.lava_rock_01, 2, variant)
+    case 'volcanic':
+      return pickVariant(T.volcanic_01, 2, variant)
     case 'swamp':
       return pickVariant(T.swamp_01, 2, variant)
     case 'farmland':

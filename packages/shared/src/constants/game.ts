@@ -16,17 +16,24 @@ export const LOAD_DISTANCE_CHUNKS = 4
 export const MOVEMENT_COSTS: Record<string, number> = {
   road: 0.5,
   grass: 1.0,
+  meadow: 1.0,
   building: 1.0,
   farmland: 1.2,
   sand: 1.3,
+  beach: 1.3,
   forest: 1.5,
+  tundra: 1.5,
+  ice: 1.5,
   snow: 1.8,
   swamp: 2.0,
+  volcanic: 2.0,
   dense_forest: 2.5,
   river: 0,
   water: 0,
   deep_water: 0,
   mountain: 0,
+  cliff: 0,
+  lava: 0,
 }
 
 /** Agent defaults */

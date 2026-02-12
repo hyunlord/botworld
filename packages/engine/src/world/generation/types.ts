@@ -1,4 +1,4 @@
-import type { Tile, TileType, Position } from '@botworld/shared'
+import type { Tile, TileType, Position, LandmarkType } from '@botworld/shared'
 
 export type NoiseMap = Float32Array
 
@@ -23,4 +23,12 @@ export interface PointOfInterest {
   type: 'marketplace' | 'tavern' | 'workshop' | 'library' | 'farm' | 'mine'
   position: Position
   biome?: string
+}
+
+export interface LandmarkDef {
+  type: LandmarkType
+  name: string
+  centerX: number
+  centerY: number
+  radius: number
 }
