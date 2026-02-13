@@ -126,6 +126,39 @@ export function injectGameStyles() {
       0%, 100% { transform: scale(1); }
       50% { transform: scale(1.05); }
     }
+
+    /* Button hover/active feedback */
+    button[style*="pointer"]:hover,
+    [role="button"]:hover {
+      filter: brightness(1.2);
+    }
+    button[style*="pointer"]:active,
+    [role="button"]:active {
+      transform: scale(0.96);
+    }
+
+    /* Scrollbar styling for panels */
+    ::-webkit-scrollbar {
+      width: 4px;
+    }
+    ::-webkit-scrollbar-track {
+      background: transparent;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: rgba(255, 255, 255, 0.15);
+      border-radius: 4px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: rgba(255, 255, 255, 0.25);
+    }
+
+    /* Canvas cursor */
+    #game-container canvas {
+      cursor: grab;
+    }
+    #game-container canvas:active {
+      cursor: grabbing;
+    }
   `
   document.head.appendChild(style)
 }

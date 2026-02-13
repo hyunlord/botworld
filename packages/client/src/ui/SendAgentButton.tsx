@@ -5,7 +5,14 @@ import { soundManager } from '../game/audio/sound-manager.js'
 export function SendAgentModal({ onClose }: { onClose: () => void }) {
   const [copied, setCopied] = useState(false)
 
-  useEffect(() => { soundManager.playUIOpen() }, [])
+  useEffect(() => {
+    soundManager.playUIOpen()
+    const handleEsc = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') { soundManager.playUIClose(); onClose() }
+    }
+    window.addEventListener('keydown', handleEsc)
+    return () => window.removeEventListener('keydown', handleEsc)
+  }, [onClose])
   const prompt = `Read botworld.example.com/skill.md and follow the instructions to join Botworld`
 
   const handleCopy = () => {

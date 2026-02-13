@@ -53,6 +53,8 @@ class SocketClient {
   private combatEventCallbacks: CombatEventCallback[] = []
   private monsterEventCallbacks: MonsterEventCallback[] = []
   private spectatorCountCallbacks: ((count: number) => void)[] = []
+  private connectCallbacks: (() => void)[] = []
+  private disconnectCallbacks: (() => void)[] = []
 
   connect(url?: string): void {
     const base = url ?? window.location.origin
@@ -112,10 +114,12 @@ class SocketClient {
 
     this.socket.on('connect', () => {
       console.log('[Socket] Connected to Botworld server')
+      for (const cb of this.connectCallbacks) cb()
     })
 
     this.socket.on('disconnect', () => {
       console.log('[Socket] Disconnected from server')
+      for (const cb of this.disconnectCallbacks) cb()
     })
   }
 
@@ -190,6 +194,16 @@ class SocketClient {
   onSpectatorCount(callback: (count: number) => void): () => void {
     this.spectatorCountCallbacks.push(callback)
     return () => { this.spectatorCountCallbacks = this.spectatorCountCallbacks.filter(cb => cb !== callback) }
+  }
+
+  onConnect(callback: () => void): () => void {
+    this.connectCallbacks.push(callback)
+    return () => { this.connectCallbacks = this.connectCallbacks.filter(cb => cb !== callback) }
+  }
+
+  onDisconnect(callback: () => void): () => void {
+    this.disconnectCallbacks.push(callback)
+    return () => { this.disconnectCallbacks = this.disconnectCallbacks.filter(cb => cb !== callback) }
   }
 
   pause(): void { this.socket?.emit('world:pause') }

@@ -29,6 +29,7 @@ import { AgentCompare } from '../ui/AgentCompare.js'
 import { FavoritesPanel } from '../ui/FavoritesPanel.js'
 import { SoundSettings } from '../ui/SoundSettings.js'
 import { ContextualHints } from '../ui/ContextualHints.js'
+import { ErrorBoundary } from '../ui/ErrorBoundary.js'
 
 injectGameStyles()
 
@@ -185,7 +186,14 @@ export function WorldView() {
   // Connect to server
   useEffect(() => {
     socketClient.connect()
-    setConnected(true)
+
+    const unsubConnect = socketClient.onConnect(() => {
+      setConnected(true)
+      socketClient.requestState()
+    })
+    const unsubDisconnect = socketClient.onDisconnect(() => {
+      setConnected(false)
+    })
 
     const unsubState = socketClient.onState((state: WorldState) => {
       applyState(state)
@@ -337,6 +345,8 @@ export function WorldView() {
       unsubSpectators()
       unsubCombat()
       unsubMonster()
+      unsubConnect()
+      unsubDisconnect()
       socketClient.disconnect()
     }
   }, [])
@@ -374,11 +384,18 @@ export function WorldView() {
       {/* Full-screen game canvas */}
       <div id="game-container" style={styles.game} />
 
-      {/* Connection indicator (subtle top-left dot) */}
-      <div style={{
-        ...styles.connectionDot,
-        background: connected ? '#2ecc71' : '#e74c3c',
-      }} title={connected ? 'Connected' : 'Disconnected'} />
+      {/* Connection indicator */}
+      {connected ? (
+        <div style={{
+          ...styles.connectionDot,
+          background: '#2ecc71',
+        }} title="Connected" />
+      ) : (
+        <div style={styles.reconnectBanner}>
+          <div style={{ ...styles.connectionDot, background: '#e74c3c', position: 'relative', top: 0, left: 0 }} />
+          <span>Reconnecting...</span>
+        </div>
+      )}
 
       {/* Event Banner (top center) */}
       <EventBanner
@@ -467,53 +484,63 @@ export function WorldView() {
 
       {/* Character Card popup (shown when agent is selected) */}
       {selectedAgent && (
-        <CharacterCard
-          agent={selectedAgent}
-          allAgents={agents}
-          onClose={() => { setSelectedAgent(null); setFollowing(false) }}
-          onFollow={handleFollow}
-          onNavigate={(x, y) => sceneRef.current?.centerOnTile(x, y)}
-          isFollowing={following}
-          characterData={selectedCharData}
-        />
+        <ErrorBoundary>
+          <CharacterCard
+            agent={selectedAgent}
+            allAgents={agents}
+            onClose={() => { setSelectedAgent(null); setFollowing(false) }}
+            onFollow={handleFollow}
+            onNavigate={(x, y) => sceneRef.current?.centerOnTile(x, y)}
+            isFollowing={following}
+            characterData={selectedCharData}
+          />
+        </ErrorBoundary>
       )}
 
       {/* Creature Card */}
       {selectedCreature && (
-        <CreatureCard
-          creature={selectedCreature}
-          onClose={() => setSelectedCreature(null)}
-          onNavigate={(x, y) => sceneRef.current?.centerOnTile(x, y)}
-        />
+        <ErrorBoundary>
+          <CreatureCard
+            creature={selectedCreature}
+            onClose={() => setSelectedCreature(null)}
+            onNavigate={(x, y) => sceneRef.current?.centerOnTile(x, y)}
+          />
+        </ErrorBoundary>
       )}
 
       {/* Building Card */}
       {selectedBuilding && (
-        <BuildingCard
-          building={selectedBuilding}
-          onClose={() => setSelectedBuilding(null)}
-          onNavigate={(x, y) => sceneRef.current?.centerOnTile(x, y)}
-        />
+        <ErrorBoundary>
+          <BuildingCard
+            building={selectedBuilding}
+            onClose={() => setSelectedBuilding(null)}
+            onNavigate={(x, y) => sceneRef.current?.centerOnTile(x, y)}
+          />
+        </ErrorBoundary>
       )}
 
       {/* Resource Card */}
       {selectedResource && (
-        <ResourceCard
-          resource={selectedResource}
-          position={selectedResource.position || { x: 0, y: 0 }}
-          onClose={() => setSelectedResource(null)}
-          onNavigate={(x, y) => sceneRef.current?.centerOnTile(x, y)}
-        />
+        <ErrorBoundary>
+          <ResourceCard
+            resource={selectedResource}
+            position={selectedResource.position || { x: 0, y: 0 }}
+            onClose={() => setSelectedResource(null)}
+            onNavigate={(x, y) => sceneRef.current?.centerOnTile(x, y)}
+          />
+        </ErrorBoundary>
       )}
 
       {/* Terrain Card */}
       {selectedTerrain && (
-        <TerrainCard
-          tile={selectedTerrain}
-          position={selectedTerrain.position || { x: 0, y: 0 }}
-          onClose={() => setSelectedTerrain(null)}
-          onNavigate={(x, y) => sceneRef.current?.centerOnTile(x, y)}
-        />
+        <ErrorBoundary>
+          <TerrainCard
+            tile={selectedTerrain}
+            position={selectedTerrain.position || { x: 0, y: 0 }}
+            onClose={() => setSelectedTerrain(null)}
+            onNavigate={(x, y) => sceneRef.current?.centerOnTile(x, y)}
+          />
+        </ErrorBoundary>
       )}
 
       {/* Follow HUD (shown when following an agent) */}
@@ -543,39 +570,49 @@ export function WorldView() {
 
       {/* Send Agent modal */}
       {showSendModal && (
-        <SendAgentModal onClose={() => setShowSendModal(false)} />
+        <ErrorBoundary>
+          <SendAgentModal onClose={() => setShowSendModal(false)} />
+        </ErrorBoundary>
       )}
 
       {/* Rankings Panel */}
       {showRankings && (
-        <RankingsPanel
-          onClose={() => setShowRankings(false)}
-          onSelectAgent={handleFeedSelectAgent}
-          onNavigate={(x, y) => sceneRef.current?.centerOnTile(x, y)}
-        />
+        <ErrorBoundary>
+          <RankingsPanel
+            onClose={() => setShowRankings(false)}
+            onSelectAgent={handleFeedSelectAgent}
+            onNavigate={(x, y) => sceneRef.current?.centerOnTile(x, y)}
+          />
+        </ErrorBoundary>
       )}
 
       {/* Statistics Dashboard */}
       {showStats && (
-        <StatsDashboard onClose={() => setShowStats(false)} />
+        <ErrorBoundary>
+          <StatsDashboard onClose={() => setShowStats(false)} />
+        </ErrorBoundary>
       )}
 
       {/* Timeline View */}
       {showTimeline && (
-        <TimelineView
-          onClose={() => setShowTimeline(false)}
-          onNavigate={(x, y) => sceneRef.current?.centerOnTile(x, y)}
-          onSelectAgent={handleFeedSelectAgent}
-        />
+        <ErrorBoundary>
+          <TimelineView
+            onClose={() => setShowTimeline(false)}
+            onNavigate={(x, y) => sceneRef.current?.centerOnTile(x, y)}
+            onSelectAgent={handleFeedSelectAgent}
+          />
+        </ErrorBoundary>
       )}
 
       {/* Agent Compare */}
       {showCompare && (
-        <AgentCompare
-          agents={agents}
-          onClose={() => setShowCompare(false)}
-          onSelectAgent={handleFeedSelectAgent}
-        />
+        <ErrorBoundary>
+          <AgentCompare
+            agents={agents}
+            onClose={() => setShowCompare(false)}
+            onSelectAgent={handleFeedSelectAgent}
+          />
+        </ErrorBoundary>
       )}
     </div>
   )
@@ -604,6 +641,25 @@ const styles: Record<string, React.CSSProperties> = {
     borderRadius: 4,
     zIndex: 50,
     pointerEvents: 'none',
+  },
+  reconnectBanner: {
+    position: 'absolute',
+    top: 8,
+    left: 8,
+    zIndex: 500,
+    display: 'flex',
+    alignItems: 'center',
+    gap: 8,
+    background: 'rgba(20, 20, 30, 0.85)',
+    backdropFilter: 'blur(8px)',
+    border: '1px solid rgba(231, 76, 60, 0.4)',
+    borderRadius: 8,
+    padding: '6px 12px',
+    color: '#ff8888',
+    fontSize: 12,
+    fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
+    pointerEvents: 'none',
+    animation: 'pulse 2s ease-in-out infinite',
   },
   toolbarBtn: {
     background: OV.bg,
