@@ -75,6 +75,7 @@ async function main() {
   const llmRouter = new LLMRouter()
   setLLMRouter(llmRouter)
   world.npcManager.setLLMRouter(llmRouter)
+  world.historyManager.setLLMRouter(llmRouter)
 
   // Load active agents from DB
   console.log('[Botworld] Loading agents from database...')

@@ -25,4 +25,5 @@ export interface WorldHistoryEntry {
   participants: string[]
   location: string
   significance: number // 1-10
+  narrative?: string   // AI-generated prose description
 }

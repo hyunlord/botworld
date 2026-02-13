@@ -9,6 +9,7 @@
 import type { WorldHistoryEntry, HistoryEventType, WorldClock } from '@botworld/shared'
 import { generateId, getSeasonFromDay } from '@botworld/shared'
 import type { EventBus } from '../core/event-bus.js'
+import type { LLMRouter } from '../llm/llm-router.js'
 
 const MAX_HISTORY_ENTRIES = 500
 
@@ -16,11 +17,17 @@ export class WorldHistoryManager {
   private entries: WorldHistoryEntry[] = []
   private eventBus: EventBus
   private nameResolver: (id: string) => string
+  private llmRouter: LLMRouter | null = null
 
   constructor(eventBus: EventBus, nameResolver: (id: string) => string) {
     this.eventBus = eventBus
     this.nameResolver = nameResolver
     this.wireEvents()
+  }
+
+  /** Set LLM router for narrative generation */
+  setLLMRouter(router: LLMRouter): void {
+    this.llmRouter = router
   }
 
   /** Get all history entries sorted by tick descending */
@@ -94,6 +101,13 @@ export class WorldHistoryManager {
       this.entries = this.entries.slice(0, MAX_HISTORY_ENTRIES)
     }
 
+    // Generate AI narrative for significant events (async, non-blocking)
+    if (significance >= 6) {
+      this.generateNarrative(entry).catch(err =>
+        console.warn(`[WorldHistory] Narrative generation failed for "${title}":`, err.message)
+      )
+    }
+
     this.eventBus.emit({
       type: 'history:recorded',
       entryId: entry.id,
@@ -104,6 +118,38 @@ export class WorldHistoryManager {
     })
 
     return entry
+  }
+
+  /** Generate a narrative description for a history entry */
+  private async generateNarrative(entry: WorldHistoryEntry): Promise<void> {
+    if (!this.llmRouter) return
+
+    try {
+      const prompt = [
+        'You are a chronicle writer for a fantasy world. Write a 2-3 sentence dramatic narrative for this historical event.',
+        `Event type: ${entry.type}`,
+        `Title: ${entry.title}`,
+        `Description: ${entry.description}`,
+        `Season: ${entry.season}, Day: ${entry.day}`,
+        `Location: ${entry.location}`,
+        `Participants: ${entry.participants.join(', ') || 'unknown'}`,
+        'Write in an epic, medieval chronicle style. Be concise.',
+      ].join('\n')
+
+      const response = await this.llmRouter.complete({
+        category: 'history_writing',
+        messages: [{ role: 'user', content: prompt }],
+        max_tokens: 150,
+      })
+
+      if (response?.content) {
+        entry.narrative = response.content
+        console.log(`[WorldHistory] Narrative generated for "${entry.title}"`)
+      }
+    } catch (err) {
+      // Silently fail — narrative is optional enrichment
+      console.debug(`[WorldHistory] Narrative generation error:`, err)
+    }
   }
 
   // ── Event wiring ──

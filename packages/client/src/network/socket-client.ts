@@ -38,6 +38,63 @@ type WorldEventEndedCallback = (data: { eventId: string; eventType: string; titl
 type CombatEventCallback = (event: WorldEvent) => void
 type MonsterEventCallback = (event: WorldEvent) => void
 
+type LayerTransitionCallback = (data: {
+  agentId: string
+  fromLayerId: string
+  toLayerId: string
+  portalId: string
+  timestamp: number
+}) => void
+
+type LayerDiscoveredCallback = (data: {
+  agentId: string
+  layerId: string
+  layerName: string
+  layerType: string
+  timestamp: number
+}) => void
+
+type LayerListCallback = (layers: {
+  id: string
+  name: string
+  type: string
+  depth: number
+  agentCount: number
+}[]) => void
+
+type LayerMapDataCallback = (data: {
+  layerId: string
+  name: string
+  type: string
+  depth: number
+  width: number
+  height: number
+  ambientLight: number
+  dangerLevel: number
+  tiles?: number[][]
+  rooms: { id: string; x: number; y: number; width: number; height: number; type: string }[]
+  traps: { id: string; position: { x: number; y: number }; type: string; detected: boolean }[]
+  agents: string[]
+  portals: { id: string; sourcePosition: { x: number; y: number }; targetLayerId: string; portalType: string }[]
+}) => void
+
+type TrapTriggeredCallback = (data: {
+  agentId: string
+  trapId: string
+  trapType: string
+  damage: number
+  layerId: string
+  timestamp: number
+}) => void
+
+type DungeonRoomEnteredCallback = (data: {
+  agentId: string
+  roomId: string
+  roomType: string
+  layerId: string
+  timestamp: number
+}) => void
+
 class SocketClient {
   private socket: Socket | null = null
   private stateCallbacks: StateCallback[] = []
@@ -52,6 +109,12 @@ class SocketClient {
   private worldEventEndedCallbacks: WorldEventEndedCallback[] = []
   private combatEventCallbacks: CombatEventCallback[] = []
   private monsterEventCallbacks: MonsterEventCallback[] = []
+  private layerTransitionCallbacks: LayerTransitionCallback[] = []
+  private layerDiscoveredCallbacks: LayerDiscoveredCallback[] = []
+  private layerListCallbacks: LayerListCallback[] = []
+  private layerMapDataCallbacks: LayerMapDataCallback[] = []
+  private trapTriggeredCallbacks: TrapTriggeredCallback[] = []
+  private dungeonRoomEnteredCallbacks: DungeonRoomEnteredCallback[] = []
   private spectatorCountCallbacks: ((count: number) => void)[] = []
   private connectCallbacks: (() => void)[] = []
   private disconnectCallbacks: (() => void)[] = []
@@ -106,6 +169,30 @@ class SocketClient {
 
     this.socket.on('monster:event', (event: WorldEvent) => {
       for (const cb of this.monsterEventCallbacks) cb(event)
+    })
+
+    this.socket.on('layer:transition', (data: any) => {
+      for (const cb of this.layerTransitionCallbacks) cb(data)
+    })
+
+    this.socket.on('layer:discovered', (data: any) => {
+      for (const cb of this.layerDiscoveredCallbacks) cb(data)
+    })
+
+    this.socket.on('layer:list', (layers: any) => {
+      for (const cb of this.layerListCallbacks) cb(layers)
+    })
+
+    this.socket.on('layer:map_data', (data: any) => {
+      for (const cb of this.layerMapDataCallbacks) cb(data)
+    })
+
+    this.socket.on('trap:triggered', (data: any) => {
+      for (const cb of this.trapTriggeredCallbacks) cb(data)
+    })
+
+    this.socket.on('dungeon:room_entered', (data: any) => {
+      for (const cb of this.dungeonRoomEnteredCallbacks) cb(data)
     })
 
     this.socket.on('spectator:count', (count: number) => {
@@ -191,6 +278,36 @@ class SocketClient {
     return () => { this.monsterEventCallbacks = this.monsterEventCallbacks.filter(cb => cb !== callback) }
   }
 
+  onLayerTransition(callback: LayerTransitionCallback): () => void {
+    this.layerTransitionCallbacks.push(callback)
+    return () => { this.layerTransitionCallbacks = this.layerTransitionCallbacks.filter(cb => cb !== callback) }
+  }
+
+  onLayerDiscovered(callback: LayerDiscoveredCallback): () => void {
+    this.layerDiscoveredCallbacks.push(callback)
+    return () => { this.layerDiscoveredCallbacks = this.layerDiscoveredCallbacks.filter(cb => cb !== callback) }
+  }
+
+  onLayerList(callback: LayerListCallback): () => void {
+    this.layerListCallbacks.push(callback)
+    return () => { this.layerListCallbacks = this.layerListCallbacks.filter(cb => cb !== callback) }
+  }
+
+  onLayerMapData(callback: LayerMapDataCallback): () => void {
+    this.layerMapDataCallbacks.push(callback)
+    return () => { this.layerMapDataCallbacks = this.layerMapDataCallbacks.filter(cb => cb !== callback) }
+  }
+
+  onTrapTriggered(callback: TrapTriggeredCallback): () => void {
+    this.trapTriggeredCallbacks.push(callback)
+    return () => { this.trapTriggeredCallbacks = this.trapTriggeredCallbacks.filter(cb => cb !== callback) }
+  }
+
+  onDungeonRoomEntered(callback: DungeonRoomEnteredCallback): () => void {
+    this.dungeonRoomEnteredCallbacks.push(callback)
+    return () => { this.dungeonRoomEnteredCallbacks = this.dungeonRoomEnteredCallbacks.filter(cb => cb !== callback) }
+  }
+
   onSpectatorCount(callback: (count: number) => void): () => void {
     this.spectatorCountCallbacks.push(callback)
     return () => { this.spectatorCountCallbacks = this.spectatorCountCallbacks.filter(cb => cb !== callback) }
@@ -219,6 +336,14 @@ class SocketClient {
   /** Tell server which NPC is being followed */
   sendFollowNpc(npcId: string | null): void {
     this.socket?.emit('follow:npc', { npcId })
+  }
+
+  requestLayers(): void {
+    this.socket?.emit('request:layers')
+  }
+
+  requestLayerMap(layerId: string): void {
+    this.socket?.emit('request:layer_map', layerId)
   }
 }
 

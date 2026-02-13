@@ -315,6 +315,19 @@ export class WorldEngine {
 
     // ── Social system event wiring ──
 
+    // Wire pack breeding → creature spawning
+    this.eventBus.on('pack:breed_request' as any, (event: any) => {
+      if (event.type !== 'pack:breed_request') return
+      const MAX_CREATURES_PER_AREA = 20
+      const nearby = this.creatureManager.getCreaturesInArea(event.position.x, event.position.y, 20)
+      if (nearby.length >= MAX_CREATURES_PER_AREA) return
+      const creature = this.creatureManager.spawnCreature(event.templateId, event.position, { packId: event.packId })
+      if (creature) {
+        this.packManager.addMember(event.packId, creature.id)
+        console.log(`[Pack] Breeding in pack ${event.packId}: new ${event.templateId} spawned`)
+      }
+    })
+
     // Trade → relationship + reputation + rumor
     this.eventBus.on('trade:completed', (event) => {
       if (event.type !== 'trade:completed') return
@@ -853,6 +866,21 @@ export class WorldEngine {
 
     // 10.99. Layer system tick (special region effects)
     this.layerManager.tick(this.clock.tick)
+
+    // 10.991. Sync agent positions to layer manager
+    for (const agent of this.agentManager.getAllAgents()) {
+      this.layerManager.updateAgentPosition(agent.id, agent.position)
+    }
+
+    // 10.992. Check for underground knockouts - agents with HP <= 0 in underground layers
+    for (const agent of this.agentManager.getAllAgents()) {
+      if (agent.stats.hp <= 0 && agent.unconsciousUntil) {
+        const result = this.layerManager.handleUndergroundKnockout(agent.id, this.clock.tick)
+        if (result.returnToSurface && result.surfacePosition) {
+          agent.position = result.surfacePosition
+        }
+      }
+    }
 
     // 10.995a. Rankings, records, and statistics tick
     this.rankingManager.tick(this.clock.tick)

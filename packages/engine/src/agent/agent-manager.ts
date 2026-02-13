@@ -304,8 +304,33 @@ export class AgentManager {
 
   /** Tick step: passive effects — hunger, emotion decay, action progress */
   updatePassiveEffects(clock: WorldClock): void {
+    const REVIVE_TICKS = 30
+
     for (const runtime of this.agents.values()) {
       const { agent } = runtime
+
+      // Check knockout recovery
+      if (agent.unconsciousUntil) {
+        if (clock.tick >= agent.unconsciousUntil) {
+          // Revive at 20% HP
+          agent.unconsciousUntil = undefined
+          agent.stats.hp = Math.max(1, Math.floor(agent.stats.maxHp * 0.2))
+          agent.stats.energy = Math.floor(agent.stats.maxEnergy * 0.3)
+          agent.currentAction = null
+          console.log(`[Agent] ${agent.name} has recovered from unconsciousness`)
+        }
+        continue // Skip all other processing while unconscious
+      }
+
+      // Check for knockout (HP <= 0)
+      if (agent.stats.hp <= 0) {
+        agent.unconsciousUntil = clock.tick + REVIVE_TICKS
+        agent.currentAction = null
+        agent.stats.hp = 0
+        console.log(`[Agent] ${agent.name} has been knocked unconscious! Revives at tick ${agent.unconsciousUntil}`)
+        continue
+      }
+
       agent.stats.hunger = Math.max(0, agent.stats.hunger - HUNGER_DRAIN_PER_TICK)
       this.decayEmotions(agent.currentMood)
       if (agent.currentAction) {
@@ -377,6 +402,12 @@ export class AgentManager {
         const prevPos = { ...agent.position }
         agent.position = nextPos
         runtime.pathIndex++
+
+        // Check for landmark exploration
+        const tile = this.tileMap.getTile(nextPos.x, nextPos.y)
+        if (tile?.landmark) {
+          this.handleLandmarkExploration(agent, tile.landmark, nextPos, clock)
+        }
 
         this.eventBus.emit({
           type: 'agent:moved',
@@ -645,6 +676,84 @@ export class AgentManager {
     })
 
     return { success: true, gave: forThem.name, received: forMe.name }
+  }
+
+  /** Handle agent entering a landmark tile */
+  private handleLandmarkExploration(
+    agent: Agent,
+    landmarkType: string,
+    position: Position,
+    clock: WorldClock,
+  ): void {
+    // Cooldown: don't trigger on every tile of the same landmark
+    const cooldownKey = `landmark_${position.x}_${position.y}`
+    const lastExplored = (agent as any).__landmarkCooldowns?.[cooldownKey]
+    if (lastExplored && clock.tick - lastExplored < 200) return
+
+    // Set cooldown
+    if (!(agent as any).__landmarkCooldowns) (agent as any).__landmarkCooldowns = {}
+    ;(agent as any).__landmarkCooldowns[cooldownKey] = clock.tick
+
+    // Roll exploration result based on landmark type
+    const roll = Math.random()
+    let encounter: 'treasure' | 'trap' | 'empty' | 'monster'
+
+    switch (landmarkType) {
+      case 'cave_entrance':
+        encounter = roll < 0.3 ? 'monster' : roll < 0.55 ? 'treasure' : roll < 0.75 ? 'trap' : 'empty'
+        break
+      case 'ancient_ruins':
+        encounter = roll < 0.15 ? 'monster' : roll < 0.5 ? 'treasure' : roll < 0.65 ? 'trap' : 'empty'
+        break
+      case 'volcano':
+        encounter = roll < 0.4 ? 'trap' : roll < 0.6 ? 'treasure' : 'empty'
+        break
+      case 'giant_tree':
+        encounter = roll < 0.5 ? 'treasure' : roll < 0.6 ? 'trap' : 'empty'
+        break
+      default:
+        encounter = roll < 0.3 ? 'treasure' : 'empty'
+    }
+
+    switch (encounter) {
+      case 'treasure': {
+        const xpGain = 10 + Math.floor(Math.random() * 20)
+        agent.xp += xpGain
+        console.log(`[Landmark] ${agent.name} found treasure at ${landmarkType}! +${xpGain} XP`)
+        this.eventBus.emit({
+          type: 'agent:action',
+          agentId: agent.id,
+          action: { type: 'explore', startedAt: clock.tick, duration: 1, data: { landmark: landmarkType, result: 'treasure', xp: xpGain } },
+          timestamp: clock.tick,
+        })
+        break
+      }
+      case 'trap': {
+        const damage = 5 + Math.floor(Math.random() * 10)
+        agent.stats.hp = Math.max(0, agent.stats.hp - damage)
+        console.log(`[Landmark] ${agent.name} triggered a trap at ${landmarkType}! -${damage} HP`)
+        this.eventBus.emit({
+          type: 'agent:action',
+          agentId: agent.id,
+          action: { type: 'explore', startedAt: clock.tick, duration: 1, data: { landmark: landmarkType, result: 'trap', damage } },
+          timestamp: clock.tick,
+        })
+        break
+      }
+      case 'monster': {
+        console.log(`[Landmark] ${agent.name} disturbed creatures at ${landmarkType}!`)
+        this.eventBus.emit({
+          type: 'agent:action',
+          agentId: agent.id,
+          action: { type: 'explore', startedAt: clock.tick, duration: 1, data: { landmark: landmarkType, result: 'monster' } },
+          timestamp: clock.tick,
+        })
+        break
+      }
+      case 'empty':
+        // Silent — nothing happens
+        break
+    }
   }
 
   private decayEmotions(mood: EmotionState): void {

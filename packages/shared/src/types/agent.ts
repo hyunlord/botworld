@@ -112,6 +112,8 @@ export interface Agent {
   bio: string
   isNpc?: boolean
   npcRole?: NpcRole
+  equipment?: Record<string, string>  // slot → itemId (e.g. weapon, armor, shield)
+  unconsciousUntil?: number           // tick when agent revives from knockout
 }
 
 export interface Organization {

@@ -10,13 +10,22 @@ export function createLayersRouter(world: WorldEngine): Router {
     res.json(state)
   })
 
-  /** GET /layers/:layerId - Get specific layer details */
+  /** GET /layers/:layerId - Get specific layer details (with tiles/rooms/traps) */
   router.get('/layers/:layerId', (req, res) => {
-    const layer = world.layerManager.getLayer(req.params.layerId)
-    if (!layer) return res.status(404).json({ error: 'Layer not found' })
-    const agents = world.layerManager.getAgentsInLayer(req.params.layerId)
-    const portals = world.layerManager.getLayerPortals(req.params.layerId)
-    res.json({ layer, agents, portals })
+    const detail = world.layerManager.getLayerDetail(req.params.layerId)
+    if (!detail) return res.status(404).json({ error: 'Layer not found' })
+    res.json({
+      layer: detail.layer,
+      agents: detail.agents,
+      portals: detail.layer.portals.filter(p => p.discovered),
+      tiles: detail.tiles,
+      rooms: detail.rooms.map(r => ({
+        id: r.id, x: r.x, y: r.y, width: r.width, height: r.height, type: r.type,
+      })),
+      traps: detail.traps.filter(t => !t.disarmed).map(t => ({
+        id: t.id, position: t.position, type: t.type, detected: t.detected,
+      })),
+    })
   })
 
   /** GET /layers/agent/:agentId - Get agent's current layer and fog of war */

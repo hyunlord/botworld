@@ -557,22 +557,28 @@ function smoothChunkTiles(tiles: Tile[][], size: number): void {
 
   const changes: { lx: number; ly: number; type: TileType; biome: string }[] = []
 
-  for (let ly = 1; ly < size - 1; ly++) {
-    for (let lx = 1; lx < size - 1; lx++) {
+  for (let ly = 0; ly < size; ly++) {
+    for (let lx = 0; lx < size; lx++) {
       const current = tiles[ly][lx]
       if (PROTECTED.has(current.type)) continue
 
       const counts = new Map<TileType, number>()
+      let neighborCount = 0
       for (let dy = -1; dy <= 1; dy++) {
         for (let dx = -1; dx <= 1; dx++) {
           if (dx === 0 && dy === 0) continue
-          const n = tiles[ly + dy][lx + dx]
+          const nx = lx + dx, ny = ly + dy
+          if (nx < 0 || nx >= size || ny < 0 || ny >= size) continue
+          const n = tiles[ny][nx]
           counts.set(n.type, (counts.get(n.type) ?? 0) + 1)
+          neighborCount++
         }
       }
 
+      // For edge tiles with fewer neighbors, use a lower threshold
+      const threshold = neighborCount >= 8 ? 2 : Math.max(1, Math.floor(neighborCount * 0.3))
       const sameCount = counts.get(current.type) ?? 0
-      if (sameCount <= 2) {
+      if (sameCount <= threshold) {
         let maxType: TileType = current.type
         let maxCount = 0
         for (const [type, count] of counts) {
@@ -583,7 +589,7 @@ function smoothChunkTiles(tiles: Tile[][], size: number): void {
           }
         }
         if (maxType !== current.type) {
-          const neighborBiome = tiles[ly + (maxType === tiles[ly - 1][lx].type ? -1 : 1)]?.[lx]?.biome ?? current.biome
+          const neighborBiome = tiles[Math.min(size - 1, Math.max(0, ly + (maxType === tiles[Math.max(0, ly - 1)][lx]?.type ? -1 : 1)))]?.[lx]?.biome ?? current.biome
           changes.push({ lx, ly, type: maxType, biome: neighborBiome ?? 'grassland' })
         }
       }

@@ -1,6 +1,35 @@
 import { Router } from 'express'
 import type { WorldEngine } from '../core/world-engine.js'
 import { requireAuth } from '../auth/middleware.js'
+import type { Agent } from '@botworld/shared'
+
+/** Calculate effective attack/defense including equipment bonuses */
+function getEffectiveStats(agent: Agent): { attack: number; defense: number } {
+  let attack = agent.stats.attack
+  let defense = agent.stats.defense
+
+  if (!agent.equipment || !agent.inventory) return { attack, defense }
+
+  const QUALITY_MULTIPLIER: Record<string, number> = {
+    crude: 0.7, basic: 1.0, fine: 1.3, masterwork: 1.6, legendary: 2.0,
+  }
+
+  for (const [slot, itemId] of Object.entries(agent.equipment)) {
+    const item = agent.inventory.find(i => i.id === itemId)
+    if (!item?.equipmentStats) continue
+
+    const qualityMult = QUALITY_MULTIPLIER[item.rarity ?? 'common'] ?? 1.0
+
+    if (item.equipmentStats.attack) {
+      attack += Math.floor(item.equipmentStats.attack * qualityMult)
+    }
+    if (item.equipmentStats.defense) {
+      defense += Math.floor(item.equipmentStats.defense * qualityMult)
+    }
+  }
+
+  return { attack, defense }
+}
 
 export function createCombatRouter(world: WorldEngine): Router {
   const router = Router()
@@ -36,10 +65,11 @@ export function createCombatRouter(world: WorldEngine): Router {
       return res.status(400).json({ error: 'Monster is too far away' })
     }
 
+    const effectiveStats = getEffectiveStats(agent)
     const combat = world.combat.startCombat(
       agentId,
-      agent.stats.attack,
-      agent.stats.defense,
+      effectiveStats.attack,
+      effectiveStats.defense,
       agent.stats.hp,
       monsterId,
     )
@@ -134,6 +164,7 @@ export function createCombatRouter(world: WorldEngine): Router {
     for (const id of attackerIds) {
       const agent = world.agentManager.getAgent(id)
       if (agent) {
+        const effectiveStats = getEffectiveStats(agent)
         const participant = world.advancedCombat.createParticipant({
           id: agent.id,
           name: agent.name,
@@ -142,8 +173,8 @@ export function createCombatRouter(world: WorldEngine): Router {
           isCreature: false,
           hp: agent.stats.hp,
           maxHp: agent.stats.maxHp,
-          attack: agent.stats.attack,
-          defense: agent.stats.defense,
+          attack: effectiveStats.attack,
+          defense: effectiveStats.defense,
           equipment: { items: agent.inventory.map(i => i.name) },
         })
         attackers.push(participant)
@@ -153,6 +184,7 @@ export function createCombatRouter(world: WorldEngine): Router {
     for (const id of defenderIds) {
       const agent = world.agentManager.getAgent(id)
       if (agent) {
+        const effectiveStats = getEffectiveStats(agent)
         const participant = world.advancedCombat.createParticipant({
           id: agent.id,
           name: agent.name,
@@ -161,8 +193,8 @@ export function createCombatRouter(world: WorldEngine): Router {
           isCreature: false,
           hp: agent.stats.hp,
           maxHp: agent.stats.maxHp,
-          attack: agent.stats.attack,
-          defense: agent.stats.defense,
+          attack: effectiveStats.attack,
+          defense: effectiveStats.defense,
           equipment: { items: agent.inventory.map(i => i.name) },
         })
         defenders.push(participant)

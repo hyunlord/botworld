@@ -5,6 +5,8 @@ import type {
   FogOfWarState,
   PortalRequirement,
   SpecialRegionType,
+  DungeonRoom,
+  DungeonTrap,
 } from '@botworld/shared'
 import { generateId } from '@botworld/shared'
 import type { EventBus } from '../core/event-bus.js'
@@ -17,6 +19,10 @@ export class WorldLayerManager {
   private agentStates = new Map<string, AgentLayerState>()
   private fogOfWar = new Map<string, FogOfWarState>() // key: "agentId:layerId"
   private surfaceLayerId: string
+  private layerTiles = new Map<string, number[][]>()   // layerId -> 2D tile array
+  private layerRooms = new Map<string, DungeonRoom[]>() // layerId -> rooms
+  private layerTraps = new Map<string, DungeonTrap[]>() // layerId -> traps
+  private agentPositions = new Map<string, { x: number; y: number }>() // agentId -> position
 
   constructor(
     private eventBus: EventBus,
@@ -149,6 +155,17 @@ export class WorldLayerManager {
     this.layers.set(result.cavern.id, result.cavern)
     this.layers.set(result.ruins.id, result.ruins)
 
+    // Store tile/room/trap data
+    for (const [id, tileData] of result.tiles) {
+      this.layerTiles.set(id, tileData)
+    }
+    for (const [id, roomData] of result.rooms) {
+      this.layerRooms.set(id, roomData)
+    }
+    for (const [id, trapData] of result.traps) {
+      this.layerTraps.set(id, trapData)
+    }
+
     // Add portal from surface to mine
     const mineEntrance: LayerPortal = {
       id: generateId('portal'),
@@ -177,6 +194,48 @@ export class WorldLayerManager {
    */
   getAllLayers(): WorldLayer[] {
     return Array.from(this.layers.values())
+  }
+
+  /**
+   * Get layer tiles
+   */
+  getLayerTiles(layerId: string): number[][] | undefined {
+    return this.layerTiles.get(layerId)
+  }
+
+  /**
+   * Get layer rooms
+   */
+  getLayerRooms(layerId: string): DungeonRoom[] {
+    return this.layerRooms.get(layerId) ?? []
+  }
+
+  /**
+   * Get layer traps
+   */
+  getLayerTraps(layerId: string): DungeonTrap[] {
+    return this.layerTraps.get(layerId) ?? []
+  }
+
+  /**
+   * Get detailed layer info including tiles, rooms, traps, and agents
+   */
+  getLayerDetail(layerId: string): {
+    layer: WorldLayer
+    tiles: number[][] | undefined
+    rooms: DungeonRoom[]
+    traps: DungeonTrap[]
+    agents: string[]
+  } | undefined {
+    const layer = this.layers.get(layerId)
+    if (!layer) return undefined
+    return {
+      layer,
+      tiles: this.layerTiles.get(layerId),
+      rooms: this.layerRooms.get(layerId) ?? [],
+      traps: this.layerTraps.get(layerId) ?? [],
+      agents: this.getAgentsInLayer(layerId),
+    }
   }
 
   /**
@@ -383,6 +442,74 @@ export class WorldLayerManager {
   }
 
   /**
+   * Update agent position (for trap checking and fog of war)
+   */
+  updateAgentPosition(agentId: string, position: { x: number; y: number }): void {
+    this.agentPositions.set(agentId, position)
+
+    const state = this.agentStates.get(agentId)
+    if (!state) return
+
+    const layer = this.layers.get(state.currentLayerId)
+    if (!layer) return
+
+    // Update fog of war
+    const visionRange = 5 // default underground vision
+    this.updateFogOfWar(agentId, position, visionRange)
+
+    // Check traps
+    const traps = this.layerTraps.get(state.currentLayerId)
+    if (traps) {
+      for (const trap of traps) {
+        if (trap.disarmed) continue
+        if (trap.position.x === position.x && trap.position.y === position.y) {
+          // Trap triggered!
+          this.eventBus.emit({
+            type: 'trap:triggered',
+            agentId,
+            trapId: trap.id,
+            trapType: trap.type,
+            damage: trap.damage,
+            layerId: state.currentLayerId,
+            timestamp: Date.now(),
+          })
+          trap.disarmed = true // one-time trigger
+        }
+      }
+    }
+
+    // Check room entry
+    const rooms = this.layerRooms.get(state.currentLayerId)
+    if (rooms) {
+      for (const room of rooms) {
+        if (position.x >= room.x && position.x < room.x + room.width &&
+            position.y >= room.y && position.y < room.y + room.height) {
+          // Check if first time entering this room
+          const roomKey = `${state.currentLayerId}:${room.id}`
+          if (!state.exploredTiles[roomKey]) {
+            state.exploredTiles[roomKey] = ['entered']
+            this.eventBus.emit({
+              type: 'dungeon:room_entered',
+              agentId,
+              roomId: room.id,
+              roomType: room.type,
+              layerId: state.currentLayerId,
+              timestamp: Date.now(),
+            })
+          }
+        }
+      }
+    }
+  }
+
+  /**
+   * Get agent position
+   */
+  getAgentPosition(agentId: string): { x: number; y: number } | undefined {
+    return this.agentPositions.get(agentId)
+  }
+
+  /**
    * Get fog of war state for agent in a layer
    */
   getFogOfWar(agentId: string, layerId: string): FogOfWarState | undefined {
@@ -416,26 +543,88 @@ export class WorldLayerManager {
   tick(tick: number): void {
     for (const [agentId, state] of this.agentStates.entries()) {
       const layer = this.layers.get(state.currentLayerId)
-      if (!layer || !layer.specialRegion) {
-        continue
+      if (!layer) continue
+
+      // Process traps for agents in underground layers
+      if (layer.type === 'mine' || layer.type === 'cavern' || layer.type === 'ancient_ruins') {
+        this.processTraps(agentId, state.currentLayerId, tick)
       }
 
       // Apply special region effects
-      if (layer.specialRegion === 'cursed_lands') {
-        // 1 HP damage every 10 ticks
-        if (tick % 10 === 0) {
-          // TODO: Apply damage to agent
-          // For now, just emit event or handle via agent manager
-        }
-      } else if (layer.specialRegion === 'dragon_domain') {
-        // 1 HP damage every 5 ticks from volcanic heat
-        if (tick % 5 === 0) {
-          // TODO: Check for fire_resistance item/buff
-          // Apply damage if no resistance
-        }
+      if (layer.specialRegion === 'cursed_lands' && tick % 10 === 0) {
+        this.eventBus.emit({
+          type: 'trap:triggered',
+          agentId,
+          trapId: 'cursed_lands_damage',
+          trapType: 'environmental',
+          damage: 5,
+          layerId: state.currentLayerId,
+          timestamp: tick,
+        })
+      } else if (layer.specialRegion === 'dragon_domain' && tick % 5 === 0) {
+        this.eventBus.emit({
+          type: 'trap:triggered',
+          agentId,
+          trapId: 'volcanic_damage',
+          trapType: 'environmental',
+          damage: 3,
+          layerId: state.currentLayerId,
+          timestamp: tick,
+        })
       }
       // enchanted_forest and elven_city have passive bonuses, handled elsewhere
     }
+  }
+
+  /**
+   * Process traps for an agent in underground layer
+   */
+  private processTraps(agentId: string, layerId: string, tick: number): void {
+    const traps = this.layerTraps.get(layerId)
+    if (!traps) return
+
+    const position = this.agentPositions.get(agentId)
+    if (!position) return
+
+    // Check if agent is on a trap tile
+    for (const trap of traps) {
+      if (trap.disarmed) continue
+      if (trap.position.x === position.x && trap.position.y === position.y) {
+        // Trap already triggered by updateAgentPosition
+        // This is just a safety check for ticks
+        continue
+      }
+    }
+  }
+
+  /**
+   * Handle agent knockout in underground - return to surface
+   */
+  handleUndergroundKnockout(agentId: string, tick: number): { returnToSurface: boolean; surfacePosition?: { x: number; y: number } } {
+    const state = this.agentStates.get(agentId)
+    if (!state || state.currentLayerId === this.surfaceLayerId) {
+      return { returnToSurface: false }
+    }
+
+    // Agent knocked out in underground - return to surface
+    const fromLayerId = state.currentLayerId
+    state.currentLayerId = this.surfaceLayerId
+
+    // Find the surface entrance position (from the mine entrance portal)
+    const surface = this.layers.get(this.surfaceLayerId)!
+    const minePortal = surface.portals.find(p => p.portalType === 'mine_entrance')
+    const surfacePos = minePortal?.sourcePosition ?? { x: 8, y: 8 }
+
+    this.eventBus.emit({
+      type: 'layer:transition',
+      agentId,
+      fromLayerId,
+      toLayerId: this.surfaceLayerId,
+      portalId: 'knockout_revival',
+      timestamp: tick,
+    })
+
+    return { returnToSurface: true, surfacePosition: surfacePos }
   }
 
   /**

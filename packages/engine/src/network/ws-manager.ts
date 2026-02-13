@@ -83,6 +83,9 @@ export class WsManager {
       // Character appearances
       this.sendCharacterAppearances(socket)
 
+      // Send layer list
+      socket.emit('layer:list', this.world.layerManager.getState().layers)
+
       // Request handlers
       socket.on('request:state', () => {
         socket.emit('world:state', this.world.getState())
@@ -91,6 +94,51 @@ export class WsManager {
       socket.on('request:chunks', (keys: string[]) => {
         const chunkData = this.world.tileMap.getSerializableChunks(keys)
         socket.emit('world:chunks', chunkData)
+      })
+
+      // Layer map data request
+      socket.on('request:layer_map', (layerId: string) => {
+        const detail = this.world.layerManager.getLayerDetail(layerId)
+        if (detail) {
+          socket.emit('layer:map_data', {
+            layerId: detail.layer.id,
+            name: detail.layer.name,
+            type: detail.layer.type,
+            depth: detail.layer.depth,
+            width: detail.layer.width,
+            height: detail.layer.height,
+            ambientLight: detail.layer.ambientLight,
+            dangerLevel: detail.layer.dangerLevel,
+            tiles: detail.tiles,
+            rooms: detail.rooms.map(r => ({
+              id: r.id,
+              x: r.x,
+              y: r.y,
+              width: r.width,
+              height: r.height,
+              type: r.type,
+            })),
+            traps: detail.traps.filter(t => !t.disarmed).map(t => ({
+              id: t.id,
+              position: t.position,
+              type: t.type,
+              detected: t.detected,
+            })),
+            agents: detail.agents,
+            portals: detail.layer.portals.filter(p => p.discovered).map(p => ({
+              id: p.id,
+              sourcePosition: p.sourcePosition,
+              targetLayerId: p.targetLayerId,
+              portalType: p.portalType,
+            })),
+          })
+        }
+      })
+
+      // Layer list request
+      socket.on('request:layers', () => {
+        const state = this.world.layerManager.getState()
+        socket.emit('layer:list', state.layers)
       })
 
       // Speed controls
@@ -366,6 +414,61 @@ export class WsManager {
 
       if (event.type === 'monster:spawned' || event.type === 'monster:died') {
         this.spectatorNs.emit('monster:event', event)
+      }
+
+      // ── Layer events ──
+      if (event.type === 'layer:transition') {
+        this.spectatorNs.emit('layer:transition', {
+          agentId: event.agentId,
+          fromLayerId: event.fromLayerId,
+          toLayerId: event.toLayerId,
+          portalId: event.portalId,
+          timestamp: event.timestamp,
+        })
+        // Notify the specific bot
+        this.botNs.to(`agent:${event.agentId}`).emit('layer:transition', {
+          fromLayerId: event.fromLayerId,
+          toLayerId: event.toLayerId,
+          portalId: event.portalId,
+          timestamp: event.timestamp,
+        })
+      }
+
+      if (event.type === 'layer:discovered') {
+        this.spectatorNs.emit('layer:discovered', {
+          agentId: event.agentId,
+          layerId: event.layerId,
+          layerName: event.layerName,
+          layerType: event.layerType,
+          timestamp: event.timestamp,
+        })
+      }
+
+      if (event.type === 'trap:triggered') {
+        this.spectatorNs.emit('trap:triggered', {
+          agentId: event.agentId,
+          trapId: event.trapId,
+          trapType: event.trapType,
+          damage: event.damage,
+          layerId: event.layerId,
+          timestamp: event.timestamp,
+        })
+        this.botNs.to(`agent:${event.agentId}`).emit('trap:triggered', {
+          trapId: event.trapId,
+          trapType: event.trapType,
+          damage: event.damage,
+          timestamp: event.timestamp,
+        })
+      }
+
+      if (event.type === 'dungeon:room_entered') {
+        this.spectatorNs.emit('dungeon:room_entered', {
+          agentId: event.agentId,
+          roomId: event.roomId,
+          roomType: event.roomType,
+          layerId: event.layerId,
+          timestamp: event.timestamp,
+        })
       }
 
       // ── Chat delivery ──

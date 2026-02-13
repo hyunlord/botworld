@@ -30,6 +30,7 @@ import { FavoritesPanel } from '../ui/FavoritesPanel.js'
 import { SoundSettings } from '../ui/SoundSettings.js'
 import { ContextualHints } from '../ui/ContextualHints.js'
 import { ErrorBoundary } from '../ui/ErrorBoundary.js'
+import { LayerTabs } from '../ui/LayerTabs.js'
 
 injectGameStyles()
 
@@ -64,6 +65,9 @@ export function WorldView() {
   const [showTimeline, setShowTimeline] = useState(false)
   const [showCompare, setShowCompare] = useState(false)
   const [cinematicDone, setCinematicDone] = useState(false)
+  const [layers, setLayers] = useState<{ id: string; name: string; type: string; depth: number; agentCount: number }[]>([])
+  const [activeLayerId, setActiveLayerId] = useState<string | null>(null)
+  const [layerMapData, setLayerMapData] = useState<any>(null)
 
   const agentNames = new Map(agents.map(a => [a.id, a.name]))
 
@@ -331,6 +335,29 @@ export function WorldView() {
       // Monster events logged in EventFeed via world:event
     })
 
+    const unsubLayerList = socketClient.onLayerList((layerList) => {
+      setLayers(layerList)
+      // Default to surface layer
+      if (!activeLayerId && layerList.length > 0) {
+        const surface = layerList.find(l => l.type === 'surface')
+        if (surface) setActiveLayerId(surface.id)
+      }
+    })
+
+    const unsubLayerMapData = socketClient.onLayerMapData((data) => {
+      setLayerMapData(data)
+      // Update Phaser scene with underground map if needed
+      const scene = sceneRef.current
+      if (scene && sceneReady.current && data.tiles) {
+        scene.showUndergroundLayer(data)
+      }
+    })
+
+    const unsubLayerTransition = socketClient.onLayerTransition((data) => {
+      // Refresh layer list to update agent counts
+      socketClient.requestLayers()
+    })
+
     return () => {
       unsubState()
       unsubAgents()
@@ -345,6 +372,9 @@ export function WorldView() {
       unsubSpectators()
       unsubCombat()
       unsubMonster()
+      unsubLayerList()
+      unsubLayerMapData()
+      unsubLayerTransition()
       unsubConnect()
       unsubDisconnect()
       socketClient.disconnect()
@@ -377,6 +407,22 @@ export function WorldView() {
     )
   }
 
+  const handleLayerSelect = (layerId: string) => {
+    setActiveLayerId(layerId)
+    const layer = layers.find(l => l.id === layerId)
+    if (layer && layer.type !== 'surface') {
+      // Request underground map data
+      socketClient.requestLayerMap(layerId)
+    } else {
+      // Switch back to surface
+      setLayerMapData(null)
+      const scene = sceneRef.current
+      if (scene && sceneReady.current) {
+        scene.showSurfaceLayer()
+      }
+    }
+  }
+
   const selectedCharData = selectedAgent ? characterMap[selectedAgent.id] : undefined
 
   return (
@@ -396,6 +442,13 @@ export function WorldView() {
           <span>Reconnecting...</span>
         </div>
       )}
+
+      {/* Layer Tabs (top center) */}
+      <LayerTabs
+        layers={layers}
+        activeLayerId={activeLayerId}
+        onLayerSelect={handleLayerSelect}
+      />
 
       {/* Event Banner (top center) */}
       <EventBanner

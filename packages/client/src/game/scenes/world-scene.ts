@@ -106,6 +106,37 @@ const T = {
   meadow_01: 189, meadow_02: 190, meadow_03: 191,
 } as const
 
+// Underground tile colors (used when no spritesheet tile matches)
+const UNDERGROUND_COLORS: Record<string, Record<number, number>> = {
+  mine: {
+    0: 0x2d2d2d,  // wall - dark gray
+    1: 0x5c4033,  // floor - brown
+    2: 0x6b5b4f,  // tunnel - lighter brown
+    3: 0x1a3a5c,  // water - dark blue
+    4: 0x8b6914,  // ore/crystal - gold
+    5: 0x8b0000,  // trap - dark red
+    6: 0x4a3728,  // door - wooden
+  },
+  cavern: {
+    0: 0x1a1a2e,  // wall - very dark blue
+    1: 0x2d4a3e,  // floor - dark green-brown
+    2: 0x3d5a4e,  // tunnel - cave green
+    3: 0x0d2b45,  // water - deep blue
+    4: 0x00c9a7,  // mushroom - cyan glow
+    5: 0x8b0000,  // trap - dark red
+    6: 0x2d4a3e,  // door
+  },
+  ancient_ruins: {
+    0: 0x1a1a3e,  // wall - dark navy
+    1: 0x2d2d5e,  // floor - dark blue-gray
+    2: 0x3d3d6e,  // corridor - lighter
+    3: 0x0d1b35,  // water - very dark blue
+    4: 0x9966cc,  // crystal/artifact - purple
+    5: 0x8b0000,  // trap - dark red
+    6: 0x4a4a7a,  // door - stone
+  },
+}
+
 /** Pick a variant index from an array based on tile variant/hash */
 function pickVariant(base: number, count: number, variant: number): number {
   return base + (variant % count)
@@ -298,6 +329,25 @@ export class WorldScene extends Phaser.Scene {
     LEFT: Phaser.Input.Keyboard.Key
     RIGHT: Phaser.Input.Keyboard.Key
   }
+
+  // Underground layer rendering
+  private undergroundMode = false
+  private undergroundContainer: Phaser.GameObjects.Container | null = null
+  private fogOverlay: Phaser.GameObjects.Graphics | null = null
+  private undergroundData: {
+    layerId: string
+    name: string
+    type: string
+    depth: number
+    width: number
+    height: number
+    ambientLight: number
+    tiles?: number[][]
+    rooms: { id: string; x: number; y: number; width: number; height: number; type: string }[]
+    traps: { id: string; position: { x: number; y: number }; type: string; detected: boolean }[]
+    agents: string[]
+    portals: { id: string; sourcePosition: { x: number; y: number }; targetLayerId: string; portalType: string }[]
+  } | null = null
 
   constructor() {
     super({ key: 'WorldScene' })
@@ -624,6 +674,11 @@ export class WorldScene extends Phaser.Scene {
 
   updateAgents(agents: Agent[]): void {
     this.agents = agents
+
+    // If in underground mode, filter to only agents in this layer
+    if (this.undergroundMode && this.undergroundData) {
+      agents = agents.filter(a => this.undergroundData!.agents.includes(a.id))
+    }
 
     for (const agent of agents) {
       const pos = worldToScreen(agent.position.x, agent.position.y)
@@ -2504,5 +2559,275 @@ export class WorldScene extends Phaser.Scene {
     const dist = Math.max(Math.abs(camTile.x - chunkCenterX), Math.abs(camTile.y - chunkCenterY))
     const activeRange = Math.ceil(3 / this.cameras.main.zoom) // more chunks visible when zoomed out
     return dist <= activeRange * 16
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // Underground Layer Methods
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  showUndergroundLayer(data: {
+    layerId: string
+    name: string
+    type: string
+    depth: number
+    width: number
+    height: number
+    ambientLight: number
+    tiles?: number[][]
+    rooms: { id: string; x: number; y: number; width: number; height: number; type: string }[]
+    traps: { id: string; position: { x: number; y: number }; type: string; detected: boolean }[]
+    agents: string[]
+    portals: { id: string; sourcePosition: { x: number; y: number }; targetLayerId: string; portalType: string }[]
+  }): void {
+    this.undergroundData = data
+    this.undergroundMode = true
+
+    // Hide surface tilemap layers
+    if (this.groundLayer) this.groundLayer.setVisible(false)
+
+    // Hide surface object sprites (buildings, resources, etc)
+    // Iterate through rendered chunks and hide their sprites
+    for (const [, chunk] of this.renderedChunks) {
+      for (const sprite of chunk.objectSprites) {
+        (sprite as Phaser.GameObjects.Sprite).setVisible(false)
+      }
+    }
+
+    // Create underground container if not exists
+    if (!this.undergroundContainer) {
+      this.undergroundContainer = this.add.container(0, 0)
+      this.undergroundContainer.setDepth(0)
+    }
+
+    // Clear previous underground rendering
+    this.undergroundContainer.removeAll(true)
+
+    // Render underground tiles
+    if (data.tiles) {
+      this.renderUndergroundTiles(data)
+    }
+
+    // Create fog of war overlay
+    this.renderFogOfWar(data)
+
+    // Render portals as markers
+    this.renderUndergroundPortals(data)
+  }
+
+  showSurfaceLayer(): void {
+    this.undergroundMode = false
+    this.undergroundData = null
+
+    // Show surface tilemap
+    if (this.groundLayer) this.groundLayer.setVisible(true)
+
+    // Show surface object sprites
+    for (const [, chunk] of this.renderedChunks) {
+      for (const sprite of chunk.objectSprites) {
+        (sprite as Phaser.GameObjects.Sprite).setVisible(true)
+      }
+    }
+
+    // Remove underground rendering
+    if (this.undergroundContainer) {
+      this.undergroundContainer.removeAll(true)
+      this.undergroundContainer.setVisible(false)
+    }
+
+    // Remove fog overlay
+    if (this.fogOverlay) {
+      this.fogOverlay.clear()
+      this.fogOverlay.setVisible(false)
+    }
+  }
+
+  private renderUndergroundTiles(data: typeof this.undergroundData & {}): void {
+    if (!data.tiles || !this.undergroundContainer) return
+
+    const colorMap = UNDERGROUND_COLORS[data.type] ?? UNDERGROUND_COLORS.mine
+    const halfW = ISO_TILE_WIDTH / 2  // 32
+    const halfH = ISO_TILE_HEIGHT / 2 // 16
+
+    for (let ty = 0; ty < data.height && ty < data.tiles.length; ty++) {
+      const row = data.tiles[ty]
+      if (!row) continue
+
+      for (let tx = 0; tx < data.width && tx < row.length; tx++) {
+        const tileType = row[tx]
+        const color = colorMap[tileType] ?? 0x333333
+
+        // Convert tile coords to isometric screen coords
+        const screenX = (tx - ty) * halfW
+        const screenY = (tx + ty) * halfH
+
+        // Draw diamond shape for each tile
+        const graphics = this.add.graphics()
+        graphics.fillStyle(color, 1.0)
+        graphics.beginPath()
+        graphics.moveTo(screenX, screenY - halfH)       // top
+        graphics.lineTo(screenX + halfW, screenY)        // right
+        graphics.lineTo(screenX, screenY + halfH)        // bottom
+        graphics.lineTo(screenX - halfW, screenY)        // left
+        graphics.closePath()
+        graphics.fillPath()
+
+        // Add grid outline
+        graphics.lineStyle(1, 0x000000, 0.15)
+        graphics.beginPath()
+        graphics.moveTo(screenX, screenY - halfH)
+        graphics.lineTo(screenX + halfW, screenY)
+        graphics.lineTo(screenX, screenY + halfH)
+        graphics.lineTo(screenX - halfW, screenY)
+        graphics.closePath()
+        graphics.strokePath()
+
+        // Set depth for iso sorting
+        graphics.setDepth(isoDepth(tx, ty))
+        this.undergroundContainer!.add(graphics)
+
+        // Special tile markers
+        if (tileType === 4) {
+          // Crystal/mushroom - add glow effect
+          const glow = this.add.graphics()
+          glow.fillStyle(color, 0.3)
+          glow.fillCircle(screenX, screenY, halfW * 0.8)
+          glow.setDepth(isoDepth(tx, ty) + 0.1)
+          this.undergroundContainer!.add(glow)
+        }
+
+        if (tileType === 5) {
+          // Trap marker (if detected)
+          const trap = data.traps.find(t => t.position.x === tx && t.position.y === ty)
+          if (trap?.detected) {
+            const marker = this.add.graphics()
+            marker.fillStyle(0xff0000, 0.6)
+            marker.fillCircle(screenX, screenY, 4)
+            marker.setDepth(isoDepth(tx, ty) + 0.2)
+            this.undergroundContainer!.add(marker)
+          }
+        }
+      }
+    }
+
+    // Label rooms
+    for (const room of data.rooms) {
+      const centerX = room.x + room.width / 2
+      const centerY = room.y + room.height / 2
+      const sx = (centerX - centerY) * halfW
+      const sy = (centerX + centerY) * halfH
+
+      const roomLabel = this.add.text(sx, sy - 12, this.getRoomLabel(room.type), {
+        fontSize: '10px',
+        color: '#ffffff',
+        stroke: '#000000',
+        strokeThickness: 2,
+        fontFamily: 'monospace',
+      }).setOrigin(0.5)
+      roomLabel.setDepth(isoDepth(centerX, centerY) + 1)
+      this.undergroundContainer!.add(roomLabel)
+    }
+  }
+
+  private getRoomLabel(type: string): string {
+    const labels: Record<string, string> = {
+      normal: '',
+      treasure: '💎 Treasure',
+      boss: '💀 Boss',
+      puzzle: '🧩 Puzzle',
+      shrine: '🕯️ Shrine',
+      lake: '💧 Lake',
+      mushroom_forest: '🍄 Mushrooms',
+      crystal_cave: '💎 Crystals',
+    }
+    return labels[type] ?? ''
+  }
+
+  private renderFogOfWar(data: typeof this.undergroundData & {}): void {
+    if (!this.undergroundContainer) return
+
+    // Create fog overlay graphics
+    if (!this.fogOverlay) {
+      this.fogOverlay = this.add.graphics()
+    }
+    this.fogOverlay.clear()
+    this.fogOverlay.setVisible(true)
+    this.fogOverlay.setDepth(9999) // On top of everything
+
+    // For spectator view: show the whole map but with darkness gradient at edges
+    // In full implementation, this would track per-agent fog of war
+    // For now, add atmospheric darkness overlay with center spotlight effect
+    const halfW = ISO_TILE_WIDTH / 2
+    const halfH = ISO_TILE_HEIGHT / 2
+    const centerTX = data.width / 2
+    const centerTY = data.height / 2
+
+    // Draw dark overlay on edges
+    const ambientAlpha = Math.max(0, 1.0 - data.ambientLight) * 0.6
+
+    if (ambientAlpha > 0) {
+      // Vignette effect - darken tiles further from center
+      const maxDist = Math.sqrt(data.width * data.width + data.height * data.height) / 2
+
+      for (let ty = 0; ty < data.height; ty++) {
+        for (let tx = 0; tx < data.width; tx++) {
+          const dist = Math.sqrt(
+            (tx - centerTX) * (tx - centerTX) +
+            (ty - centerTY) * (ty - centerTY)
+          )
+          const edgeFactor = Math.min(1, dist / maxDist)
+          const alpha = ambientAlpha * edgeFactor
+
+          if (alpha > 0.05) {
+            const screenX = (tx - ty) * halfW
+            const screenY = (tx + ty) * halfH
+
+            this.fogOverlay.fillStyle(0x000000, alpha)
+            this.fogOverlay.beginPath()
+            this.fogOverlay.moveTo(screenX, screenY - halfH)
+            this.fogOverlay.lineTo(screenX + halfW, screenY)
+            this.fogOverlay.lineTo(screenX, screenY + halfH)
+            this.fogOverlay.lineTo(screenX - halfW, screenY)
+            this.fogOverlay.closePath()
+            this.fogOverlay.fillPath()
+          }
+        }
+      }
+    }
+  }
+
+  private renderUndergroundPortals(data: typeof this.undergroundData & {}): void {
+    if (!this.undergroundContainer) return
+
+    const halfW = ISO_TILE_WIDTH / 2
+    const halfH = ISO_TILE_HEIGHT / 2
+
+    for (const portal of data.portals) {
+      const { x, y } = portal.sourcePosition
+      const screenX = (x - y) * halfW
+      const screenY = (x + y) * halfH
+
+      // Portal icon
+      const portalIcons: Record<string, string> = {
+        mine_entrance: '⛏️',
+        cave_hole: '🕳️',
+        secret_door: '🚪',
+        magic_portal: '✨',
+        hidden_path: '🔮',
+      }
+      const icon = portalIcons[portal.portalType] ?? '🚪'
+
+      const marker = this.add.text(screenX, screenY - 8, icon, {
+        fontSize: '16px',
+      }).setOrigin(0.5)
+      marker.setDepth(isoDepth(x, y) + 2)
+      this.undergroundContainer.add(marker)
+
+      // Glow effect
+      const glow = this.add.graphics()
+      glow.fillStyle(0x00ffff, 0.2)
+      glow.fillCircle(screenX, screenY, halfW * 0.6)
+      glow.setDepth(isoDepth(x, y) + 1.5)
+      this.undergroundContainer.add(glow)
+    }
   }
 }

@@ -230,6 +230,12 @@ export class SettlementManager {
       this.lastElectionCheck = clock.tick
 
       for (const settlement of this.settlements.values()) {
+        // Collect daily taxes
+        const taxed = this.collectTaxes(settlement.id, agents)
+        if (taxed > 0) {
+          console.log(`[Settlement] ${settlement.name} collected ${taxed}G in taxes`)
+        }
+
         // Check if it's time for a new election
         if (settlement.type !== 'camp' && !settlement.currentElection) {
           const daysSinceCreation = Math.floor((clock.tick - settlement.createdAt) / TICKS_PER_GAME_DAY)
@@ -242,6 +248,9 @@ export class SettlementManager {
         if (settlement.currentElection) {
           this.processElection(settlement, clock.tick, agents, getAgentName)
         }
+
+        // Check for rebellion conditions
+        this.checkRebellion(settlement, agents, clock.tick, getAgentName)
       }
     }
   }
@@ -642,5 +651,72 @@ export class SettlementManager {
       'I will ensure fair treatment for all residents.',
     ]
     return platforms[Math.floor(Math.random() * platforms.length)]
+  }
+
+  /** Check if rebellion conditions are met for a settlement */
+  private checkRebellion(
+    settlement: ReturnType<typeof this.settlements.get> & {},
+    agents: Agent[],
+    tick: number,
+    getAgentName: (id: string) => string,
+  ): void {
+    // Only settlements with a leader can have rebellions
+    if (!settlement.leaderId || settlement.type === 'camp') return
+    // Don't rebel during elections
+    if (settlement.currentElection) return
+
+    // Calculate rebellion chance
+    let rebellionChance = 0
+
+    // High taxes increase rebellion
+    if (settlement.taxRate > 0.3) rebellionChance += 20
+    if (settlement.taxRate > 0.5) rebellionChance += 15
+
+    // Low prosperity increases rebellion
+    if (settlement.prosperity < 30) rebellionChance += 15
+    if (settlement.prosperity < 15) rebellionChance += 10
+
+    // Low treasury (can't maintain services)
+    if (settlement.treasury < 10) rebellionChance += 10
+
+    // Small chance regardless (political instability)
+    rebellionChance += 2
+
+    // Roll for rebellion (daily check, so keep probability reasonable)
+    if (Math.random() * 100 >= rebellionChance) return
+
+    // Find rebel leader: resident who is not the current leader
+    const residentAgents = settlement.residents
+      .filter(id => id !== settlement.leaderId)
+      .map(id => agents.find(a => a.id === id))
+      .filter(Boolean) as Agent[]
+
+    if (residentAgents.length < 2) return
+
+    // Pick the agent with highest leadership skill as rebel leader
+    const rebelLeader = residentAgents.reduce((best, a) => {
+      const leadership = a.skills?.leadership ?? 0
+      const bestLeadership = best.skills?.leadership ?? 0
+      return leadership > bestLeadership ? a : best
+    }, residentAgents[0])
+
+    // Rebellion! Replace leader
+    const oldLeaderId = settlement.leaderId
+    const oldLeaderName = getAgentName(oldLeaderId)
+    settlement.leaderId = rebelLeader.id
+
+    console.log(`[Settlement] REBELLION in ${settlement.name}! ${rebelLeader.name} overthrew ${oldLeaderName}`)
+
+    this.eventBus.emit({
+      type: 'settlement:law_enacted',
+      settlementId: settlement.id,
+      settlementName: settlement.name,
+      lawType: 'rebellion',
+      description: `${rebelLeader.name} led a rebellion against ${oldLeaderName} in ${settlement.name}!`,
+      timestamp: tick,
+    })
+
+    // Lower tax rate after rebellion (populist measure)
+    settlement.taxRate = Math.max(0.05, settlement.taxRate - 0.1)
   }
 }

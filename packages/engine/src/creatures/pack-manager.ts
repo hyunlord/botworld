@@ -261,8 +261,14 @@ export class PackManager {
 
     // Breeding: if pack size < 3 and morale > 60, spawn new wolf pup every 100 ticks
     if (pack.memberIds.length < 3 && pack.morale > 60 && pack.lastActionTick % 100 === 0) {
-      // Emit event for spawning (actual spawning handled by CreatureManager)
-      // For now, just log intent
+      this.eventBus.emit({
+        type: 'pack:breed_request' as any,
+        packId: pack.id,
+        packType: pack.packType,
+        templateId: this.packTypeToTemplateId(pack.packType),
+        position: { ...pack.territoryCenter },
+        timestamp: Date.now(),
+      } as any)
     }
   }
 
