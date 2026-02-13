@@ -19,7 +19,7 @@ import { socketClient } from '../../network/socket-client.js'
 import { getAutoTileIndex } from '../utils/autotile.js'
 
 // Scale factors for sprites placed on the top-down grid
-const AGENT_SCALE = 0.6
+const AGENT_SCALE = 1.3
 const RESOURCE_SCALE = 0.35
 const BUILDING_SCALE = 1.0
 
@@ -1336,8 +1336,8 @@ export class WorldScene extends Phaser.Scene {
   }
 
   private createAgentSprite(agent: Agent, screenPos: { x: number; y: number }): void {
-    const shadow = this.add.image(0, 6, 'agent_shadow')
-      .setScale(0.7)
+    const shadow = this.add.image(0, 8, 'agent_shadow')
+      .setScale(1.0)
       .setAlpha(0.3)
 
     // Default direction
@@ -1399,8 +1399,8 @@ export class WorldScene extends Phaser.Scene {
     const displayName = isNpc ? `[NPC] ${agent.name}` : agent.name
     const nameColor = isNpc ? '#FFD700' : '#ffffff'
 
-    const nameText = this.add.text(0, -22, displayName, {
-      fontSize: '10px',
+    const nameText = this.add.text(0, -40, displayName, {
+      fontSize: '11px',
       fontFamily: 'Arial, sans-serif',
       fontStyle: 'bold',
       color: nameColor,
@@ -1412,7 +1412,7 @@ export class WorldScene extends Phaser.Scene {
 
     // Level badge (small circle to the right of name)
     const badgeX = nameText.width / 2 + 8
-    const badgeY = -26
+    const badgeY = -44
     const lvlBadge = this.add.graphics()
     lvlBadge.fillStyle(isNpc ? 0xFFD700 : 0x4488FF, 0.85)
     lvlBadge.fillCircle(badgeX, badgeY, 7)
@@ -1428,7 +1428,7 @@ export class WorldScene extends Phaser.Scene {
       strokeThickness: 1,
     }).setOrigin(0.5, 0.5)
 
-    const actionText = this.add.text(0, 10, '', {
+    const actionText = this.add.text(0, 16, '', {
       fontSize: '8px',
       fontFamily: 'Arial, sans-serif',
       color: '#aabbcc',
@@ -1437,7 +1437,7 @@ export class WorldScene extends Phaser.Scene {
     }).setOrigin(0.5, 0)
 
     // Emotion icon (top-left of agent, initially hidden)
-    const emotionIcon = this.add.image(-8, -28, 'emotion_happy')
+    const emotionIcon = this.add.image(-12, -46, 'emotion_happy')
       .setOrigin(0.5, 0.5)
       .setScale(0.5)
       .setAlpha(0)
@@ -1445,7 +1445,7 @@ export class WorldScene extends Phaser.Scene {
     this.agentEmotionIcons.set(agent.id, emotionIcon)
 
     // Action icon (top-right of agent, initially hidden)
-    const actionIcon = this.add.image(8, -28, 'act_walking')
+    const actionIcon = this.add.image(12, -46, 'act_walking')
       .setOrigin(0.5, 0.5)
       .setScale(0.5)
       .setAlpha(0)
@@ -1458,8 +1458,12 @@ export class WorldScene extends Phaser.Scene {
       [shadow, spriteOrGroup, nameText, actionText, emotionIcon, actionIcon, lvlBadge, lvlText],
     )
     container.setDepth(500 + isoDepth(agent.position.x, agent.position.y))
-    container.setSize(30, 40)
-    container.setInteractive()
+    container.setSize(56, 80)
+    container.setInteractive(
+      new Phaser.Geom.Rectangle(-28, -68, 56, 80),
+      Phaser.Geom.Rectangle.Contains,
+    )
+    container.input!.cursor = 'pointer'
 
     container.on('pointerover', () => {
       this.handleAgentHover(agent.id)
@@ -2301,8 +2305,12 @@ export class WorldScene extends Phaser.Scene {
     container.setDepth(490 + isoDepth(monster.position.x, monster.position.y))
 
     // Make monster clickable
-    container.setSize(30, 40)
-    container.setInteractive()
+    container.setSize(48, 64)
+    container.setInteractive(
+      new Phaser.Geom.Rectangle(-24, -56, 48, 64),
+      Phaser.Geom.Rectangle.Contains,
+    )
+    container.input!.cursor = 'pointer'
     container.on('pointerdown', () => {
       this.events.emit('creature:selected', monster)
     })

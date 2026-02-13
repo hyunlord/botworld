@@ -91,6 +91,7 @@ const styles: Record<string, React.CSSProperties> = {
     top: 12,
     right: 56,
     zIndex: 310,
+    pointerEvents: 'auto' as const,
   },
   toggleBtn: {
     width: 36,

@@ -89,6 +89,42 @@ export default function TerrainCard({
   const icon = BIOME_ICONS[biome] || BIOME_ICONS.default
   const description = BIOME_DESCRIPTIONS[biome] || 'An unknown terrain type.'
 
+  // Format elevation from elevationLevel (0-4) or raw float (0-1)
+  const getElevationLabel = (): string => {
+    const level = tile.elevationLevel
+    if (level !== undefined && level !== null) {
+      const labels: Record<number, string> = {
+        0: 'Sea Level',
+        1: 'Lowland',
+        2: 'Midland',
+        3: 'Highland',
+        4: 'Peak',
+      }
+      return labels[level] ?? `Level ${level}`
+    }
+    if (tile.elevation !== undefined && tile.elevation !== null) {
+      const pct = Math.round(tile.elevation * 100)
+      if (pct <= 10) return 'Sea Level'
+      if (pct <= 30) return 'Lowland'
+      if (pct <= 55) return 'Midland'
+      if (pct <= 75) return 'Highland'
+      return 'Peak'
+    }
+    return 'Unknown'
+  }
+
+  // Format movement cost into a descriptive label
+  const getMovementLabel = (): string => {
+    const cost = tile.movementCost
+    if (cost === undefined || cost === null) return 'Unknown'
+    if (cost === 0) return 'Impassable'
+    if (cost <= 0.5) return `Fast (${cost})`
+    if (cost <= 1.0) return `Normal (${cost})`
+    if (cost <= 1.5) return `Moderate (${cost})`
+    if (cost <= 2.0) return `Difficult (${cost})`
+    return `Very Difficult (${cost})`
+  }
+
   const containerStyle: React.CSSProperties = {
     ...glassPanel,
     ...interactive,
@@ -224,22 +260,24 @@ export default function TerrainCard({
       </div>
 
       <div style={statsGridStyle}>
-        {tile.elevation !== undefined && (
+        {(tile.elevation !== undefined || tile.elevationLevel !== undefined) && (
           <div style={statBoxStyle}>
             <div style={statLabelStyle}>Elevation</div>
-            <div style={statValueStyle}>{tile.elevation}</div>
+            <div style={statValueStyle}>{getElevationLabel()}</div>
           </div>
         )}
-        {tile.moisture !== undefined && (
+        {tile.type && (
           <div style={statBoxStyle}>
-            <div style={statLabelStyle}>Moisture</div>
-            <div style={statValueStyle}>{tile.moisture}</div>
+            <div style={statLabelStyle}>Terrain</div>
+            <div style={{ ...statValueStyle, textTransform: 'capitalize' as const }}>
+              {tile.type.replace(/_/g, ' ')}
+            </div>
           </div>
         )}
         {tile.movementCost !== undefined && (
           <div style={statBoxStyle}>
-            <div style={statLabelStyle}>Movement Cost</div>
-            <div style={statValueStyle}>{tile.movementCost}</div>
+            <div style={statLabelStyle}>Movement</div>
+            <div style={statValueStyle}>{getMovementLabel()}</div>
           </div>
         )}
         <div style={statBoxStyle}>
@@ -248,6 +286,14 @@ export default function TerrainCard({
             {position.x}, {position.y}
           </div>
         </div>
+        {tile.walkable !== undefined && (
+          <div style={statBoxStyle}>
+            <div style={statLabelStyle}>Walkable</div>
+            <div style={{ ...statValueStyle, color: tile.walkable ? '#4ade80' : '#f87171' }}>
+              {tile.walkable ? 'Yes' : 'No'}
+            </div>
+          </div>
+        )}
       </div>
 
       {tile.territory && (

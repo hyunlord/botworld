@@ -430,6 +430,9 @@ export function WorldView() {
       {/* Full-screen game canvas */}
       <div id="game-container" style={styles.game} />
 
+      {/* UI Overlay — pointer-events: none so Phaser canvas receives drag/scroll */}
+      <div style={styles.overlay}>
+
       {/* Connection indicator */}
       {connected ? (
         <div style={{
@@ -621,6 +624,8 @@ export function WorldView() {
       {/* Contextual Hints (after cinematic intro) */}
       <ContextualHints active={cinematicDone} />
 
+      </div>{/* end UI overlay */}
+
       {/* Send Agent modal */}
       {showSendModal && (
         <ErrorBoundary>
@@ -684,6 +689,12 @@ const styles: Record<string, React.CSSProperties> = {
     height: '100%',
     position: 'absolute',
     inset: 0,
+  },
+  overlay: {
+    position: 'absolute',
+    inset: 0,
+    zIndex: 100,
+    pointerEvents: 'none' as const,
   },
   connectionDot: {
     position: 'absolute',

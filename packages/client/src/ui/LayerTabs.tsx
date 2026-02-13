@@ -53,6 +53,7 @@ export const LayerTabs: FC<LayerTabsProps> = ({ layers, activeLayerId, onLayerSe
       backdropFilter: 'blur(8px)',
       border: '1px solid rgba(255,255,255,0.1)',
       zIndex: 100,
+      pointerEvents: 'auto' as const,
       fontFamily: OV.font,
       fontSize: 12,
     }}>

@@ -60,6 +60,27 @@ export default function CharacterCard({
   const charData = characterData
   const portraitUrl = charData?.appearance?.portraitUrl || null
 
+  // Defensive: ensure stats exists (avoid TypeError crash)
+  const stats = agent?.stats || {} as Record<string, number>
+  const safeHp = stats.hp ?? 0
+  const safeMaxHp = stats.maxHp ?? 100
+  const safeEnergy = stats.energy ?? 0
+  const safeMaxEnergy = stats.maxEnergy ?? 100
+  const safeHunger = stats.hunger ?? 0
+  const safeMaxHunger = stats.maxHunger ?? 100
+  const safeMana = stats.mana ?? 0
+  const safeMaxMana = stats.maxMana ?? 100
+
+  // If essential agent data is missing, show loading state
+  if (!agent?.name) {
+    return (
+      <div style={{ ...glassPanel, ...interactive, position: 'fixed', right: 16, top: 80, width: 300, padding: 20, zIndex: 500 }}>
+        <button style={{ position: 'absolute', top: 8, right: 8, background: 'none', border: 'none', color: OV.textMuted, fontSize: 18, cursor: 'pointer' }} onClick={onClose}>✕</button>
+        <div style={{ color: OV.textDim, textAlign: 'center' as const, padding: 20 }}>Loading agent data...</div>
+      </div>
+    )
+  }
+
   // Helper: get race-based color for portrait fallback
   function getRaceColor(race?: string): string {
     const colors: Record<string, string> = {
@@ -230,10 +251,10 @@ export default function CharacterCard({
 
         {/* Stat bars */}
         <div style={styles.statsSection}>
-          <StatBar icon="❤️" value={agent.stats.hp} max={agent.stats.maxHp} color="#EF4444" />
-          <StatBar icon="⚡" value={agent.stats.energy} max={agent.stats.maxEnergy} color="#FBBF24" />
-          <StatBar icon="🍖" value={agent.stats.hunger} max={agent.stats.maxHunger} color="#F59E0B" />
-          <StatBar icon="✨" value={agent.stats.mana || 0} max={agent.stats.maxMana || 100} color="#60A5FA" />
+          <StatBar icon="❤️" value={safeHp} max={safeMaxHp} color="#EF4444" />
+          <StatBar icon="⚡" value={safeEnergy} max={safeMaxEnergy} color="#FBBF24" />
+          <StatBar icon="🍖" value={safeHunger} max={safeMaxHunger} color="#F59E0B" />
+          <StatBar icon="✨" value={safeMana} max={safeMaxMana} color="#60A5FA" />
         </div>
 
         {/* Current thought/mood */}
@@ -272,11 +293,11 @@ export default function CharacterCard({
 
         {/* Skills summary */}
         <div style={styles.skillsSummary}>
-          {renderSkillRating('Combat', agent.skills?.combat || 0)}
-          {renderSkillRating('Crafting', agent.skills?.crafting || 0)}
-          {renderSkillRating('Magic', agent.skills?.magic || 0)}
-          {renderSkillRating('Social', agent.skills?.diplomacy || 0)}
-          {renderSkillRating('Survival', agent.skills?.survival || 0)}
+          {renderSkillRating('Combat', (agent.skills as any)?.combat || 0)}
+          {renderSkillRating('Crafting', (agent.skills as any)?.crafting || 0)}
+          {renderSkillRating('Magic', (agent.skills as any)?.magic || 0)}
+          {renderSkillRating('Social', (agent.skills as any)?.diplomacy || 0)}
+          {renderSkillRating('Survival', (agent.skills as any)?.survival || 0)}
         </div>
 
         {/* Action buttons */}
@@ -395,7 +416,8 @@ function StatBar({ icon, value, max, color }: {
   max: number
   color: string
 }) {
-  const pct = Math.min(100, Math.round((value / max) * 100))
+  const safeMax = max || 1
+  const pct = Math.min(100, Math.round(((value || 0) / safeMax) * 100))
   return (
     <div style={styles.statRow}>
       <span style={styles.statIcon}>{icon}</span>
@@ -457,7 +479,8 @@ function ProfileTab({ agent }: { agent: any }) {
 
 // Tab: Stats & Skills
 function StatsTab({ agent, skills }: { agent: any; skills: Record<string, any> }) {
-  const allSkills = { ...agent.skills, ...skills }
+  const allSkills = { ...(agent.skills || {}), ...skills }
+  const st = agent?.stats || {} as Record<string, number>
   const skillCategories = {
     Combat: ['combat', 'melee', 'ranged', 'defense'],
     Crafting: ['crafting', 'smithing', 'alchemy', 'cooking'],
@@ -470,12 +493,12 @@ function StatsTab({ agent, skills }: { agent: any; skills: Record<string, any> }
     <div style={styles.tabSection}>
       {/* Full stat bars */}
       <div style={styles.statsSection}>
-        <StatBar icon="❤️" value={agent.stats.hp} max={agent.stats.maxHp} color="#EF4444" />
-        <StatBar icon="⚡" value={agent.stats.energy} max={agent.stats.maxEnergy} color="#FBBF24" />
-        <StatBar icon="🍖" value={agent.stats.hunger} max={agent.stats.maxHunger} color="#F59E0B" />
-        <StatBar icon="✨" value={agent.stats.mana || 0} max={agent.stats.maxMana || 100} color="#60A5FA" />
-        <StatBar icon="⚔️" value={agent.stats.attack || 10} max={100} color="#F87171" />
-        <StatBar icon="🛡️" value={agent.stats.defense || 10} max={100} color="#A78BFA" />
+        <StatBar icon="❤️" value={st.hp ?? 0} max={st.maxHp ?? 100} color="#EF4444" />
+        <StatBar icon="⚡" value={st.energy ?? 0} max={st.maxEnergy ?? 100} color="#FBBF24" />
+        <StatBar icon="🍖" value={st.hunger ?? 0} max={st.maxHunger ?? 100} color="#F59E0B" />
+        <StatBar icon="✨" value={st.mana ?? 0} max={st.maxMana ?? 100} color="#60A5FA" />
+        <StatBar icon="⚔️" value={st.attack ?? 10} max={100} color="#F87171" />
+        <StatBar icon="🛡️" value={st.defense ?? 10} max={100} color="#A78BFA" />
       </div>
 
       {/* Skills by category */}
