@@ -15,6 +15,7 @@ import { soundManager } from '../audio/sound-manager.js'
 import { InteractionEffects } from '../systems/interaction-effects.js'
 import { EventVisuals } from '../systems/event-visuals.js'
 import { TILE_SIZE, ISO_TILE_WIDTH, ISO_TILE_HEIGHT, worldToScreen, screenToWorld, isoDepth } from '../utils/coordinates.js'
+import { socketClient } from '../../network/socket-client.js'
 import { getAutoTileIndex } from '../utils/autotile.js'
 
 // Scale factors for sprites placed on the top-down grid
@@ -282,6 +283,8 @@ export class WorldScene extends Phaser.Scene {
   private agents: Agent[] = []
   private selectedAgentId: string | null = null
   private followingAgentId: string | null = null
+  /** Timer for viewport emission (ms since last emit) */
+  private viewportEmitTimer = 0
   private hasCentered = false
 
   // WASD + arrow key camera controls
@@ -534,6 +537,13 @@ export class WorldScene extends Phaser.Scene {
     this.postProcessing?.update()
     this.lightingSystem?.update()
     this.seasonSystem?.update()
+
+    // Emit viewport bounds to server every 3 seconds for NPC priority scheduling
+    this.viewportEmitTimer += delta
+    if (this.viewportEmitTimer >= 3000) {
+      this.viewportEmitTimer = 0
+      this.emitViewportBounds()
+    }
 
     // Performance optimizations
     this.cullOffscreenObjects()
@@ -871,10 +881,12 @@ export class WorldScene extends Phaser.Scene {
     this.selectedAgentId = agentId
     this.events.emit('agent:selected', agentId)
     this.updateSelectionRing()
+    socketClient.sendFollowNpc(agentId)
   }
 
   unfollowAgent(): void {
     this.followingAgentId = null
+    socketClient.sendFollowNpc(null)
   }
 
   isFollowing(): boolean {
@@ -2416,6 +2428,23 @@ export class WorldScene extends Phaser.Scene {
   // ── Performance Optimization Systems ──
 
   /** Cull objects outside the camera viewport for performance */
+  /** Emit camera viewport bounds to server for NPC priority scheduling */
+  private emitViewportBounds(): void {
+    const cam = this.cameras.main
+    // Convert all 4 corners of viewport to world coordinates
+    const topLeft = screenToWorld(cam.scrollX, cam.scrollY)
+    const topRight = screenToWorld(cam.scrollX + cam.width / cam.zoom, cam.scrollY)
+    const bottomLeft = screenToWorld(cam.scrollX, cam.scrollY + cam.height / cam.zoom)
+    const bottomRight = screenToWorld(cam.scrollX + cam.width / cam.zoom, cam.scrollY + cam.height / cam.zoom)
+
+    const minX = Math.min(topLeft.x, topRight.x, bottomLeft.x, bottomRight.x)
+    const maxX = Math.max(topLeft.x, topRight.x, bottomLeft.x, bottomRight.x)
+    const minY = Math.min(topLeft.y, topRight.y, bottomLeft.y, bottomRight.y)
+    const maxY = Math.max(topLeft.y, topRight.y, bottomLeft.y, bottomRight.y)
+
+    socketClient.sendViewport({ minX, maxX, minY, maxY })
+  }
+
   private cullOffscreenObjects(): void {
     const cam = this.cameras.main
     const padding = 128 // extra pixels beyond viewport

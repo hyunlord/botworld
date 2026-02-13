@@ -118,6 +118,19 @@ export class WsManager {
         })
       })
 
+      // Viewport tracking for NPC priority scheduling
+      socket.on('viewport:update', (bounds: { minX: number; maxX: number; minY: number; maxY: number }) => {
+        if (typeof bounds?.minX === 'number' && typeof bounds?.maxX === 'number' &&
+            typeof bounds?.minY === 'number' && typeof bounds?.maxY === 'number') {
+          this.world.npcManager.getScheduler()?.priorityScheduler.updateViewport(bounds)
+        }
+      })
+
+      // Follow NPC tracking for priority scheduling
+      socket.on('follow:npc', (data: { npcId: string | null }) => {
+        this.world.npcManager.getScheduler()?.priorityScheduler.setFollowedNpc(data?.npcId ?? null)
+      })
+
       socket.on('disconnect', () => {
         console.log(`[WS:spectator] Disconnected: ${socket.id}`)
         this.broadcastSpectatorCount()

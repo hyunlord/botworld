@@ -210,6 +210,16 @@ class SocketClient {
   resume(): void { this.socket?.emit('world:resume') }
   setSpeed(speed: number): void { this.socket?.emit('world:setSpeed', speed) }
   disconnect(): void { this.socket?.disconnect() }
+
+  /** Send viewport bounds for NPC priority scheduling */
+  sendViewport(bounds: { minX: number; maxX: number; minY: number; maxY: number }): void {
+    this.socket?.emit('viewport:update', bounds)
+  }
+
+  /** Tell server which NPC is being followed */
+  sendFollowNpc(npcId: string | null): void {
+    this.socket?.emit('follow:npc', { npcId })
+  }
 }
 
 export const socketClient = new SocketClient()

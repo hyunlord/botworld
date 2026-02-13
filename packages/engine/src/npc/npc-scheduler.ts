@@ -14,6 +14,11 @@ import type { NPCContext, NPCDecision } from './npc-brain.js'
 import { callNPCBrain, callNPCBrainForPlan } from './npc-brain.js'
 import { buildSystemPrompt } from './npc-prompts.js'
 import { getRoutineEntry } from './npc-routines.js'
+import { evaluateRules, type RuleContext } from './rule-engine.js'
+import { PatternCache, type TimeSlot } from './pattern-cache.js'
+import { TriggerDetector } from './trigger-detector.js'
+import { BatchBrain } from './batch-brain.js'
+import { PriorityScheduler, type ViewportBounds } from './priority-scheduler.js'
 import type { EventBus } from '../core/event-bus.js'
 import { findPath } from '../world/pathfinding.js'
 import type { TileMap } from '../world/tile-map.js'
@@ -28,6 +33,7 @@ import type { KingdomManager } from '../politics/kingdom-manager.js'
 import type { EcosystemManager } from '../world/ecosystem-manager.js'
 import type { BuildingManager } from '../buildings/building-manager.js'
 import type { CreatureManager } from '../creatures/creature-manager.js'
+import type { LLMRouter } from '../llm/llm-router.js'
 
 // ── Configuration ──
 
@@ -221,6 +227,12 @@ export class NPCScheduler {
   private getRecentEventDescriptions: () => string[]
   private planExecutor: PlanExecutor | null = null
 
+  // ── Strategy systems ──
+  readonly patternCache = new PatternCache()
+  readonly triggerDetector = new TriggerDetector()
+  readonly batchBrain = new BatchBrain()
+  readonly priorityScheduler = new PriorityScheduler()
+
   constructor(
     private eventBus: EventBus,
     private tileMap: TileMap,
@@ -238,7 +250,31 @@ export class NPCScheduler {
   /** Set the plan executor reference (called by NpcManager after WorldEngine creates it) */
   setPlanExecutor(executor: PlanExecutor): void {
     this.planExecutor = executor
+    // Wire batch brain results → plan executor
+    this.batchBrain.onResults((results) => {
+      for (const result of results) {
+        if (result.plan && this.planExecutor && !this.planExecutor.hasPlan(result.npcId)) {
+          this.planExecutor.setPlan(result.npcId, result.plan)
+        } else if (!result.plan) {
+          // Fallback for failed LLM calls
+          const runtime = this.runtimes.get(result.npcId)
+          const ref = this.npcRefs().get(result.npcId)
+          if (runtime && ref) {
+            const routine = getRoutineEntry(runtime.role, this.lastClock?.timeOfDay ?? 'morning')
+            this.executeFallback(ref, runtime, routine.fallback, this.lastClock ?? { tick: 0, day: 0, timeOfDay: 'morning', dayProgress: 0.25 })
+          }
+        }
+      }
+    })
   }
+
+  /** Wire LLM router to batch brain */
+  setLLMRouter(router: LLMRouter): void {
+    this.batchBrain.setLLMRouter(router)
+  }
+
+  /** Last clock value for batch brain fallback context */
+  private lastClock: WorldClock | null = null
 
   // ── Social system references ──
   private relationshipManager: RelationshipManager | null = null
@@ -307,62 +343,123 @@ export class NPCScheduler {
       hasNearby: false,
       hasConversation: false,
     })
+    // Register with trigger detector for interrupt tracking
+    this.triggerDetector.register(npcId)
   }
 
-  /** Called from NpcManager.tick() — checks timers and triggers LLM decisions */
+  /** Called from NpcManager.tick() — 3-tier optimization: Rules → Cache → Batch LLM */
   async tick(clock: WorldClock): Promise<void> {
     const now = Date.now()
+    this.lastClock = clock
+
+    // Periodic cleanup of expired social changes
+    this.priorityScheduler.cleanupExpired(clock.tick)
+
+    // Update player agent list for priority calculation
+    const allAgents = this.getAllAgentsIncludingNpcs()
+    const playerIds = allAgents.filter(a => !a.isNpc).map(a => a.id)
+    this.priorityScheduler.updatePlayerAgents(playerIds)
+
+    const season = this.getSeason(clock.day)
 
     for (const [npcId, runtime] of this.runtimes) {
-      const elapsed = now - runtime.lastDecisionTime
-      if (elapsed < runtime.currentInterval) continue
-
       const ref = this.npcRefs().get(npcId)
       if (!ref) continue
+
+      // Calculate priority-based interval
+      const priority = this.priorityScheduler.calculatePriority(npcId, ref.agent, allAgents)
+
+      const elapsed = now - runtime.lastDecisionTime
+      // Use the more aggressive of priority interval and conversation interval
+      const effectiveInterval = runtime.hasConversation
+        ? Math.min(priority.interval, 15_000)
+        : priority.interval
+      if (elapsed < effectiveInterval) continue
 
       // Skip if NPC already has an active plan running
       if (this.planExecutor?.hasPlan(npcId)) continue
 
-      // Check routine — some time slots skip LLM
-      const routine = getRoutineEntry(runtime.role, clock.timeOfDay)
-
-      // Update nearby state for interval tuning
+      // Update nearby state
       const nearby = this.findNearbyAgents(ref.agent.position, npcId)
       runtime.hasNearby = nearby.length > 0
       runtime.hasConversation = runtime.recentChat.length > 0 && nearby.length > 0
-
-      // Adjust interval
-      runtime.currentInterval = this.computeInterval(runtime)
+      runtime.currentInterval = effectiveInterval
       runtime.lastDecisionTime = now
 
-      if (!routine.useLLM) {
-        // Rule-based fallback for this time slot
-        this.executeFallback(ref, runtime, routine.fallback, clock)
+      // Check stat-based triggers (low HP, high hunger)
+      this.triggerDetector.checkStatTriggers(npcId, ref.agent, clock.tick)
+
+      // ── TIER 1: Rule Engine (instant, no LLM) ──
+      const ruleCtx: RuleContext = {
+        agent: ref.agent,
+        timeOfDay: clock.timeOfDay,
+        nearbyAgents: nearby.map(a => ({
+          id: a.id,
+          name: a.name,
+          isNpc: a.isNpc ?? false,
+          role: a.npcRole,
+          distance: Math.abs(a.position.x - ref.agent.position.x) +
+                    Math.abs(a.position.y - ref.agent.position.y),
+        })),
+        inCombat: this.priorityScheduler.isInCombat(npcId),
+        nearbyEnemies: [], // Populated by combat system via triggers
+        hasNearbyConversation: runtime.hasConversation,
+        poiName: this.findNearestPoiName(ref.agent.position),
+      }
+
+      const rulePlan = evaluateRules(ruleCtx)
+      if (rulePlan) {
+        if (this.planExecutor && !this.planExecutor.hasPlan(npcId)) {
+          this.planExecutor.setPlan(npcId, rulePlan)
+        }
         continue
       }
 
-      // Build context and call LLM
-      const context = this.buildContext(ref, runtime, clock, nearby, routine.hint)
+      // ── TIER 2: Pattern Cache (no LLM if cache hit + no triggers) ──
+      if (!this.triggerDetector.hasTriggers(npcId)) {
+        if (this.patternCache.hasPattern(npcId, season)) {
+          const timeSlot = clock.timeOfDay as TimeSlot
+          const cachedPlan = this.patternCache.getPatternPlan(npcId, timeSlot)
+          if (cachedPlan) {
+            if (this.planExecutor && !this.planExecutor.hasPlan(npcId)) {
+              this.planExecutor.setPlan(npcId, cachedPlan)
+            }
+            continue
+          }
+        }
 
-      // Use premium model if talking to a player agent
+        // No pattern & no triggers — check if routine says skip LLM
+        const routine = getRoutineEntry(runtime.role, clock.timeOfDay)
+        if (!routine.useLLM) {
+          this.executeFallback(ref, runtime, routine.fallback, clock)
+          continue
+        }
+      }
+
+      // ── TIER 3: Batch LLM Call (triggers present or no cache) ──
+      const routine = getRoutineEntry(runtime.role, clock.timeOfDay)
+      const context = this.buildContext(ref, runtime, clock, nearby, routine.hint)
       const hasPlayerNearby = nearby.some(a => !a.isNpc)
 
-      // Fire-and-forget: don't block the tick loop
+      // Consume triggers for LLM context enrichment
+      const triggers = this.triggerDetector.consumeTriggers(npcId, clock.tick)
+      const triggerContext = TriggerDetector.formatTriggersForLLM(triggers)
+
       if (this.planExecutor) {
-        // Use plan-aware brain call → set plan directly
-        callNPCBrainForPlan(runtime.systemPrompt, context, hasPlayerNearby)
-          .then(plan => {
-            if (plan && !this.planExecutor!.hasPlan(npcId)) {
-              this.planExecutor!.setPlan(npcId, plan)
-            } else if (!plan) {
-              this.executeFallback(ref, runtime, routine.fallback, clock)
-            }
-          })
-          .catch(() => {
-            this.executeFallback(ref, runtime, routine.fallback, clock)
-          })
+        // Use batch brain for optimized batching
+        this.batchBrain.enqueue({
+          npcId,
+          systemPrompt: runtime.systemPrompt,
+          context,
+          triggerContext: triggerContext || undefined,
+          premium: hasPlayerNearby,
+        })
+        // Also invalidate pattern cache since triggers fired
+        if (triggers.length > 0) {
+          this.patternCache.invalidatePattern(npcId)
+        }
       } else {
-        // Legacy: single-action brain call
+        // Legacy: direct single-action brain call (no plan executor)
         callNPCBrain(runtime.systemPrompt, context, hasPlayerNearby)
           .then(decision => {
             if (decision) {
@@ -402,6 +499,16 @@ export class NPCScheduler {
           runtime.currentInterval,
           targetId === npcId ? 8_000 : 15_000,
         )
+
+        // Add spoken_to trigger when directly addressed (breaks pattern cache)
+        if (targetId === npcId) {
+          this.triggerDetector.addTrigger(
+            npcId,
+            'spoken_to',
+            `${speakerName} is speaking to you: "${message.slice(0, 60)}"`,
+            0,  // tick filled by caller if needed
+          )
+        }
       }
     }
   }
@@ -698,6 +805,12 @@ export class NPCScheduler {
     const lines = AMBIENT_LINES[role]
     if (!lines?.length) return '*nods quietly*'
     return lines[Math.floor(Math.random() * lines.length)]
+  }
+
+  /** Get season from day number */
+  private getSeason(day: number): string {
+    const seasons = ['spring', 'summer', 'autumn', 'winter']
+    return seasons[Math.floor((day % 28) / 7)]
   }
 
   private emotionToEmote(emotion: string): string {

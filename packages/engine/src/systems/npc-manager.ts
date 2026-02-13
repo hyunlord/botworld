@@ -197,9 +197,13 @@ export class NpcManager {
     // llmEnabled will be set when setLLMRouter is called
   }
 
+  /** LLM router reference for batch brain */
+  private llmRouter: LLMRouter | null = null
+
   /** Wire the LLM router for NPC brain decisions */
   setLLMRouter(router: LLMRouter): void {
     this.llmEnabled = router.isEnabled()
+    this.llmRouter = router
     if (this.llmEnabled) {
       console.log('[NpcManager] LLM brain enabled via LLMRouter')
     } else {
@@ -241,6 +245,11 @@ export class NpcManager {
       getWeather,
       getRecentEvents,
     )
+
+    // Wire LLM router to batch brain
+    if (this.llmRouter) {
+      this.scheduler.setLLMRouter(this.llmRouter)
+    }
 
     // Register already-spawned NPCs
     for (const [id, rt] of this.npcs) {
@@ -461,6 +470,11 @@ export class NpcManager {
       case 'farmer': return `${name} tends the fields, growing crops and providing food to the settlement.`
       case 'priest': return `${name} tends the temple, offering blessings, healing, and spiritual guidance.`
     }
+  }
+
+  /** Get scheduler reference (for external systems like viewport tracking) */
+  getScheduler(): NPCScheduler | null {
+    return this.scheduler
   }
 
   /** Get all NPC agents for inclusion in agent lists */
