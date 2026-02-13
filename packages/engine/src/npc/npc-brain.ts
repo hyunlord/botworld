@@ -1,12 +1,13 @@
 /**
- * NPC Brain — LLM-powered decision making via OpenRouter API.
+ * NPC Brain — LLM-powered decision making via LLM router.
  *
- * Calls OpenRouter with NPC-specific system prompts + world context,
+ * Calls the LLM router (local/cloud dual routing) with NPC-specific system prompts + world context,
  * parses the JSON action response, and returns a structured decision.
- * Falls back gracefully when the API is unavailable or rate-limited.
+ * Falls back gracefully when the router is unavailable.
  */
 
 import type { ActionPlan } from '@botworld/shared'
+import type { LLMRouter } from '../llm/llm-router.js'
 
 export interface NPCDecision {
   action: 'speak' | 'move' | 'rest' | 'emote' | 'idle'
@@ -65,84 +66,48 @@ export interface NPCContext {
   nearbyCreatures?: string
 }
 
-// ── Rate limiter ──
+// ── LLM Router ──
 
-let callsThisMinute = 0
-let minuteStart = Date.now()
-const MAX_CALLS_PER_MINUTE = parseInt(process.env.NPC_MAX_CALLS_PER_MINUTE ?? '20', 10)
+let llmRouter: LLMRouter | null = null
 
-function checkRateLimit(): boolean {
-  const now = Date.now()
-  if (now - minuteStart > 60_000) {
-    callsThisMinute = 0
-    minuteStart = now
-  }
-  if (callsThisMinute >= MAX_CALLS_PER_MINUTE) return false
-  callsThisMinute++
-  return true
+export function setLLMRouter(router: LLMRouter): void {
+  llmRouter = router
 }
-
-// ── OpenRouter API ──
-
-const OPENROUTER_URL = 'https://openrouter.ai/api/v1/chat/completions'
 
 export async function callNPCBrain(
   systemPrompt: string,
   context: NPCContext,
   premium = false,
 ): Promise<NPCDecision | null> {
-  const apiKey = process.env.OPENROUTER_API_KEY
-  if (!apiKey) {
+  if (!llmRouter) {
     return null
   }
-
-  if (!checkRateLimit()) {
-    return null
-  }
-
-  const model = premium
-    ? (process.env.NPC_LLM_MODEL_PREMIUM ?? 'anthropic/claude-3.5-haiku')
-    : (process.env.NPC_LLM_MODEL ?? 'google/gemini-2.0-flash-001')
 
   const contextMessage = buildContextMessage(context)
 
   try {
-    const res = await fetch(OPENROUTER_URL, {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${apiKey}`,
-        'Content-Type': 'application/json',
-        'HTTP-Referer': 'https://botworld.example.com',
-        'X-Title': 'Botworld NPC',
-      },
-      body: JSON.stringify({
-        model,
-        messages: [
-          { role: 'system', content: systemPrompt },
-          { role: 'user', content: contextMessage },
-        ],
-        max_tokens: 800,
-        temperature: 0.8,
-        response_format: { type: 'json_object' },
-      }),
-      signal: AbortSignal.timeout(10_000),
-    })
-
-    if (!res.ok) {
-      console.warn(`[NPCBrain] OpenRouter ${res.status}: ${res.statusText}`)
-      return null
+    const request: Parameters<typeof llmRouter.complete>[0] = {
+      category: 'npc_action',
+      messages: [
+        { role: 'system', content: systemPrompt },
+        { role: 'user', content: contextMessage },
+      ],
+      max_tokens: 800,
+      temperature: 0.8,
+      response_format: 'json',
     }
 
-    const data = await res.json() as {
-      choices?: { message?: { content?: string } }[]
+    // Add model preference for premium requests (router ignores for local, which is fine)
+    if (premium) {
+      request.model = process.env.NPC_LLM_MODEL_PREMIUM ?? 'anthropic/claude-3.5-haiku'
     }
 
-    const content = data.choices?.[0]?.message?.content
-    if (!content) return null
+    const response = await llmRouter.complete(request)
+    if (!response) return null
 
-    return parseDecision(content)
+    return parseDecision(response.content)
   } catch (err) {
-    console.warn(`[NPCBrain] API error: ${(err as Error).message}`)
+    console.warn(`[NPCBrain] LLM router error: ${(err as Error).message}`)
     return null
   }
 }
@@ -153,61 +118,41 @@ export async function callNPCBrainForPlan(
   context: NPCContext,
   premium = false,
 ): Promise<ActionPlan | null> {
-  const apiKey = process.env.OPENROUTER_API_KEY
-  if (!apiKey) return null
-  if (!checkRateLimit()) return null
-
-  const model = premium
-    ? (process.env.NPC_LLM_MODEL_PREMIUM ?? 'anthropic/claude-3.5-haiku')
-    : (process.env.NPC_LLM_MODEL ?? 'google/gemini-2.0-flash-001')
+  if (!llmRouter) return null
 
   const contextMessage = buildContextMessage(context)
 
   try {
-    const res = await fetch(OPENROUTER_URL, {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${apiKey}`,
-        'Content-Type': 'application/json',
-        'HTTP-Referer': 'https://botworld.example.com',
-        'X-Title': 'Botworld NPC',
-      },
-      body: JSON.stringify({
-        model,
-        messages: [
-          { role: 'system', content: systemPrompt },
-          { role: 'user', content: contextMessage },
-        ],
-        max_tokens: 800,
-        temperature: 0.8,
-        response_format: { type: 'json_object' },
-      }),
-      signal: AbortSignal.timeout(10_000),
-    })
-
-    if (!res.ok) {
-      console.warn(`[NPCBrain] OpenRouter ${res.status}: ${res.statusText}`)
-      return null
+    const request: Parameters<typeof llmRouter.complete>[0] = {
+      category: 'npc_action',
+      messages: [
+        { role: 'system', content: systemPrompt },
+        { role: 'user', content: contextMessage },
+      ],
+      max_tokens: 800,
+      temperature: 0.8,
+      response_format: 'json',
     }
 
-    const data = await res.json() as {
-      choices?: { message?: { content?: string } }[]
+    // Add model preference for premium requests
+    if (premium) {
+      request.model = process.env.NPC_LLM_MODEL_PREMIUM ?? 'anthropic/claude-3.5-haiku'
     }
 
-    const content = data.choices?.[0]?.message?.content
-    if (!content) return null
+    const response = await llmRouter.complete(request)
+    if (!response) return null
 
     // Try plan parsing first (new format with steps array)
-    const plan = parsePlanResponse(content)
+    const plan = parsePlanResponse(response.content)
     if (plan) return plan
 
     // Fall back to old single-action parsing
-    const decision = parseDecision(content)
+    const decision = parseDecision(response.content)
     if (decision) return singleActionToPlan(decision)
 
     return null
   } catch (err) {
-    console.warn(`[NPCBrain] API error: ${(err as Error).message}`)
+    console.warn(`[NPCBrain] LLM router error: ${(err as Error).message}`)
     return null
   }
 }

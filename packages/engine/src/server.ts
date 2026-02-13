@@ -8,6 +8,9 @@ import express from 'express'
 import { createServer } from 'node:http'
 import { Server as SocketServer } from 'socket.io'
 import { WorldEngine } from './core/world-engine.js'
+import { LLMRouter } from './llm/llm-router.js'
+import { setLLMRouter } from './npc/npc-brain.js'
+import { createAdminLLMRouter } from './api/admin-llm.js'
 import { registryRouter, claimRouter, sessionRouter } from './auth/index.js'
 import { characterRouter } from './api/character.js'
 import { PortraitService } from './services/portrait-service.js'
@@ -67,6 +70,11 @@ function findSpawnPositions(world: WorldEngine, count: number): { x: number; y: 
 async function main() {
   // Create world
   const world = new WorldEngine()
+
+  // LLM Router (dual local/cloud routing)
+  const llmRouter = new LLMRouter()
+  setLLMRouter(llmRouter)
+  world.npcManager.setLLMRouter(llmRouter)
 
   // Load active agents from DB
   console.log('[Botworld] Loading agents from database...')
@@ -183,6 +191,7 @@ async function main() {
 
   // Admin routes (X-Admin-Key auth)
   app.use('/api', createAdminRouter(world, metrics))
+  app.use('/api', createAdminLLMRouter(llmRouter))
 
   // Health check (public, no auth)
   app.use(createHealthRouter(world, metrics))

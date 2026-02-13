@@ -19,6 +19,7 @@ import type { KingdomManager } from '../politics/kingdom-manager.js'
 import type { EcosystemManager } from '../world/ecosystem-manager.js'
 import type { BuildingManager } from '../buildings/building-manager.js'
 import type { CreatureManager } from '../creatures/creature-manager.js'
+import type { LLMRouter } from '../llm/llm-router.js'
 
 // ── NPC dialogue pools (fallback when LLM is unavailable) ──
 
@@ -185,7 +186,7 @@ export class NpcManager {
   /** LLM-powered scheduler (initialized after construction) */
   private scheduler: NPCScheduler | null = null
 
-  /** Whether LLM brain is enabled (OPENROUTER_API_KEY is set) */
+  /** Whether LLM brain is enabled (set when setLLMRouter is called) */
   private llmEnabled = false
 
   constructor(
@@ -193,11 +194,16 @@ export class NpcManager {
     private tileMap: TileMap,
     private clockGetter: () => WorldClock,
   ) {
-    this.llmEnabled = !!process.env.OPENROUTER_API_KEY
+    // llmEnabled will be set when setLLMRouter is called
+  }
+
+  /** Wire the LLM router for NPC brain decisions */
+  setLLMRouter(router: LLMRouter): void {
+    this.llmEnabled = router.isEnabled()
     if (this.llmEnabled) {
-      console.log('[NpcManager] LLM brain enabled (OPENROUTER_API_KEY detected)')
+      console.log('[NpcManager] LLM brain enabled via LLMRouter')
     } else {
-      console.log('[NpcManager] LLM brain disabled — using scripted dialogue fallback')
+      console.log('[NpcManager] LLM brain disabled — no providers available')
     }
   }
 
