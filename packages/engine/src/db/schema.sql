@@ -137,3 +137,34 @@ CREATE INDEX IF NOT EXISTS idx_notifications_agent_id ON notifications (agent_id
 CREATE INDEX IF NOT EXISTS idx_notifications_owner_unread ON notifications (owner_id, read) WHERE read = false;
 CREATE INDEX IF NOT EXISTS idx_notifications_created_at ON notifications (created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_notifications_type ON notifications (type);
+
+-- ============================================================
+-- Table: agent_skills (persistent skill progression)
+-- ============================================================
+CREATE TABLE IF NOT EXISTS agent_skills (
+    agent_id        UUID NOT NULL REFERENCES agents(id) ON DELETE CASCADE,
+    skill_id        VARCHAR(30) NOT NULL,
+    level           INTEGER NOT NULL DEFAULT 0,
+    xp              INTEGER NOT NULL DEFAULT 0,
+    xp_to_next      INTEGER NOT NULL DEFAULT 10,
+    unlocked_abilities TEXT[] NOT NULL DEFAULT '{}',
+    updated_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    PRIMARY KEY (agent_id, skill_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_agent_skills_agent ON agent_skills (agent_id);
+CREATE INDEX IF NOT EXISTS idx_agent_skills_skill ON agent_skills (skill_id);
+CREATE INDEX IF NOT EXISTS idx_agent_skills_level ON agent_skills (level DESC);
+
+-- ============================================================
+-- Table: agent_magic_state (persistent mana/effects)
+-- ============================================================
+CREATE TABLE IF NOT EXISTS agent_magic_state (
+    agent_id        UUID PRIMARY KEY REFERENCES agents(id) ON DELETE CASCADE,
+    max_mana        INTEGER NOT NULL DEFAULT 50,
+    current_mana    INTEGER NOT NULL DEFAULT 50,
+    cooldowns       JSONB NOT NULL DEFAULT '{}',
+    active_casts    JSONB NOT NULL DEFAULT '[]',
+    active_effects  JSONB NOT NULL DEFAULT '[]',
+    updated_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);

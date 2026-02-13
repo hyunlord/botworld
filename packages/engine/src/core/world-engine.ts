@@ -33,6 +33,8 @@ import { FormationSystem } from '../combat/formation-system.js'
 import { RecipeManager } from '../crafting/recipe-manager.js'
 import { FarmingSystem } from '../crafting/farming-system.js'
 import { ProductionManager } from '../crafting/production-manager.js'
+import { SkillManager } from '../skills/skill-manager.js'
+import { MagicSystem } from '../skills/magic-system.js'
 
 export class WorldEngine {
   readonly eventBus = new EventBus()
@@ -66,6 +68,8 @@ export class WorldEngine {
   readonly recipeManager: RecipeManager
   readonly farmingSystem: FarmingSystem
   readonly productionManager: ProductionManager
+  public skillManager: SkillManager
+  public magicSystem: MagicSystem
   clock: WorldClock
 
   private tickInterval: ReturnType<typeof setInterval> | null = null
@@ -187,6 +191,10 @@ export class WorldEngine {
     this.recipeManager = new RecipeManager(this.eventBus)
     this.farmingSystem = new FarmingSystem(this.eventBus)
     this.productionManager = new ProductionManager(this.eventBus)
+
+    // Skill and Magic systems
+    this.skillManager = new SkillManager(this.eventBus)
+    this.magicSystem = new MagicSystem(this.eventBus)
   }
 
   start(): void {
@@ -378,7 +386,93 @@ export class WorldEngine {
           event.resourceType, event.timestamp,
         )
       }
+      // Award gathering XP
+      this.skillManager.awardXP(event.agentId, 'gathering', 1, 'practice', event.timestamp)
     })
+
+    // ── Skill XP wiring ──
+
+    // Initialize skills/magic for newly spawned agents
+    this.eventBus.on('agent:spawned', (event) => {
+      if (event.type !== 'agent:spawned') return
+      this.skillManager.initializeAgent(event.agent.id)
+      this.magicSystem.initializeAgent(event.agent.id, 50)
+    })
+
+    // Combat → combat skill XP
+    this.eventBus.on('combat:ended', (event) => {
+      if (event.type !== 'combat:ended') return
+      // Award combat XP on any outcome (victory gives more)
+      const combatMul = event.outcome === 'victory' ? 1.5 : 1
+      this.skillManager.awardXP(event.agentId, 'melee', combatMul, 'practice', event.timestamp)
+      this.skillManager.awardXP(event.agentId, 'defense', combatMul * 0.8, 'practice', event.timestamp)
+      this.skillManager.awardXP(event.agentId, 'tactics', combatMul * 0.5, 'practice', event.timestamp)
+    })
+
+    // Trade → trading skill XP
+    this.eventBus.on('trade:completed', (event) => {
+      if (event.type !== 'trade:completed') return
+      this.skillManager.awardXP(event.buyerId, 'trading', 1, 'practice', event.timestamp)
+      this.skillManager.awardXP(event.sellerId, 'trading', 1, 'practice', event.timestamp)
+    })
+
+    // Crafting → crafting skill XP (route by recipe category)
+    this.eventBus.on('item:crafted', (event) => {
+      if (event.type !== 'item:crafted') return
+      const item = event.item
+      // Determine crafting sub-skill from item type
+      const craftSkillMap: Record<string, string> = {
+        weapon: 'smithing', armor: 'smithing', tool: 'smithing',
+        potion: 'alchemy', medicine: 'alchemy',
+        food: 'cooking', meal: 'cooking',
+        furniture: 'woodworking', structure: 'woodworking',
+        clothing: 'tailoring', fabric: 'tailoring',
+        enchanted: 'enchanting', scroll: 'enchanting',
+      }
+      const subSkill = craftSkillMap[item.type] || 'crafting'
+      this.skillManager.awardXP(event.agentId, subSkill as any, 1, 'practice', event.timestamp)
+    })
+
+    // Conversation → social skill XP
+    this.eventBus.on('agent:spoke', (event) => {
+      if (event.type !== 'agent:spoke') return
+      if (event.targetAgentId) {
+        this.skillManager.awardXP(event.agentId, 'charisma', 0.5, 'practice', event.timestamp)
+      }
+    })
+
+    // Spell casting → magic school XP
+    this.eventBus.on('spell:cast_completed', (event) => {
+      if (event.type !== 'spell:cast_completed') return
+      const school = (event as any).school
+      if (school) {
+        this.skillManager.awardXP(event.agentId, school, 1.5, 'practice', event.timestamp)
+      }
+    })
+
+    // Skill level up → update agent mana if magic skill
+    this.eventBus.on('skill:level_up', (event) => {
+      if (event.type !== 'skill:level_up') return
+      const magicSchools = ['fire', 'ice', 'heal', 'summon', 'arcane', 'dark']
+      if (magicSchools.includes(event.skillId)) {
+        // Increase max mana by 5 per magic level gained
+        const state = this.magicSystem.getMagicState(event.agentId)
+        if (state) {
+          state.maxMana += 5
+          state.currentMana = Math.min(state.currentMana + 5, state.maxMana)
+        }
+      }
+    })
+
+    // Initialize skills/magic for any agents loaded before start()
+    for (const agent of this.agentManager.getAllAgents()) {
+      if (this.skillManager.getAgentSkills(agent.id).length === 0) {
+        this.skillManager.initializeAgent(agent.id)
+      }
+      if (!this.magicSystem.getMagicState(agent.id)) {
+        this.magicSystem.initializeAgent(agent.id, agent.stats.maxMana ?? 50)
+      }
+    }
 
     console.log('[WorldEngine] Starting simulation...')
     this.restartInterval()
@@ -503,6 +597,16 @@ export class WorldEngine {
       () => this.creatureManager.getAllCreatures(),
     )
     this.denManager.tick(this.clock)
+
+    // 10.97. Magic system tick
+    this.magicSystem.tick(this.clock)
+
+    // 10.98. Mana regeneration for all agents
+    for (const agent of this.agentManager.getAllAgents()) {
+      const isResting = agent.currentAction?.type === 'rest'
+      const isMeditating = agent.currentAction?.type === 'meditate'
+      this.magicSystem.regenMana(agent.id, isResting ?? false, isMeditating ?? false)
+    }
 
     // 11. Weather system tick
     const weatherChanged = this.weather.tick(this.clock)

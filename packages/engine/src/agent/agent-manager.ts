@@ -46,8 +46,19 @@ export class AgentManager {
   }): Agent {
     const id = generateId('agent')
     const skills: Record<SkillType, number> = {
+      // Legacy categories
       gathering: 1, crafting: 1, combat: 1, diplomacy: 1,
       leadership: 1, trading: 1, farming: 1, cooking: 1,
+      // Combat skills
+      melee: 0, ranged: 0, defense: 0, tactics: 0,
+      // Crafting skills
+      smithing: 0, woodworking: 0, alchemy: 0, enchanting: 0, tailoring: 0,
+      // Magic skills
+      fire: 0, ice: 0, heal: 0, summon: 0, arcane: 0, dark: 0,
+      // Social skills
+      charisma: 0, deception: 0, lore: 0,
+      // Survival skills
+      hunting: 0, stealth: 0, navigation: 0,
     }
 
     const agent: Agent = {
@@ -63,6 +74,8 @@ export class AgentManager {
         maxHunger: DEFAULT_MAX_HUNGER,
         attack: DEFAULT_ATTACK,
         defense: DEFAULT_DEFENSE,
+        mana: 50,
+        maxMana: 50,
       },
       level: 1,
       xp: 0,
@@ -107,6 +120,11 @@ export class AgentManager {
     const defaultSkills: Record<SkillType, number> = {
       gathering: 1, crafting: 1, combat: 1, diplomacy: 1,
       leadership: 1, trading: 1, farming: 1, cooking: 1,
+      melee: 0, ranged: 0, defense: 0, tactics: 0,
+      smithing: 0, woodworking: 0, alchemy: 0, enchanting: 0, tailoring: 0,
+      fire: 0, ice: 0, heal: 0, summon: 0, arcane: 0, dark: 0,
+      charisma: 0, deception: 0, lore: 0,
+      hunting: 0, stealth: 0, navigation: 0,
     }
     if (options.skills) {
       for (const [k, v] of Object.entries(options.skills)) {
@@ -127,6 +145,8 @@ export class AgentManager {
         maxHunger: DEFAULT_MAX_HUNGER,
         attack: DEFAULT_ATTACK,
         defense: DEFAULT_DEFENSE,
+        mana: 50,
+        maxMana: 50,
       },
       level: 1,
       xp: 0,

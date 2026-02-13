@@ -9,6 +9,7 @@ import type { GuildType, SettlementType, DiplomacyStatus, TreatyType, WarGoal } 
 import type { HistoryEventType } from './history.js'
 import type { Season, AnimalType, CreatureType, CreatureTier, DenType } from './ecosystem.js'
 import type { BuildingType, BuildingState, SiegeWeaponType } from './building.js'
+import type { SkillId, SkillCategory, SpellSchool, LearningMethod } from './skill.js'
 
 /** All event types in the world */
 export type WorldEvent =
@@ -97,6 +98,17 @@ export type WorldEvent =
   | FarmingHarvestedEvent
   | FarmingProducedEvent
   | ProductionCompletedEvent
+  | SkillXPGainedEvent
+  | SkillLevelUpEvent
+  | SkillAbilityUnlockedEvent
+  | SkillComboDiscoveredEvent
+  | SkillTaughtEvent
+  | SpellCastStartedEvent
+  | SpellCastCompletedEvent
+  | SpellCastFailedEvent
+  | SpellCastInterruptedEvent
+  | SpellEffectExpiredEvent
+  | ManaRestoredEvent
 
 export interface AgentMovedEvent {
   type: 'agent:moved'
@@ -916,5 +928,122 @@ export interface ProductionCompletedEvent {
   recipeName: string
   quantity: number
   workerId?: string
+  timestamp: number
+}
+
+// ── Skill Events ──
+
+export interface SkillXPGainedEvent {
+  type: 'skill:xp_gained'
+  agentId: string
+  skillId: SkillId
+  skillName: string
+  xpGained: number
+  method: LearningMethod
+  newLevel: number
+  leveledUp: boolean
+  timestamp: number
+}
+
+export interface SkillLevelUpEvent {
+  type: 'skill:level_up'
+  agentId: string
+  skillId: SkillId
+  skillName: string
+  newLevel: number
+  timestamp: number
+}
+
+export interface SkillAbilityUnlockedEvent {
+  type: 'skill:ability_unlocked'
+  agentId: string
+  skillId: SkillId
+  skillName: string
+  abilityId: string
+  abilityName: string
+  level: number
+  timestamp: number
+}
+
+export interface SkillComboDiscoveredEvent {
+  type: 'skill:combo_discovered'
+  agentId: string
+  comboId: string
+  comboName: string
+  skill1: SkillId
+  skill2: SkillId
+  abilityName: string
+  timestamp: number
+}
+
+export interface SkillTaughtEvent {
+  type: 'skill:taught'
+  teacherId: string
+  studentId: string
+  skillId: SkillId
+  xpGained: number
+  newLevel: number
+  timestamp: number
+}
+
+// ── Magic/Spell Events ──
+
+export interface SpellCastStartedEvent {
+  type: 'spell:cast_started'
+  agentId: string
+  spellId: string
+  spellName: string
+  school: SpellSchool
+  targetId?: string
+  castTime: number
+  manaCost: number
+  timestamp: number
+}
+
+export interface SpellCastCompletedEvent {
+  type: 'spell:cast_completed'
+  agentId: string
+  spellId: string
+  spellName: string
+  school: SpellSchool
+  targetId?: string
+  effects: string[]
+  manaCost: number
+  timestamp: number
+}
+
+export interface SpellCastFailedEvent {
+  type: 'spell:cast_failed'
+  agentId: string
+  spellId: string
+  spellName: string
+  reason: string
+  manaCost: number
+  timestamp: number
+}
+
+export interface SpellCastInterruptedEvent {
+  type: 'spell:cast_interrupted'
+  agentId: string
+  spellId: string
+  spellName: string
+  timestamp: number
+}
+
+export interface SpellEffectExpiredEvent {
+  type: 'spell:effect_expired'
+  agentId: string
+  spellId: string
+  targetId: string
+  timestamp: number
+}
+
+export interface ManaRestoredEvent {
+  type: 'mana:restored'
+  agentId: string
+  amount: number
+  source: string
+  newMana: number
+  maxMana: number
   timestamp: number
 }

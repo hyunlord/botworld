@@ -12,6 +12,27 @@ export type SkillType =
   | 'trading'
   | 'farming'
   | 'cooking'
+  | 'melee'
+  | 'ranged'
+  | 'defense'
+  | 'tactics'
+  | 'smithing'
+  | 'woodworking'
+  | 'alchemy'
+  | 'enchanting'
+  | 'tailoring'
+  | 'fire'
+  | 'ice'
+  | 'heal'
+  | 'summon'
+  | 'arcane'
+  | 'dark'
+  | 'charisma'
+  | 'deception'
+  | 'navigation'
+  | 'hunting'
+  | 'stealth'
+  | 'lore'
 
 export type OrgRank = 'leader' | 'officer' | 'member' | 'recruit'
 
@@ -33,6 +54,10 @@ export type ActionType =
   | 'flee'
   | 'build'
   | 'give'
+  | 'cast'
+  | 'meditate'
+  | 'teach'
+  | 'learn'
 
 export interface AgentAction {
   type: ActionType
@@ -53,6 +78,8 @@ export interface AgentStats {
   maxHunger: number
   attack: number
   defense: number
+  mana: number
+  maxMana: number
 }
 
 export interface Memory {

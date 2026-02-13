@@ -60,6 +60,18 @@ export const ENERGY_COST = {
   flee: 3,
   build: 4,
   give: 0,
+  cast: 3,
+  meditate: 0,
+  teach: 1,
+  learn: 1,
+  farm: 2,
+  fish: 2,
+  mine: 3,
+  hunt: 4,
+  pray: 0,
+  perform: 1,
+  steal: 3,
+  sneak: 2,
 } as const
 
 /** Hunger drain per tick */
