@@ -31,6 +31,7 @@ import { createBuildingsRouter } from './api/buildings.js'
 import { createCreaturesRouter } from './api/creatures.js'
 import { createCraftingRouter } from './api/crafting.js'
 import { createSkillsRouter } from './api/skills.js'
+import { createLayersRouter } from './api/layers.js'
 import { NotificationManager } from './systems/notifications.js'
 import { MetricsCollector } from './monitoring/metrics.js'
 import { createHealthRouter } from './monitoring/health-check.js'
@@ -169,6 +170,7 @@ async function main() {
   app.use('/api', createCreaturesRouter(world))
   app.use('/api', createCraftingRouter(world))
   app.use('/api', createSkillsRouter(world))
+  app.use('/api', createLayersRouter(world))
 
   // Admin routes (X-Admin-Key auth)
   app.use('/api', createAdminRouter(world, metrics))

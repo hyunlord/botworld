@@ -35,6 +35,9 @@ import { FarmingSystem } from '../crafting/farming-system.js'
 import { ProductionManager } from '../crafting/production-manager.js'
 import { SkillManager } from '../skills/skill-manager.js'
 import { MagicSystem } from '../skills/magic-system.js'
+import { UndergroundGenerator } from '../world/underground-generator.js'
+import { OceanSystem } from '../world/ocean-system.js'
+import { WorldLayerManager } from '../world/layer-manager.js'
 
 export class WorldEngine {
   readonly eventBus = new EventBus()
@@ -70,6 +73,9 @@ export class WorldEngine {
   readonly productionManager: ProductionManager
   public skillManager: SkillManager
   public magicSystem: MagicSystem
+  readonly undergroundGenerator: UndergroundGenerator
+  readonly oceanSystem: OceanSystem
+  readonly layerManager: WorldLayerManager
   clock: WorldClock
 
   private tickInterval: ReturnType<typeof setInterval> | null = null
@@ -195,6 +201,17 @@ export class WorldEngine {
     // Skill and Magic systems
     this.skillManager = new SkillManager(this.eventBus)
     this.magicSystem = new MagicSystem(this.eventBus)
+
+    // World layer systems
+    this.undergroundGenerator = new UndergroundGenerator()
+    this.oceanSystem = new OceanSystem(this.eventBus)
+    this.layerManager = new WorldLayerManager(this.eventBus, this.undergroundGenerator, this.oceanSystem)
+
+    // Generate underground at first mine POI
+    const minePoi = this.tileMap.pois.find(p => p.type === 'mine')
+    if (minePoi) {
+      this.layerManager.generateUnderground(minePoi.position)
+    }
   }
 
   start(): void {
@@ -392,11 +409,12 @@ export class WorldEngine {
 
     // ── Skill XP wiring ──
 
-    // Initialize skills/magic for newly spawned agents
+    // Initialize skills/magic/layers for newly spawned agents
     this.eventBus.on('agent:spawned', (event) => {
       if (event.type !== 'agent:spawned') return
       this.skillManager.initializeAgent(event.agent.id)
       this.magicSystem.initializeAgent(event.agent.id, 50)
+      this.layerManager.initializeAgent(event.agent.id)
     })
 
     // Combat → combat skill XP
@@ -464,7 +482,7 @@ export class WorldEngine {
       }
     })
 
-    // Initialize skills/magic for any agents loaded before start()
+    // Initialize skills/magic/layers for any agents loaded before start()
     for (const agent of this.agentManager.getAllAgents()) {
       if (this.skillManager.getAgentSkills(agent.id).length === 0) {
         this.skillManager.initializeAgent(agent.id)
@@ -472,6 +490,7 @@ export class WorldEngine {
       if (!this.magicSystem.getMagicState(agent.id)) {
         this.magicSystem.initializeAgent(agent.id, agent.stats.maxMana ?? 50)
       }
+      this.layerManager.initializeAgent(agent.id)
     }
 
     console.log('[WorldEngine] Starting simulation...')
@@ -601,7 +620,13 @@ export class WorldEngine {
     // 10.97. Magic system tick
     this.magicSystem.tick(this.clock)
 
-    // 10.98. Mana regeneration for all agents
+    // 10.98. Ocean system tick (ship movement, builds)
+    this.oceanSystem.tick(this.clock.tick)
+
+    // 10.99. Layer system tick (special region effects)
+    this.layerManager.tick(this.clock.tick)
+
+    // 10.995. Mana regeneration for all agents
     for (const agent of this.agentManager.getAllAgents()) {
       const isResting = agent.currentAction?.type === 'rest'
       const isMeditating = agent.currentAction?.type === 'meditate'
@@ -672,6 +697,9 @@ export class WorldEngine {
       advancedCombats: this.advancedCombat.getActiveCombats().length,
       farms: this.farmingSystem.getAllFarms().length,
       productionQueues: this.productionManager.getActiveQueues().length,
+      layers: this.layerManager.getState(),
+      ships: this.oceanSystem.getAllShips().length,
+      islands: this.oceanSystem.getIslands().length,
     }
   }
 }

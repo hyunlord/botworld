@@ -10,6 +10,7 @@ import type { HistoryEventType } from './history.js'
 import type { Season, AnimalType, CreatureType, CreatureTier, DenType } from './ecosystem.js'
 import type { BuildingType, BuildingState, SiegeWeaponType } from './building.js'
 import type { SkillId, SkillCategory, SpellSchool, LearningMethod } from './skill.js'
+import type { ShipBuiltEvent, ShipSailedEvent, IslandDiscoveredEvent, LayerTransitionEvent, LayerDiscoveredEvent, PortalDiscoveredEvent, TrapTriggeredEvent, TrapDisarmedEvent, DungeonRoomEnteredEvent } from './world-layer.js'
 
 /** All event types in the world */
 export type WorldEvent =
@@ -109,6 +110,15 @@ export type WorldEvent =
   | SpellCastInterruptedEvent
   | SpellEffectExpiredEvent
   | ManaRestoredEvent
+  | ShipBuiltEvent
+  | ShipSailedEvent
+  | IslandDiscoveredEvent
+  | LayerTransitionEvent
+  | LayerDiscoveredEvent
+  | PortalDiscoveredEvent
+  | TrapTriggeredEvent
+  | TrapDisarmedEvent
+  | DungeonRoomEnteredEvent
 
 export interface AgentMovedEvent {
   type: 'agent:moved'
