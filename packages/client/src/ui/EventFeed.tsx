@@ -3,7 +3,7 @@ import type { WorldEvent } from '@botworld/shared'
 import { OV, glassPanel, interactive } from './overlay-styles.js'
 import { soundManager } from '../game/audio/sound-manager.js'
 
-type EntryKind = 'chat' | 'gather' | 'craft' | 'trade' | 'combat' | 'event'
+type EntryKind = 'chat' | 'gather' | 'craft' | 'trade' | 'combat' | 'event' | 'political' | 'social'
 
 interface FeedEntry {
   agentName: string
@@ -21,6 +21,8 @@ const KIND_ICONS: Record<EntryKind, string> = {
   trade: '🤝',
   combat: '⚔️',
   event: '🏆',
+  political: '👑',
+  social: '👥',
 }
 
 const KIND_COLORS: Record<EntryKind, string> = {
@@ -30,6 +32,8 @@ const KIND_COLORS: Record<EntryKind, string> = {
   trade: '#4ADE80',
   combat: '#F87171',
   event: '#C084FC',
+  political: '#A78BFA',
+  social: '#34D399',
 }
 
 function eventToEntry(e: WorldEvent, agentNames: Map<string, string>): FeedEntry | null {
@@ -79,6 +83,9 @@ export function EventFeed({ events, agentNames, onNavigate, onSelectAgent }: Eve
   const [expanded, setExpanded] = useState(false)
   const [entries, setEntries] = useState<FeedEntry[]>([])
   const [unreadCount, setUnreadCount] = useState(0)
+  const [categoryFilter, setCategoryFilter] = useState<string>('all')
+  const [importanceFilter, setImportanceFilter] = useState<string>('all')
+  const [searchText, setSearchText] = useState('')
   const lastCountRef = useRef(0)
   const lastNotifRef = useRef(0)
 
@@ -101,12 +108,38 @@ export function EventFeed({ events, agentNames, onNavigate, onSelectAgent }: Eve
     if (expanded) setUnreadCount(0)
   }, [expanded])
 
-  const visible = entries.slice(-5)
+  // Filter entries
+  let filtered = entries
+  if (categoryFilter !== 'all') {
+    filtered = filtered.filter(e => e.kind === categoryFilter)
+  }
+  if (importanceFilter === 'important') {
+    filtered = filtered.filter(e => isImportant(e))
+  }
+  if (importanceFilter === 'historic') {
+    filtered = filtered.filter(e => isHistoric(e))
+  }
+  if (searchText) {
+    const lower = searchText.toLowerCase()
+    filtered = filtered.filter(e =>
+      e.agentName.toLowerCase().includes(lower) ||
+      e.message.toLowerCase().includes(lower)
+    )
+  }
+
+  const visible = filtered.slice(-5)
 
   const handleEntryClick = (entry: FeedEntry) => {
     if (entry.agentId && onSelectAgent) {
       onSelectAgent(entry.agentId)
     } else if (entry.position && onNavigate) {
+      onNavigate(entry.position.x, entry.position.y)
+    }
+  }
+
+  const handleNavigate = (entry: FeedEntry) => {
+    if (entry.position && onNavigate) {
+      soundManager.playUIClick()
       onNavigate(entry.position.x, entry.position.y)
     }
   }
@@ -136,9 +169,50 @@ export function EventFeed({ events, agentNames, onNavigate, onSelectAgent }: Eve
           <span style={styles.headerTitle}>Live Feed</span>
           <button style={styles.collapseBtn} onClick={() => { soundManager.playUIClose(); setExpanded(false) }}>▼</button>
         </div>
+
+        {/* Filters */}
+        <div style={styles.filters}>
+          {/* Category filter */}
+          <div style={styles.filterRow}>
+            {['all', 'combat', 'trade', 'craft', 'chat', 'gather', 'event'].map(cat => (
+              <button
+                key={cat}
+                style={filterPill(categoryFilter === cat)}
+                onClick={() => { soundManager.playUIClick(); setCategoryFilter(cat) }}
+              >
+                {cat === 'all' ? 'All' : KIND_ICONS[cat as EntryKind]}
+              </button>
+            ))}
+          </div>
+
+          {/* Importance filter */}
+          <div style={styles.filterRow}>
+            {['all', 'important', 'historic'].map(imp => (
+              <button
+                key={imp}
+                style={filterPill(importanceFilter === imp)}
+                onClick={() => { soundManager.playUIClick(); setImportanceFilter(imp) }}
+              >
+                {imp === 'all' ? 'All' : imp === 'important' ? '⚡' : '🏛️'}
+              </button>
+            ))}
+          </div>
+
+          {/* Search */}
+          <input
+            type="text"
+            value={searchText}
+            onChange={e => setSearchText(e.target.value)}
+            placeholder="Search..."
+            style={styles.searchInput}
+          />
+        </div>
+
         <div style={styles.entries}>
           {visible.length === 0 && (
-            <div style={styles.empty}>Waiting for activity...</div>
+            <div style={styles.empty}>
+              {entries.length === 0 ? 'Waiting for activity...' : 'No matching events'}
+            </div>
           )}
           {visible.map((entry, i) => (
             <div
@@ -153,6 +227,16 @@ export function EventFeed({ events, agentNames, onNavigate, onSelectAgent }: Eve
               <span style={{ color: KIND_COLORS[entry.kind] }}>{KIND_ICONS[entry.kind]}</span>
               <span style={styles.entryName}>{entry.agentName}:</span>
               <span style={{ ...styles.entryMsg, color: KIND_COLORS[entry.kind] }}>{entry.message}</span>
+              <span style={styles.entryTime}>{formatTimeAgo(entry.timestamp)}</span>
+              {entry.position && (
+                <button
+                  style={styles.goBtn}
+                  onClick={(e) => { e.stopPropagation(); handleNavigate(entry) }}
+                  title="Go to location"
+                >
+                  🗺️
+                </button>
+              )}
             </div>
           ))}
         </div>
@@ -160,6 +244,43 @@ export function EventFeed({ events, agentNames, onNavigate, onSelectAgent }: Eve
     </div>
   )
 }
+
+function isImportant(entry: FeedEntry): boolean {
+  if (entry.kind === 'combat') return true
+  if (entry.kind === 'trade' && entry.message.includes('for ')) {
+    const priceMatch = entry.message.match(/for (\d+)G/)
+    if (priceMatch && parseInt(priceMatch[1]) >= 100) return true
+  }
+  if (entry.message.includes('legendary') || entry.message.includes('masterwork')) return true
+  if (entry.message.includes('defeated') || entry.message.includes('slew')) return true
+  return false
+}
+
+function isHistoric(entry: FeedEntry): boolean {
+  return entry.kind === 'event' || entry.kind === 'political'
+}
+
+function formatTimeAgo(timestamp: number): string {
+  const seconds = Math.floor((Date.now() - timestamp) / 1000)
+  if (seconds < 10) return 'now'
+  if (seconds < 60) return `${seconds}s`
+  const minutes = Math.floor(seconds / 60)
+  if (minutes < 60) return `${minutes}m`
+  const hours = Math.floor(minutes / 60)
+  if (hours < 24) return `${hours}h`
+  return `${Math.floor(hours / 24)}d`
+}
+
+const filterPill = (active: boolean): React.CSSProperties => ({
+  padding: '2px 8px',
+  fontSize: 10,
+  borderRadius: 10,
+  border: `1px solid ${active ? OV.accent : OV.border}`,
+  background: active ? 'rgba(255,215,0,0.15)' : 'transparent',
+  color: active ? OV.accent : OV.textMuted,
+  cursor: 'pointer',
+  transition: 'all 0.15s',
+})
 
 const styles: Record<string, React.CSSProperties> = {
   wrapper: {
@@ -200,6 +321,9 @@ const styles: Record<string, React.CSSProperties> = {
     width: 320,
     padding: 10,
     animation: 'fadeSlideIn 0.2s ease-out',
+    maxHeight: '60vh',
+    display: 'flex',
+    flexDirection: 'column' as const,
   },
   header: {
     display: 'flex',
@@ -220,28 +344,55 @@ const styles: Record<string, React.CSSProperties> = {
     cursor: 'pointer',
     padding: '0 4px',
   },
+  filters: {
+    display: 'flex',
+    flexDirection: 'column' as const,
+    gap: 4,
+    marginBottom: 8,
+    paddingBottom: 8,
+    borderBottom: `1px solid ${OV.border}`,
+  },
+  filterRow: {
+    display: 'flex',
+    gap: 4,
+    flexWrap: 'wrap' as const,
+  },
+  searchInput: {
+    width: '100%',
+    padding: '4px 6px',
+    fontSize: 10,
+    background: 'rgba(255, 255, 255, 0.05)',
+    border: `1px solid ${OV.border}`,
+    borderRadius: 6,
+    color: OV.text,
+    fontFamily: OV.font,
+    outline: 'none',
+  },
   entries: {
     display: 'flex',
-    flexDirection: 'column',
+    flexDirection: 'column' as const,
     gap: 4,
+    overflowY: 'auto' as const,
+    flex: 1,
   },
   empty: {
     color: OV.textMuted,
     fontSize: 11,
     fontStyle: 'italic',
-    textAlign: 'center',
+    textAlign: 'center' as const,
     padding: 8,
   },
   entry: {
     display: 'flex',
-    alignItems: 'baseline',
-    gap: 5,
+    alignItems: 'center',
+    gap: 4,
     fontSize: 11,
     lineHeight: 1.5,
     padding: '2px 4px',
     borderRadius: 4,
     transition: 'opacity 0.3s',
     animation: 'slideInLeft 0.2s ease-out',
+    position: 'relative' as const,
   },
   entryName: {
     color: OV.accent,
@@ -252,5 +403,19 @@ const styles: Record<string, React.CSSProperties> = {
     overflow: 'hidden',
     textOverflow: 'ellipsis',
     whiteSpace: 'nowrap' as const,
+    flex: 1,
+  },
+  entryTime: {
+    fontSize: 9,
+    color: OV.textMuted,
+    flexShrink: 0,
+  },
+  goBtn: {
+    background: 'none',
+    border: 'none',
+    fontSize: 10,
+    cursor: 'pointer',
+    padding: 0,
+    flexShrink: 0,
   },
 }

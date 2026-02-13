@@ -38,6 +38,9 @@ import { MagicSystem } from '../skills/magic-system.js'
 import { UndergroundGenerator } from '../world/underground-generator.js'
 import { OceanSystem } from '../world/ocean-system.js'
 import { WorldLayerManager } from '../world/layer-manager.js'
+import { RankingManager } from '../systems/ranking-manager.js'
+import { WorldRecordManager } from '../systems/world-records.js'
+import { StatisticsCollector } from '../systems/statistics-collector.js'
 
 export class WorldEngine {
   readonly eventBus = new EventBus()
@@ -76,6 +79,9 @@ export class WorldEngine {
   readonly undergroundGenerator: UndergroundGenerator
   readonly oceanSystem: OceanSystem
   readonly layerManager: WorldLayerManager
+  readonly rankingManager: RankingManager
+  readonly worldRecordManager: WorldRecordManager
+  readonly statisticsCollector: StatisticsCollector
   clock: WorldClock
 
   private tickInterval: ReturnType<typeof setInterval> | null = null
@@ -212,6 +218,11 @@ export class WorldEngine {
     if (minePoi) {
       this.layerManager.generateUnderground(minePoi.position)
     }
+
+    // Rankings, records, and statistics systems
+    this.rankingManager = new RankingManager(this.eventBus, this.agentManager)
+    this.worldRecordManager = new WorldRecordManager(this.eventBus)
+    this.statisticsCollector = new StatisticsCollector(this.eventBus, this.agentManager, () => this.clock)
   }
 
   start(): void {
@@ -626,6 +637,10 @@ export class WorldEngine {
     // 10.99. Layer system tick (special region effects)
     this.layerManager.tick(this.clock.tick)
 
+    // 10.995a. Rankings, records, and statistics tick
+    this.rankingManager.tick(this.clock.tick)
+    this.statisticsCollector.tick(this.clock.tick)
+
     // 10.995. Mana regeneration for all agents
     for (const agent of this.agentManager.getAllAgents()) {
       const isResting = agent.currentAction?.type === 'rest'
@@ -700,6 +715,8 @@ export class WorldEngine {
       layers: this.layerManager.getState(),
       ships: this.oceanSystem.getAllShips().length,
       islands: this.oceanSystem.getIslands().length,
+      rankings: this.rankingManager.getRankings() ? 'available' : 'pending',
+      worldRecords: this.worldRecordManager.getRecords().length,
     }
   }
 }

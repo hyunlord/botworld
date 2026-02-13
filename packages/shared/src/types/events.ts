@@ -11,6 +11,7 @@ import type { Season, AnimalType, CreatureType, CreatureTier, DenType } from './
 import type { BuildingType, BuildingState, SiegeWeaponType } from './building.js'
 import type { SkillId, SkillCategory, SpellSchool, LearningMethod } from './skill.js'
 import type { ShipBuiltEvent, ShipSailedEvent, IslandDiscoveredEvent, LayerTransitionEvent, LayerDiscoveredEvent, PortalDiscoveredEvent, TrapTriggeredEvent, TrapDisarmedEvent, DungeonRoomEnteredEvent } from './world-layer.js'
+import type { WorldRecordBrokenEvent, RankingsUpdatedEvent } from './ranking.js'
 
 /** All event types in the world */
 export type WorldEvent =
@@ -119,6 +120,8 @@ export type WorldEvent =
   | TrapTriggeredEvent
   | TrapDisarmedEvent
   | DungeonRoomEnteredEvent
+  | WorldRecordBrokenEvent
+  | RankingsUpdatedEvent
 
 export interface AgentMovedEvent {
   type: 'agent:moved'

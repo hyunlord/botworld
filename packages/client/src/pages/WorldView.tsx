@@ -22,6 +22,11 @@ import { FollowHUD } from '../ui/FollowHUD.js'
 import { NotificationSystem } from '../ui/NotificationSystem.js'
 import { soundManager } from '../game/audio/sound-manager.js'
 import { OV, injectGameStyles } from '../ui/overlay-styles.js'
+import { RankingsPanel } from '../ui/RankingsPanel.js'
+import { StatsDashboard } from '../ui/StatsDashboard.js'
+import { TimelineView } from '../ui/TimelineView.js'
+import { AgentCompare } from '../ui/AgentCompare.js'
+import { FavoritesPanel } from '../ui/FavoritesPanel.js'
 
 injectGameStyles()
 
@@ -51,6 +56,10 @@ export function WorldView() {
   const [selectedTerrain, setSelectedTerrain] = useState<any>(null)
   const [followActionLog, setFollowActionLog] = useState<string[]>([])
   const [notifSubscriptions, setNotifSubscriptions] = useState<string[]>([])
+  const [showRankings, setShowRankings] = useState(false)
+  const [showStats, setShowStats] = useState(false)
+  const [showTimeline, setShowTimeline] = useState(false)
+  const [showCompare, setShowCompare] = useState(false)
 
   const agentNames = new Map(agents.map(a => [a.id, a.name]))
 
@@ -370,6 +379,13 @@ export function WorldView() {
         onNavigate={(x, y) => sceneRef.current?.centerOnTile(x, y)}
       />
 
+      {/* Favorites Panel (top-left) */}
+      <FavoritesPanel
+        agents={agents}
+        onNavigate={(x, y) => sceneRef.current?.centerOnTile(x, y)}
+        onSelectAgent={handleFeedSelectAgent}
+      />
+
       {/* Minimap (bottom-left) */}
       <Minimap
         agents={agents}
@@ -393,6 +409,39 @@ export function WorldView() {
         onNavigate={(x, y) => sceneRef.current?.centerOnTile(x, y)}
         onSelectAgent={handleFeedSelectAgent}
       />
+
+      {/* Spectator Toolbar */}
+      <div style={{
+        position: 'absolute',
+        bottom: 52,
+        left: '50%',
+        transform: 'translateX(-50%)',
+        zIndex: 200,
+        display: 'flex',
+        gap: 6,
+        pointerEvents: 'auto',
+      }}>
+        <button
+          style={{ ...styles.toolbarBtn }}
+          onClick={() => setShowRankings(true)}
+          title="Rankings"
+        >🏆</button>
+        <button
+          style={{ ...styles.toolbarBtn }}
+          onClick={() => setShowStats(true)}
+          title="Statistics"
+        >📊</button>
+        <button
+          style={{ ...styles.toolbarBtn }}
+          onClick={() => setShowTimeline(true)}
+          title="Timeline"
+        >📜</button>
+        <button
+          style={{ ...styles.toolbarBtn }}
+          onClick={() => setShowCompare(true)}
+          title="Compare Agents"
+        >⚖️</button>
+      </div>
 
       {/* Bottom HUD bar */}
       <BottomHUD
@@ -482,6 +531,38 @@ export function WorldView() {
       {showSendModal && (
         <SendAgentModal onClose={() => setShowSendModal(false)} />
       )}
+
+      {/* Rankings Panel */}
+      {showRankings && (
+        <RankingsPanel
+          onClose={() => setShowRankings(false)}
+          onSelectAgent={handleFeedSelectAgent}
+          onNavigate={(x, y) => sceneRef.current?.centerOnTile(x, y)}
+        />
+      )}
+
+      {/* Statistics Dashboard */}
+      {showStats && (
+        <StatsDashboard onClose={() => setShowStats(false)} />
+      )}
+
+      {/* Timeline View */}
+      {showTimeline && (
+        <TimelineView
+          onClose={() => setShowTimeline(false)}
+          onNavigate={(x, y) => sceneRef.current?.centerOnTile(x, y)}
+          onSelectAgent={handleFeedSelectAgent}
+        />
+      )}
+
+      {/* Agent Compare */}
+      {showCompare && (
+        <AgentCompare
+          agents={agents}
+          onClose={() => setShowCompare(false)}
+          onSelectAgent={handleFeedSelectAgent}
+        />
+      )}
     </div>
   )
 }
@@ -509,5 +590,17 @@ const styles: Record<string, React.CSSProperties> = {
     borderRadius: 4,
     zIndex: 50,
     pointerEvents: 'none',
+  },
+  toolbarBtn: {
+    background: OV.bg,
+    backdropFilter: OV.blur,
+    border: `1px solid ${OV.border}`,
+    borderRadius: OV.radiusSm,
+    color: OV.text,
+    fontSize: 16,
+    padding: '6px 10px',
+    cursor: 'pointer',
+    fontFamily: OV.font,
+    transition: 'all 0.15s',
   },
 }
