@@ -171,6 +171,11 @@ export class RumorSystem {
     return [...this.rumors.values()]
   }
 
+  /** Get rumors about a specific agent */
+  getRumorsAbout(agentId: string): Rumor[] {
+    return [...this.rumors.values()].filter(r => r.aboutId === agentId)
+  }
+
   private emitSpread(rumorId: string, fromId: string, toId: string, reliability: number, tick: number): void {
     this.eventBus.emit({
       type: 'rumor:spread',

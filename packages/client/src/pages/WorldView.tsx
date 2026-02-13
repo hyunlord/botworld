@@ -27,6 +27,8 @@ import { StatsDashboard } from '../ui/StatsDashboard.js'
 import { TimelineView } from '../ui/TimelineView.js'
 import { AgentCompare } from '../ui/AgentCompare.js'
 import { FavoritesPanel } from '../ui/FavoritesPanel.js'
+import { SoundSettings } from '../ui/SoundSettings.js'
+import { ContextualHints } from '../ui/ContextualHints.js'
 
 injectGameStyles()
 
@@ -60,6 +62,7 @@ export function WorldView() {
   const [showStats, setShowStats] = useState(false)
   const [showTimeline, setShowTimeline] = useState(false)
   const [showCompare, setShowCompare] = useState(false)
+  const [cinematicDone, setCinematicDone] = useState(false)
 
   const agentNames = new Map(agents.map(a => [a.id, a.name]))
 
@@ -157,6 +160,10 @@ export function WorldView() {
 
         scene.events.on('follow:stopped', () => {
           setFollowing(false)
+        })
+
+        scene.events.on('cinematic:complete', () => {
+          setCinematicDone(true)
         })
 
         if (pendingState.current) {
@@ -526,6 +533,12 @@ export function WorldView() {
         onSelectAgent={handleFeedSelectAgent}
         onToggleSubscription={handleToggleSubscription}
       />
+
+      {/* Sound Settings */}
+      <SoundSettings />
+
+      {/* Contextual Hints (after cinematic intro) */}
+      <ContextualHints active={cinematicDone} />
 
       {/* Send Agent modal */}
       {showSendModal && (

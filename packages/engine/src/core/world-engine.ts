@@ -504,6 +504,223 @@ export class WorldEngine {
       this.layerManager.initializeAgent(agent.id)
     }
 
+    // ── Cross-system integration ──
+
+    // 1. Item ↔ Combat: Track item usage in combat, reduce durability
+    this.eventBus.on('advanced_combat:ended', (event) => {
+      if (event.type !== 'advanced_combat:ended') return
+      // Record combat in item history for all survivors' equipped items
+      const allParticipantIds = [...event.survivors.map(s => s.name), ...event.casualties.map(c => c.name)]
+      for (const participantId of allParticipantIds) {
+        const agent = this.agentManager.getAgent(participantId) ?? this.npcManager.getNpc(participantId)
+        if (!agent?.inventory) continue
+        for (const item of agent.inventory) {
+          // Check if item has durability (implying it's equippable/usable)
+          if (item.durability !== undefined && item.durability > 0) {
+            this.itemManager.recordEvent(item.id, 'used_in_combat', event.timestamp)
+            // Reduce durability slightly
+            item.durability = Math.max(0, item.durability - 1)
+          }
+        }
+      }
+    })
+
+    // 2. Item ↔ Relationships: Gift giving boosts affection
+    this.eventBus.on('trade:completed', (event) => {
+      if (event.type !== 'trade:completed') return
+      // If price is 0, treat as gift
+      if (event.price === 0) {
+        this.relationshipManager.applyInteraction(
+          event.sellerId, event.buyerId, 'gift_given', event.timestamp,
+          { item: event.item.name },
+        )
+      }
+    })
+
+    // 3. Combat ↔ Relationships: Fighting together builds trust
+    this.eventBus.on('advanced_combat:ended', (event) => {
+      if (event.type !== 'advanced_combat:ended') return
+      // If survivors are on same side, they fought together
+      if (event.survivors.length >= 2) {
+        for (let i = 0; i < event.survivors.length; i++) {
+          for (let j = i + 1; j < event.survivors.length; j++) {
+            this.relationshipManager.applyInteraction(
+              event.survivors[i].name, event.survivors[j].name, 'combat_victory', event.timestamp,
+            )
+          }
+        }
+      }
+    })
+
+    // 4. Weather ↔ Combat: Weather modifiers affect combat
+    this.eventBus.on('advanced_combat:started', (event) => {
+      if (event.type !== 'advanced_combat:started') return
+      const weather = this.weather.getState().current
+      if (weather === 'rain' || weather === 'storm') {
+        // Log weather effect (actual combat engine would use this)
+        console.log(`[WorldEngine] Combat ${event.combatId}: ${weather} weather affects ranged accuracy`)
+      }
+    })
+
+    // 5. Season ↔ Farming: Winter freezes crops
+    this.eventBus.on('world:tick', (event) => {
+      if (event.type !== 'world:tick') return
+      // Only check every 100 ticks
+      if (event.clock.tick % 100 !== 0) return
+      const season = this.ecosystemManager.getSeason()
+      if (season === 'winter') {
+        // Mark farms as winter-affected (pause growth)
+        for (const farm of this.farmingSystem.getAllFarms()) {
+          for (const plot of farm.plots) {
+            if (plot.growthProgress < 100 && !plot.isReady) {
+              // Pause growth by marking with metadata
+              (plot as any).winterPaused = true
+            }
+          }
+        }
+      } else if (season === 'spring') {
+        // Resume growth
+        for (const farm of this.farmingSystem.getAllFarms()) {
+          for (const plot of farm.plots) {
+            (plot as any).winterPaused = false
+          }
+        }
+      }
+    })
+
+    // 6. Building ↔ Crafting: Nearby buildings boost craft quality
+    this.eventBus.on('item:crafted', (event) => {
+      if (event.type !== 'item:crafted') return
+      const agent = this.agentManager.getAgent(event.agentId) ?? this.npcManager.getNpc(event.agentId)
+      if (!agent) return
+      // Check if near a relevant building (workshop, blacksmith, etc.)
+      const nearbyBuildings = this.buildingManager.getBuildingsNear(agent.position.x, agent.position.y, 3)
+      const hasForge = nearbyBuildings.some(b => b.type === 'blacksmith' || b.type === 'workshop' || b.type === 'ancient_forge')
+      if (hasForge && event.item) {
+        // Quality boost: add building bonus to item
+        const item = this.itemManager.getItem(event.item.id)
+        if (item && item.stats) {
+          // Boost all stats by 10%
+          for (const key of Object.keys(item.stats)) {
+            (item.stats as any)[key] = Math.ceil((item.stats as any)[key] * 1.1)
+          }
+          this.itemManager.recordEvent(event.item.id, 'enchanted', event.timestamp)
+        }
+      }
+    })
+
+    // 7. Skill ↔ Crafting: Higher skill = better quality
+    this.eventBus.on('item:crafted', (event) => {
+      if (event.type !== 'item:crafted') return
+      const skills = this.skillManager.getAgentSkills(event.agentId)
+      const craftingSkill = skills.find(s => s.skillId === 'smithing' || s.skillId === 'alchemy' || s.skillId === 'cooking')
+      if (craftingSkill && craftingSkill.level >= 5) {
+        const item = this.itemManager.getItem(event.item.id)
+        if (item && item.stats) {
+          const bonus = Math.floor(craftingSkill.level / 5) * 0.05 // 5% per 5 levels
+          for (const key of Object.keys(item.stats)) {
+            (item.stats as any)[key] = Math.ceil((item.stats as any)[key] * (1 + bonus))
+          }
+        }
+      }
+    })
+
+    // 8. Rumor ↔ Politics: Rumors influence election outcomes
+    this.eventBus.on('election:started', (event) => {
+      if (event.type !== 'election:started') return
+      // Check if any candidate has negative rumors
+      const candidates = event.candidates ?? []
+      for (const candidate of candidates) {
+        const rumors = this.rumorSystem.getRumorsAbout(candidate.agentId)
+        const negativeRumors = rumors.filter(r => r.type === 'scandal')
+        if (negativeRumors.length > 0) {
+          // Reduce their votes/support via reputation
+          this.reputationSystem.adjustReputation(
+            candidate.agentId, 'leadership', -negativeRumors.length * 3,
+            `Rumors affecting election standing`, event.timestamp,
+          )
+        }
+      }
+    })
+
+    // 9. Secret ↔ Politics: Revealed secrets cause political crises
+    this.eventBus.on('secret:revealed', (event) => {
+      if (event.type !== 'secret:revealed') return
+      // Check if the secret holder is a political leader
+      const settlements = this.settlementManager.getAllSettlements()
+      for (const settlement of settlements) {
+        if (settlement.leaderId === event.ownerId) {
+          // Create political crisis rumor
+          this.rumorSystem.createRumor(
+            'scandal',
+            `${settlement.name}'s leader's secret was revealed`,
+            event.ownerId,
+            event.revealedBy,
+            event.timestamp,
+          )
+          // Reputation hit
+          this.reputationSystem.adjustReputation(
+            event.ownerId, 'leadership', -15,
+            'Secret revealed - political crisis', event.timestamp,
+          )
+        }
+      }
+    })
+
+    // 10. Creature ↔ Ecosystem: Predators hunt prey (wolves hunt rabbits)
+    this.eventBus.on('creature:died', (event) => {
+      if (event.type !== 'creature:died') return
+      // If killed by another creature (check if killedBy is a creature ID), it's natural ecosystem
+      if (event.killedBy && event.killedBy.startsWith('creature_')) {
+        this.ecosystemManager.onPredation(
+          event.killedBy,
+          event.templateId,
+          event.position,
+          event.timestamp,
+        )
+      }
+    })
+
+    // 11. Building ↔ Combat: Siege damages buildings
+    this.eventBus.on('siege:started', (event) => {
+      if (event.type !== 'siege:started') return
+      // Siege system handles damage internally via SiegeSystem.tick()
+      console.log(`[WorldEngine] Siege started at position (${event.position.x}, ${event.position.y}) by ${event.attackerId}`)
+    })
+
+    // 12. Magic ↔ Combat: Track spell usage in combat
+    this.eventBus.on('spell:cast_completed', (event) => {
+      if (event.type !== 'spell:cast_completed') return
+      // Check if in combat by looking for recent combat events
+      const recentCombats = this.eventBus.getRecentEvents(10).filter(e =>
+        e.type === 'advanced_combat:started' || e.type === 'combat:started',
+      )
+      if (recentCombats.length > 0) {
+        // Award bonus combat XP for using magic in combat
+        this.skillManager.awardXP(event.agentId, 'tactics', 0.5, 'practice', event.timestamp)
+      }
+    })
+
+    // 13. Season ↔ Creatures: Winter hibernation/migration
+    this.eventBus.on('world:tick', (event) => {
+      if (event.type !== 'world:tick') return
+      // Only check when season transitions (every 7200 ticks = 1 season)
+      if (event.clock.tick % 7200 !== 1) return
+      const season = this.ecosystemManager.getSeason()
+      const allCreatures = this.creatureManager.getAllCreatures()
+      for (const creature of allCreatures) {
+        if (season === 'winter') {
+          // Bears, rabbits, deer hibernate (reduce activity)
+          if (creature.templateId === 'bear' || creature.templateId === 'rabbit' || creature.templateId === 'deer') {
+            (creature as any).hibernating = true
+          }
+        } else if (season === 'spring') {
+          // End hibernation
+          (creature as any).hibernating = false
+        }
+      }
+    })
+
     console.log('[WorldEngine] Starting simulation...')
     this.restartInterval()
   }

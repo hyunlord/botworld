@@ -571,9 +571,191 @@ export function playRareItem(volume = 1): void {
   g.gain.exponentialRampToValueAtTime(0.001, now + 0.5)
 }
 
+export function playBowShot(volume = 1): void {
+  const ctx = getCtx()
+  const now = ctx.currentTime
+  const g = ctx.createGain()
+  g.connect(ctx.destination)
+
+  // High swoosh
+  const osc = ctx.createOscillator()
+  osc.type = 'sine'
+  osc.frequency.setValueAtTime(600, now)
+  osc.frequency.exponentialRampToValueAtTime(1500, now + 0.1)
+  osc.connect(g)
+
+  g.gain.setValueAtTime(0.1 * volume, now)
+  g.gain.exponentialRampToValueAtTime(0.001, now + 0.1)
+
+  osc.start(now)
+  osc.stop(now + 0.1)
+}
+
+export function playShieldBlock(volume = 1): void {
+  const ctx = getCtx()
+  const now = ctx.currentTime
+  const g = ctx.createGain()
+  g.connect(ctx.destination)
+
+  // Metallic clang
+  const osc = ctx.createOscillator()
+  osc.type = 'square'
+  osc.frequency.value = 1000
+  osc.connect(g)
+  osc.start(now)
+  osc.stop(now + 0.08)
+
+  // Noise component
+  const noise = createNoiseBurst(ctx, 0.08, now)
+  noise.connect(g)
+
+  g.gain.setValueAtTime(0.12 * volume, now)
+  g.gain.exponentialRampToValueAtTime(0.001, now + 0.08)
+}
+
+export function playMagicCast(volume = 1): void {
+  const ctx = getCtx()
+  const now = ctx.currentTime
+  const g = ctx.createGain()
+  g.connect(ctx.destination)
+
+  // Rising sparkle arpeggio
+  const freqs = [400, 600, 800, 1000, 1200, 1400, 1600]
+  for (let i = 0; i < freqs.length; i++) {
+    const t = now + i * 0.043
+    const osc = ctx.createOscillator()
+    osc.type = 'sine'
+    osc.frequency.value = freqs[i]
+    osc.connect(g)
+    osc.start(t)
+    osc.stop(t + 0.06)
+  }
+
+  g.gain.setValueAtTime(0.08 * volume, now)
+  g.gain.exponentialRampToValueAtTime(0.001, now + 0.3)
+}
+
+export function playExplosion(volume = 1): void {
+  const ctx = getCtx()
+  const now = ctx.currentTime
+  const g = ctx.createGain()
+  g.connect(ctx.destination)
+
+  // Noise burst
+  const noise = createNoiseBurst(ctx, 0.3, now)
+  noise.connect(g)
+
+  // Low rumble
+  const osc = ctx.createOscillator()
+  osc.type = 'sine'
+  osc.frequency.setValueAtTime(40, now)
+  osc.frequency.exponentialRampToValueAtTime(20, now + 0.5)
+  osc.connect(g)
+  osc.start(now)
+  osc.stop(now + 0.5)
+
+  g.gain.setValueAtTime(0.15 * volume, now)
+  g.gain.exponentialRampToValueAtTime(0.001, now + 0.5)
+}
+
+export function playSpeechBubble(volume = 1): void {
+  const ctx = getCtx()
+  const now = ctx.currentTime
+  const g = ctx.createGain()
+  g.connect(ctx.destination)
+
+  // Soft pop
+  const osc = ctx.createOscillator()
+  osc.type = 'sine'
+  osc.frequency.setValueAtTime(500, now)
+  osc.frequency.exponentialRampToValueAtTime(300, now + 0.04)
+  osc.connect(g)
+
+  g.gain.setValueAtTime(0.05 * volume, now)
+  g.gain.exponentialRampToValueAtTime(0.001, now + 0.04)
+
+  osc.start(now)
+  osc.stop(now + 0.04)
+}
+
+export function playLegendaryCraft(volume = 1): void {
+  const ctx = getCtx()
+  const now = ctx.currentTime
+  const g = ctx.createGain()
+  g.connect(ctx.destination)
+
+  // Grand arpeggio: C4->E4->G4->C5->E5->G5->C6
+  const notes = [262, 330, 392, 523, 659, 784, 1047]
+  for (let i = 0; i < notes.length; i++) {
+    const t = now + i * 0.17
+    const osc = ctx.createOscillator()
+    osc.type = 'sine'
+    osc.frequency.value = notes[i]
+    osc.connect(g)
+    osc.start(t)
+    osc.stop(t + 0.2)
+  }
+
+  // Sustained chord at the end
+  const chordTime = now + 1.2
+  for (const freq of [523, 659, 784, 1047]) {
+    const osc = ctx.createOscillator()
+    osc.type = 'sine'
+    osc.frequency.value = freq
+    osc.connect(g)
+    osc.start(chordTime)
+    osc.stop(chordTime + 1.0)
+  }
+
+  g.gain.setValueAtTime(0.12 * volume, now)
+  g.gain.setValueAtTime(0.15 * volume, chordTime)
+  g.gain.exponentialRampToValueAtTime(0.001, chordTime + 1.0)
+}
+
+export function playEventAlarm(volume = 1): void {
+  const ctx = getCtx()
+  const now = ctx.currentTime
+  const g = ctx.createGain()
+  g.connect(ctx.destination)
+
+  // Bell chime: two hits with reverb-like decay
+  for (let i = 0; i < 2; i++) {
+    const t = now + i * 0.3
+    const osc = ctx.createOscillator()
+    osc.type = 'sine'
+    osc.frequency.value = 1047 // C6
+    osc.connect(g)
+    osc.start(t)
+    osc.stop(t + 0.4)
+  }
+
+  g.gain.setValueAtTime(0.1 * volume, now)
+  g.gain.exponentialRampToValueAtTime(0.001, now + 0.6)
+}
+
+export function playHealSpell(volume = 1): void {
+  const ctx = getCtx()
+  const now = ctx.currentTime
+  const g = ctx.createGain()
+  g.connect(ctx.destination)
+
+  // Gentle ascending glissando
+  const osc = ctx.createOscillator()
+  osc.type = 'sine'
+  osc.frequency.setValueAtTime(300, now)
+  osc.frequency.exponentialRampToValueAtTime(800, now + 0.4)
+  osc.connect(g)
+
+  g.gain.setValueAtTime(0.08 * volume, now)
+  g.gain.exponentialRampToValueAtTime(0.001, now + 0.4)
+
+  osc.start(now)
+  osc.stop(now + 0.4)
+}
+
 // ── BGM Generator ──
 
-export type BgmTrack = 'day' | 'night' | 'combat' | 'town'
+export type BgmTrack = 'day' | 'night' | 'combat' | 'town' | 'forest' | 'boss' | 'event' | 'winter'
 
 interface BgmState {
   oscillators: OscillatorNode[]
@@ -628,6 +810,42 @@ const BGM_PATTERNS: Record<BgmTrack, { notes: string[][]; tempo: number; wave: W
     bass: [['C3'], ['D3'], ['E3'], ['F3'], ['E3'], ['D3'], ['C3'], ['G3']],
     tempo: 450,
     wave: 'triangle',
+  },
+  forest: {
+    notes: [
+      ['E4'], ['G4'], ['B4'], ['D5'],
+      ['B4'], ['G4'], ['E4'], ['G4'],
+    ],
+    bass: [['E3'], ['B3'], ['A3'], ['B3'], ['E3'], ['B3'], ['A3'], ['E3']],
+    tempo: 550,
+    wave: 'sine',
+  },
+  boss: {
+    notes: [
+      ['D4', 'F4'], ['D4', 'F4'], ['A4', 'C5'], ['D4', 'F4'],
+      ['F4', 'A4'], ['F4', 'A4'], ['C5'], ['A4'],
+    ],
+    bass: [['D3'], ['D3'], ['A3'], ['D3'], ['F3'], ['F3'], ['A3'], ['D3']],
+    tempo: 200,
+    wave: 'sawtooth',
+  },
+  event: {
+    notes: [
+      ['C4', 'E4'], ['E4', 'G4'], ['G4', 'C5'], ['C5'],
+      ['G4'], ['E4', 'G4'], ['C4', 'E4'], ['G4'],
+    ],
+    bass: [['C3'], ['G3'], ['C3'], ['G3'], ['C3'], ['G3'], ['C3'], ['G3']],
+    tempo: 350,
+    wave: 'triangle',
+  },
+  winter: {
+    notes: [
+      ['A4'], ['C5'], ['E5'], ['A4'],
+      ['C5'], ['A4'], ['E5'], ['C5'],
+    ],
+    bass: [['A3'], ['E3'], ['C3'], ['A3'], ['E3'], ['A3'], ['C3'], ['E3']],
+    tempo: 700,
+    wave: 'sine',
   },
 }
 
@@ -723,4 +941,279 @@ export function setBgmVolume(volume: number): void {
 
 export function getCurrentTrack(): BgmTrack | null {
   return currentTrack
+}
+
+// ── Ambient Layer System ──
+
+interface AmbientLayer {
+  source: OscillatorNode | AudioBufferSourceNode
+  gain: GainNode
+  filter?: BiquadFilterNode
+  interval?: ReturnType<typeof setInterval>
+}
+
+const activeAmbientLayers: Map<string, AmbientLayer> = new Map()
+const MAX_AMBIENT_LAYERS = 4
+
+export type AmbientType = 'birds' | 'insects' | 'wind' | 'water' | 'crowd' | 'cave_drip' | 'fire' | 'frogs'
+
+export function startAmbientLayer(id: string, type: AmbientType, volume: number): void {
+  if (activeAmbientLayers.has(id)) return
+  if (activeAmbientLayers.size >= MAX_AMBIENT_LAYERS) {
+    console.warn(`Max ambient layers (${MAX_AMBIENT_LAYERS}) reached`)
+    return
+  }
+
+  const ctx = getCtx()
+  const masterGain = ctx.createGain()
+  masterGain.gain.value = volume * 0.1
+  masterGain.connect(ctx.destination)
+
+  let layer: AmbientLayer
+
+  switch (type) {
+    case 'birds': {
+      // Random high-frequency chirps
+      const interval = setInterval(() => {
+        const now = ctx.currentTime
+        const freq = 1500 + Math.random() * 1500
+        const osc = ctx.createOscillator()
+        osc.type = 'sine'
+        osc.frequency.value = freq
+        const g = ctx.createGain()
+        g.gain.setValueAtTime(0.05, now)
+        g.gain.exponentialRampToValueAtTime(0.001, now + 0.1)
+        osc.connect(g)
+        g.connect(masterGain)
+        osc.start(now)
+        osc.stop(now + 0.1)
+      }, 2000 + Math.random() * 3000)
+
+      layer = { source: ctx.createOscillator(), gain: masterGain, interval }
+      layer.source.disconnect() // Placeholder, actual sound comes from interval
+      break
+    }
+
+    case 'insects': {
+      // Continuous high buzz with LFO
+      const osc = ctx.createOscillator()
+      osc.type = 'square'
+      osc.frequency.value = 4000
+
+      const lfo = ctx.createOscillator()
+      lfo.type = 'sine'
+      lfo.frequency.value = 10
+      const lfoGain = ctx.createGain()
+      lfoGain.gain.value = 200
+      lfo.connect(lfoGain)
+      lfoGain.connect(osc.frequency)
+      lfo.start()
+
+      masterGain.gain.value = volume * 0.02
+      osc.connect(masterGain)
+      osc.start()
+
+      layer = { source: osc, gain: masterGain }
+      break
+    }
+
+    case 'wind': {
+      // Low-pass filtered sine with slow LFO
+      const osc = ctx.createOscillator()
+      osc.type = 'sine'
+      osc.frequency.value = 200
+
+      const lfo = ctx.createOscillator()
+      lfo.type = 'sine'
+      lfo.frequency.value = 0.15
+      const lfoGain = ctx.createGain()
+      lfoGain.gain.value = 80
+      lfo.connect(lfoGain)
+      lfoGain.connect(osc.frequency)
+      lfo.start()
+
+      const filter = ctx.createBiquadFilter()
+      filter.type = 'bandpass'
+      filter.frequency.value = 300
+      filter.Q.value = 0.5
+
+      masterGain.gain.value = volume * 0.04
+      osc.connect(filter)
+      filter.connect(masterGain)
+      osc.start()
+
+      layer = { source: osc, gain: masterGain, filter }
+      break
+    }
+
+    case 'water': {
+      // Low-pass filtered noise
+      const bufferSize = ctx.sampleRate * 2
+      const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate)
+      const data = buffer.getChannelData(0)
+      for (let i = 0; i < bufferSize; i++) {
+        data[i] = (Math.random() * 2 - 1) * 0.3
+      }
+
+      const source = ctx.createBufferSource()
+      source.buffer = buffer
+      source.loop = true
+
+      const filter = ctx.createBiquadFilter()
+      filter.type = 'lowpass'
+      filter.frequency.value = 1500
+
+      masterGain.gain.value = volume * 0.08
+      source.connect(filter)
+      filter.connect(masterGain)
+      source.start()
+
+      layer = { source, gain: masterGain, filter }
+      break
+    }
+
+    case 'crowd': {
+      // Multiple overlapping low-frequency murmurs
+      const oscs: OscillatorNode[] = []
+      const filter = ctx.createBiquadFilter()
+      filter.type = 'bandpass'
+      filter.frequency.value = 200
+      filter.Q.value = 1
+
+      for (let i = 0; i < 3; i++) {
+        const osc = ctx.createOscillator()
+        osc.type = 'sine'
+        osc.frequency.value = 100 + Math.random() * 200
+        osc.connect(filter)
+        osc.start()
+        oscs.push(osc)
+      }
+
+      masterGain.gain.value = volume * 0.06
+      filter.connect(masterGain)
+
+      layer = { source: oscs[0], gain: masterGain, filter }
+      break
+    }
+
+    case 'cave_drip': {
+      // Random single sine pings
+      const interval = setInterval(() => {
+        const now = ctx.currentTime
+        const freq = 800 + Math.random() * 400
+        const osc = ctx.createOscillator()
+        osc.type = 'sine'
+        osc.frequency.value = freq
+        const g = ctx.createGain()
+        g.gain.setValueAtTime(0.08, now)
+        g.gain.exponentialRampToValueAtTime(0.001, now + 0.3)
+        osc.connect(g)
+        g.connect(masterGain)
+        osc.start(now)
+        osc.stop(now + 0.3)
+      }, 3000 + Math.random() * 5000)
+
+      layer = { source: ctx.createOscillator(), gain: masterGain, interval }
+      layer.source.disconnect()
+      break
+    }
+
+    case 'fire': {
+      // Crackling noise bursts with bandpass filter
+      const interval = setInterval(() => {
+        const now = ctx.currentTime
+        const bufferSize = Math.ceil(ctx.sampleRate * 0.08)
+        const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate)
+        const data = buffer.getChannelData(0)
+        for (let i = 0; i < bufferSize; i++) {
+          data[i] = Math.random() * 2 - 1
+        }
+        const source = ctx.createBufferSource()
+        source.buffer = buffer
+
+        const filter = ctx.createBiquadFilter()
+        filter.type = 'bandpass'
+        filter.frequency.value = 200 + Math.random() * 600
+        filter.Q.value = 2
+
+        const g = ctx.createGain()
+        g.gain.setValueAtTime(0.06, now)
+        g.gain.exponentialRampToValueAtTime(0.001, now + 0.08)
+
+        source.connect(filter)
+        filter.connect(g)
+        g.connect(masterGain)
+        source.start(now)
+      }, 200 + Math.random() * 400)
+
+      layer = { source: ctx.createOscillator(), gain: masterGain, interval }
+      layer.source.disconnect()
+      break
+    }
+
+    case 'frogs': {
+      // Random low croaks
+      const interval = setInterval(() => {
+        const now = ctx.currentTime
+        const freq = 150 + Math.random() * 100
+        const osc = ctx.createOscillator()
+        osc.type = 'square'
+        osc.frequency.value = freq
+        const g = ctx.createGain()
+        g.gain.setValueAtTime(0.06, now)
+        g.gain.exponentialRampToValueAtTime(0.001, now + 0.15)
+        osc.connect(g)
+        g.connect(masterGain)
+        osc.start(now)
+        osc.stop(now + 0.15)
+      }, 4000 + Math.random() * 6000)
+
+      layer = { source: ctx.createOscillator(), gain: masterGain, interval }
+      layer.source.disconnect()
+      break
+    }
+
+    default:
+      return
+  }
+
+  activeAmbientLayers.set(id, layer)
+}
+
+export function stopAmbientLayer(id: string): void {
+  const layer = activeAmbientLayers.get(id)
+  if (!layer) return
+
+  const ctx = getCtx()
+  const now = ctx.currentTime
+
+  // Fade out
+  layer.gain.gain.linearRampToValueAtTime(0, now + 0.5)
+
+  setTimeout(() => {
+    if (layer.interval) {
+      clearInterval(layer.interval)
+    }
+    try {
+      layer.source.stop()
+    } catch { /* already stopped */ }
+    try {
+      layer.gain.disconnect()
+    } catch { /* already disconnected */ }
+    activeAmbientLayers.delete(id)
+  }, 600)
+}
+
+export function stopAllAmbientLayers(): void {
+  const ids = Array.from(activeAmbientLayers.keys())
+  for (const id of ids) {
+    stopAmbientLayer(id)
+  }
+}
+
+export function setAmbientVolume(volume: number): void {
+  for (const layer of activeAmbientLayers.values()) {
+    const ctx = getCtx()
+    layer.gain.gain.linearRampToValueAtTime(volume * 0.1, ctx.currentTime + 0.3)
+  }
 }

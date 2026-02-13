@@ -14,6 +14,9 @@ import {
   startWindAmbient, stopWindAmbient, setWindVolume,
   playUIClick, playUIHover, playUIOpen, playUIClose,
   playUINotification, playBattleStart, playRareItem,
+  playBowShot, playShieldBlock, playMagicCast, playExplosion,
+  playSpeechBubble, playLegendaryCraft, playEventAlarm, playHealSpell,
+  startAmbientLayer, stopAmbientLayer, stopAllAmbientLayers, setAmbientVolume,
   type BgmTrack,
 } from './synth.js'
 
@@ -33,6 +36,10 @@ export class SoundManager {
   private nearPoi = false
   private inCombat = false
   private currentTimeOfDay: TimeOfDay = 'morning'
+  private currentBiome = ''
+  private currentSeason = 'spring'
+  private inBossCombat = false
+  private inEvent = false
 
   constructor() {
     this.bgmVolume = this.loadNumber(STORAGE_KEY_BGM, 0.3)
@@ -60,6 +67,7 @@ export class SoundManager {
       setBgmVolume(this.bgmVolume)
       setRainVolume(this.bgmVolume)
       setWindVolume(this.bgmVolume)
+      setAmbientVolume(this.bgmVolume)
     }
   }
 
@@ -76,8 +84,10 @@ export class SoundManager {
       stopBgm()
       stopRainAmbient()
       stopWindAmbient()
+      stopAllAmbientLayers()
     } else {
       this.updateBgm()
+      this.updateAmbientLayers(this.currentBiome, this.currentTimeOfDay === 'evening' || this.currentTimeOfDay === 'night')
     }
     return this.muted
   }
@@ -104,14 +114,51 @@ export class SoundManager {
     this.updateBgm()
   }
 
+  /** Called when camera moves to different biome area */
+  onBiomeChange(biome: string, isNight: boolean): void {
+    if (this.currentBiome === biome) return
+    this.currentBiome = biome
+    this.updateBgm()
+    this.updateAmbientLayers(biome, isNight)
+  }
+
+  /** Called when season changes */
+  onSeasonChange(season: string): void {
+    this.currentSeason = season
+    this.updateBgm()
+  }
+
+  /** Called when boss combat starts/ends */
+  setBossCombat(active: boolean): void {
+    if (this.inBossCombat === active) return
+    this.inBossCombat = active
+    this.updateBgm()
+  }
+
+  /** Called when event starts/ends */
+  setEventActive(active: boolean): void {
+    if (this.inEvent === active) return
+    this.inEvent = active
+    this.updateBgm()
+  }
+
   private updateBgm(): void {
     if (!this.initialized || this.muted) return
 
     let track: BgmTrack
-    if (this.inCombat) {
+    // Priority order
+    if (this.inBossCombat) {
+      track = 'boss'
+    } else if (this.inCombat) {
       track = 'combat'
+    } else if (this.inEvent) {
+      track = 'event'
     } else if (this.nearPoi) {
       track = 'town'
+    } else if (this.currentBiome === 'forest' || this.currentBiome === 'dense_forest') {
+      track = 'forest'
+    } else if (this.currentSeason === 'winter') {
+      track = 'winter'
     } else {
       const nightTimes: TimeOfDay[] = ['evening', 'night']
       track = nightTimes.includes(this.currentTimeOfDay) ? 'night' : 'day'
@@ -119,6 +166,45 @@ export class SoundManager {
 
     if (getCurrentTrack() !== track) {
       startBgm(track, this.bgmVolume)
+    }
+  }
+
+  private updateAmbientLayers(biome: string, isNight: boolean): void {
+    stopAllAmbientLayers()
+    if (this.muted || !this.initialized) return
+
+    const vol = this.bgmVolume
+
+    switch (biome) {
+      case 'grass':
+      case 'meadow':
+      case 'plains':
+        startAmbientLayer('birds', 'birds', vol)
+        startAmbientLayer('insects', 'insects', vol)
+        startAmbientLayer('wind', 'wind', vol)
+        break
+      case 'forest':
+      case 'dense_forest':
+        startAmbientLayer('birds', 'birds', vol)
+        if (isNight) startAmbientLayer('insects', 'insects', vol)
+        break
+      case 'water':
+      case 'river':
+      case 'beach':
+        startAmbientLayer('water', 'water', vol)
+        if (isNight) startAmbientLayer('frogs', 'frogs', vol)
+        break
+      case 'mountain':
+      case 'cliff':
+        startAmbientLayer('wind', 'wind', vol)
+        break
+      case 'cave':
+        startAmbientLayer('drip', 'cave_drip', vol)
+        break
+      case 'snow':
+      case 'tundra':
+        startAmbientLayer('wind', 'wind', vol)
+        break
     }
   }
 
@@ -218,6 +304,46 @@ export class SoundManager {
     playRareItem(this.sfxVolume)
   }
 
+  playBowShot(): void {
+    if (this.muted || !this.initialized) return
+    playBowShot(this.sfxVolume)
+  }
+
+  playShieldBlock(): void {
+    if (this.muted || !this.initialized) return
+    playShieldBlock(this.sfxVolume)
+  }
+
+  playMagicCast(): void {
+    if (this.muted || !this.initialized) return
+    playMagicCast(this.sfxVolume)
+  }
+
+  playExplosion(): void {
+    if (this.muted || !this.initialized) return
+    playExplosion(this.sfxVolume)
+  }
+
+  playSpeechBubble(): void {
+    if (this.muted || !this.initialized) return
+    playSpeechBubble(this.sfxVolume)
+  }
+
+  playLegendaryCraft(): void {
+    if (this.muted || !this.initialized) return
+    playLegendaryCraft(this.sfxVolume)
+  }
+
+  playEventAlarm(): void {
+    if (this.muted || !this.initialized) return
+    playEventAlarm(this.sfxVolume)
+  }
+
+  playHealSpell(): void {
+    if (this.muted || !this.initialized) return
+    playHealSpell(this.sfxVolume)
+  }
+
   // ── Weather Ambient ──
 
   startRain(): void {
@@ -244,6 +370,7 @@ export class SoundManager {
     stopBgm()
     stopRainAmbient()
     stopWindAmbient()
+    stopAllAmbientLayers()
   }
 
   // ── Helpers ──

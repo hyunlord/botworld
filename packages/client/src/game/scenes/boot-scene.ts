@@ -11,6 +11,111 @@ export class BootScene extends Phaser.Scene {
   }
 
   preload(): void {
+    // Loading screen background
+    const { width, height } = this.scale
+    const bg = this.add.rectangle(width / 2, height / 2, width, height, 0x0f1423)
+    bg.setDepth(0)
+
+    // Title text
+    const title = this.add.text(width / 2, height / 2 - 80, 'BOTWORLD', {
+      fontSize: '48px',
+      fontFamily: '"Press Start 2P", "Courier New", monospace',
+      color: '#FFD700',
+      stroke: '#000000',
+      strokeThickness: 4,
+    })
+    title.setOrigin(0.5)
+    title.setDepth(1)
+
+    // Subtitle
+    const subtitle = this.add.text(width / 2, height / 2 - 40, 'A Living World of AI Agents', {
+      fontSize: '14px',
+      fontFamily: '"Inter", sans-serif',
+      color: '#8A9BB8',
+    })
+    subtitle.setOrigin(0.5)
+    subtitle.setDepth(1)
+
+    // Progress bar background
+    const barBg = this.add.rectangle(width / 2, height / 2 + 20, 300, 12, 0x1a2235)
+    barBg.setStrokeStyle(1, 0x2a3a55)
+    barBg.setDepth(1)
+
+    // Progress bar fill
+    const barFill = this.add.rectangle(width / 2 - 148, height / 2 + 20, 0, 8, 0xFFD700)
+    barFill.setOrigin(0, 0.5)
+    barFill.setDepth(2)
+
+    // Progress text
+    const progressText = this.add.text(width / 2, height / 2 + 45, 'Loading world...', {
+      fontSize: '11px',
+      fontFamily: '"Inter", sans-serif',
+      color: '#5A6478',
+    })
+    progressText.setOrigin(0.5)
+    progressText.setDepth(1)
+
+    // Loading tips
+    const tips = [
+      'Click any object in the world to see its history',
+      'Follow an agent to see their journey unfold',
+      'Every item has a story — check the item card',
+      'Agents form relationships, guilds, and even nations',
+      'The world has seasons that affect crops and creatures',
+      'Watch for world events — legendary battles happen here',
+      'Star your favorite agents to track them easily',
+      'Use the rankings panel to see who leads the world',
+      'Buildings can be besieged during wars',
+      'Agents learn skills and craft unique items',
+    ]
+
+    const tipText = this.add.text(width / 2, height - 60, `Tip: ${tips[Math.floor(Math.random() * tips.length)]}`, {
+      fontSize: '12px',
+      fontFamily: '"Inter", sans-serif',
+      color: '#6B7A8D',
+      fontStyle: 'italic',
+      wordWrap: { width: 500 },
+      align: 'center',
+    })
+    tipText.setOrigin(0.5)
+    tipText.setDepth(1)
+
+    // Rotate tips every 3 seconds
+    let tipIndex = Math.floor(Math.random() * tips.length)
+    const tipTimer = this.time.addEvent({
+      delay: 3000,
+      loop: true,
+      callback: () => {
+        tipIndex = (tipIndex + 1) % tips.length
+        tipText.setText(`Tip: ${tips[tipIndex]}`)
+      },
+    })
+
+    // Loading animation - pulsing dots after "Loading world"
+    let dotCount = 0
+    const dotTimer = this.time.addEvent({
+      delay: 500,
+      loop: true,
+      callback: () => {
+        dotCount = (dotCount + 1) % 4
+        const assetName = this.load.totalToLoad > 0
+          ? ` (${Math.round((1 - this.load.totalToLoad / Math.max(this.load.totalComplete + this.load.totalToLoad, 1)) * 100)}%)`
+          : ''
+        progressText.setText('Loading world' + '.'.repeat(dotCount) + assetName)
+      },
+    })
+
+    // Update progress bar on load progress
+    this.load.on('progress', (value: number) => {
+      barFill.width = 296 * value
+    })
+
+    // Cleanup timers when load completes
+    this.load.on('complete', () => {
+      tipTimer.destroy()
+      dotTimer.destroy()
+    })
+
     // ── Isometric terrain tilemap spritesheet (primary ground layer) ──
     this.load.spritesheet('iso-terrain-sheet', 'assets/tiles/iso-terrain-sheet.png', {
       frameWidth: ISO_TILE_WIDTH,

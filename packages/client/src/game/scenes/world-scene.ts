@@ -271,6 +271,10 @@ export class WorldScene extends Phaser.Scene {
   // Zoom tier for LOD visibility (0=far, 1=normal, 2=close)
   private currentZoomTier = 1
 
+  // Performance optimization
+  private currentLOD: 'high' | 'medium' | 'low' = 'high'
+  private fpsText?: Phaser.GameObjects.Text
+
   // Character appearance (layered sprite) data
   private characterAppearances: CharacterAppearanceMap = {}
   private spriteCache = new SpriteCache()
@@ -341,6 +345,16 @@ export class WorldScene extends Phaser.Scene {
     this.postProcessing = new PostProcessing(this)
     this.lightingSystem = new LightingSystem(this)
     this.seasonSystem = new SeasonSystem()
+
+    // FPS counter (debug overlay)
+    this.fpsText = this.add.text(10, 10, 'FPS: 60', {
+      fontSize: '11px',
+      color: '#00ff00',
+      backgroundColor: 'rgba(0,0,0,0.5)',
+      padding: { x: 4, y: 2 },
+    })
+    this.fpsText.setScrollFactor(0) // Fixed to camera
+    this.fpsText.setDepth(9999)
 
     // Initialize audio on first user interaction (Web Audio requirement)
     this.input.once('pointerdown', () => {
@@ -520,6 +534,15 @@ export class WorldScene extends Phaser.Scene {
     this.postProcessing?.update()
     this.lightingSystem?.update()
     this.seasonSystem?.update()
+
+    // Performance optimizations
+    this.cullOffscreenObjects()
+    this.updateLOD()
+
+    // Update FPS counter
+    if (this.fpsText) {
+      this.fpsText.setText(`FPS: ${Math.round(this.game.loop.actualFps)}`)
+    }
   }
 
   // --- Chunk data management ---
@@ -555,14 +578,21 @@ export class WorldScene extends Phaser.Scene {
 
     const targetScreen = worldToScreen(targetX, targetY)
 
-    // Pan to active area + zoom in over 1.5s
+    // Start zoomed out for cinematic effect
+    cam.setZoom(0.4)
+
+    // Pan to active area + zoom in over 3s (cinematic opening)
     this.tweens.add({
       targets: cam,
       scrollX: targetScreen.x + ISO_TILE_WIDTH / 2 - cam.width / 2,
       scrollY: targetScreen.y + ISO_TILE_HEIGHT / 2 - cam.height / 2,
-      zoom: 1.5,
-      duration: 1500,
-      ease: 'Cubic.easeInOut',
+      zoom: 1.0,
+      duration: 3000,
+      ease: 'Sine.easeInOut',
+      onComplete: () => {
+        // Emit event so React can show hints after intro
+        this.events.emit('cinematic:complete')
+      },
     })
   }
 
@@ -1028,6 +1058,7 @@ export class WorldScene extends Phaser.Scene {
             .setScale(0.5)
             .setDepth(isoDepth(tile.position.x, tile.position.y) + 0.05)
             .setFlipX((hash % 3) === 0)
+            .setData('isDecoration', true)
           objectSprites.push(deco)
         }
 
@@ -2286,5 +2317,69 @@ export class WorldScene extends Phaser.Scene {
     const ly = y - cy * CHUNK_SIZE
     if (ly < 0 || ly >= chunk.tiles.length || lx < 0 || lx >= chunk.tiles[ly].length) return null
     return chunk.tiles[ly][lx]
+  }
+
+  // ── Performance Optimization Systems ──
+
+  /** Cull objects outside the camera viewport for performance */
+  private cullOffscreenObjects(): void {
+    const cam = this.cameras.main
+    const padding = 128 // extra pixels beyond viewport
+    const left = cam.scrollX - padding
+    const right = cam.scrollX + cam.width + padding
+    const top = cam.scrollY - padding
+    const bottom = cam.scrollY + cam.height + padding
+
+    // Cull agent sprites
+    for (const [, container] of this.agentSprites) {
+      const visible = container.x >= left && container.x <= right &&
+                      container.y >= top && container.y <= bottom
+      container.setVisible(visible)
+      container.setActive(visible)
+    }
+
+    // Cull monster sprites
+    for (const [, container] of this.monsterSprites) {
+      const visible = container.x >= left && container.x <= right &&
+                      container.y >= top && container.y <= bottom
+      container.setVisible(visible)
+      container.setActive(visible)
+    }
+  }
+
+  /** Update LOD (Level of Detail) based on camera zoom */
+  private updateLOD(): void {
+    const zoom = this.cameras.main.zoom
+    const newLOD = zoom >= 0.8 ? 'high' : zoom >= 0.5 ? 'medium' : 'low'
+
+    if (newLOD === this.currentLOD) return
+    this.currentLOD = newLOD
+
+    // Toggle decoration visibility based on LOD
+    for (const [, chunk] of this.renderedChunks) {
+      for (const sprite of chunk.objectSprites) {
+        if (sprite.getData?.('isDecoration')) {
+          (sprite as any).setVisible(newLOD !== 'low')
+        }
+      }
+    }
+
+    // At low zoom, hide particle effects
+    if (this.ambientParticles) {
+      (this.ambientParticles as any).setVisible(newLOD !== 'low')
+    }
+  }
+
+  /** Check if chunk is within active range of camera */
+  private isChunkActive(cx: number, cy: number): boolean {
+    const cam = this.cameras.main
+    const centerWorld = this.cameras.main.getWorldPoint(cam.width / 2, cam.height / 2)
+    // Use screenToWorld to convert camera center to tile coords
+    const camTile = screenToWorld(centerWorld.x, centerWorld.y)
+    const chunkCenterX = cx * 16 + 8
+    const chunkCenterY = cy * 16 + 8
+    const dist = Math.max(Math.abs(camTile.x - chunkCenterX), Math.abs(camTile.y - chunkCenterY))
+    const activeRange = Math.ceil(3 / this.cameras.main.zoom) // more chunks visible when zoomed out
+    return dist <= activeRange * 16
   }
 }

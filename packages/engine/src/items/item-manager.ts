@@ -238,6 +238,19 @@ export class ItemManager {
     )
   }
 
+  /** Record a generic event in item history */
+  recordEvent(itemId: string, type: ItemHistoryType, tick: number, details?: Record<string, unknown>): void {
+    const item = this.items.get(itemId)
+    if (!item) return
+
+    item.history.push({
+      tick,
+      type,
+      text: `Event: ${type}`,
+      details,
+    })
+  }
+
   /**
    * Record combat use and apply durability damage.
    */

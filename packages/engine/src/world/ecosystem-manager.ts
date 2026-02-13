@@ -211,6 +211,18 @@ export class EcosystemManager {
     return lines.join('\n')
   }
 
+  /** Record predation event (predator killed prey) */
+  onPredation(
+    predatorTemplateId: string,
+    preyTemplateId: string,
+    position: { x: number; y: number },
+    tick: number,
+  ): void {
+    // Stub implementation - can be extended with predator-prey tracking
+    // Log the predation event for ecosystem balance tracking
+    console.log(`[Ecosystem] Predation: ${predatorTemplateId} killed ${preyTemplateId} at (${position.x}, ${position.y})`)
+  }
+
   // ── Private ──
 
   private tickResourceRegen(clock: WorldClock): void {

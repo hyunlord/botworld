@@ -759,4 +759,18 @@ export class BuildingManager {
 
     return building.level < definition.maxLevel
   }
+
+  /** Get buildings within radius of a position */
+  getBuildingsNear(x: number, y: number, radius: number): Building[] {
+    const results: Building[] = []
+    for (const building of this.buildings.values()) {
+      const dx = building.x - x
+      const dy = building.y - y
+      const distance = Math.sqrt(dx * dx + dy * dy)
+      if (distance <= radius) {
+        results.push(building)
+      }
+    }
+    return results
+  }
 }
