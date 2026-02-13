@@ -27,6 +27,57 @@ export type CharacterClass =
   | 'alchemist'
   | 'merchant'
 
+export type Gender = 'male' | 'female'
+
+export type EquipmentQuality = 'crude' | 'basic' | 'fine' | 'masterwork' | 'legendary'
+
+export type WeaponType =
+  | 'none' | 'sword' | 'greatsword' | 'axe' | 'battle_axe' | 'dagger' | 'spear'
+  | 'hammer' | 'war_hammer' | 'bow' | 'crossbow' | 'staff' | 'wand' | 'mace'
+  | 'halberd' | 'katana' | 'rapier' | 'flail' | 'pickaxe' | 'woodaxe' | 'fishing_rod'
+
+export type ShieldType = 'none' | 'buckler' | 'kite_shield' | 'tower_shield'
+
+export type PantsType = 'cloth_pants' | 'leather_pants' | 'chain_leggings' | 'plate_leggings' | 'robe_skirt'
+export type ShoesType = 'sandals' | 'boots' | 'armored_boots' | 'mage_shoes'
+export type HelmetType = 'none' | 'leather_cap' | 'chain_coif' | 'iron_helm' | 'full_helm' | 'crown'
+export type CloakType = 'none' | 'short_cloak' | 'long_cloak' | 'royal_cloak'
+
+export type HairStyle =
+  | 'short_crop' | 'medium_wavy' | 'long_straight' | 'long_braided' | 'ponytail'
+  | 'mohawk' | 'bald' | 'curly' | 'twin_tails' | 'topknot'
+  | 'short_messy' | 'braided' | 'afro' | 'bob' | 'spiky' // legacy compat
+
+export const SKIN_PALETTES = {
+  pale: '#FFE0D0',
+  light: '#F5C5A3',
+  medium: '#D4A373',
+  tan: '#C48B5C',
+  brown: '#8B6544',
+  dark: '#5C3A21',
+  fantasy_green: '#7CAA6E',
+  fantasy_blue: '#A0C4E8',
+} as const
+
+export type SkinPalette = keyof typeof SKIN_PALETTES
+
+export const HAIR_PALETTES = {
+  black: '#1A1A1A',
+  dark_brown: '#3D2B1F',
+  brown: '#6B4423',
+  auburn: '#922724',
+  ginger: '#C45A27',
+  blonde: '#E8C872',
+  platinum: '#E8E0D0',
+  white: '#F0EDE8',
+  silver: '#C0C0C0',
+  blue: '#4488CC',
+  green: '#44AA66',
+  purple: '#8844AA',
+} as const
+
+export type HairPalette = keyof typeof HAIR_PALETTES
+
 // ──────────────────────────────────────────────
 // Appearance — layered sprite system
 // ──────────────────────────────────────────────
@@ -75,6 +126,22 @@ export interface CharacterAppearance {
 
   // Racial features (optional)
   racialFeatures?: RacialFeatures
+
+  // Gender (new - PROMPT 21 Visual Identity)
+  gender?: Gender
+
+  // Equipment layers (new - PROMPT 21 Visual Identity)
+  pants?: PantsType
+  shoes?: ShoesType
+  helmet?: HelmetType
+  cloak?: CloakType
+  weapon?: WeaponType
+  weaponQuality?: EquipmentQuality
+  shield?: ShieldType
+  armorQuality?: EquipmentQuality
+
+  // Portrait (new - PROMPT 21 Visual Identity)
+  portraitUrl?: string
 }
 
 // ──────────────────────────────────────────────
@@ -140,3 +207,22 @@ export type CharacterAppearanceMap = Record<string, {
   persona_reasoning?: string
   spriteHash: string
 }>
+
+// ──────────────────────────────────────────────
+// Helper Functions — PROMPT 21 Visual Identity
+// ──────────────────────────────────────────────
+
+export function getBodyKey(race: Race, gender: Gender): string {
+  return `${race}_${gender}`
+}
+
+export const RACE_DEFAULTS: Record<Race, Partial<CharacterAppearance>> = {
+  human: { skinTone: '#F5C5A3', height: 'medium', bodyType: 'average' },
+  elf: { skinTone: '#F5C5A3', height: 'tall', bodyType: 'slim' },
+  dwarf: { skinTone: '#D4A373', height: 'short', bodyType: 'large' },
+  orc: { skinTone: '#7CAA6E', height: 'tall', bodyType: 'athletic' },
+  beastkin: { skinTone: '#D4A373', height: 'medium', bodyType: 'athletic' },
+  undead: { skinTone: '#A0C4E8', height: 'medium', bodyType: 'slim' },
+  fairy: { skinTone: '#FFE0D0', height: 'short', bodyType: 'slim' },
+  dragonkin: { skinTone: '#8B6544', height: 'tall', bodyType: 'large' },
+}

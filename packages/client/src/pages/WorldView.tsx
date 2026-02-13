@@ -474,6 +474,7 @@ export function WorldView() {
           onFollow={handleFollow}
           onNavigate={(x, y) => sceneRef.current?.centerOnTile(x, y)}
           isFollowing={following}
+          characterData={selectedCharData}
         />
       )}
 

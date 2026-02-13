@@ -838,8 +838,114 @@ export class BootScene extends Phaser.Scene {
       char_racial_wing_feathered:   g => { g.fillStyle(0xCCCCCC, 0.6); g.fillEllipse(4, 26, 10, 24); g.fillEllipse(44, 26, 10, 24) },
     }
 
+    // Race+Gender body placeholders (new 14-layer system)
+    const raceGenderBodies: Record<string, (g: Phaser.GameObjects.Graphics) => void> = {
+      // Human
+      char_body_human_male:    g => { g.fillStyle(0xAAAAAA); g.fillRoundedRect(12, 6, 24, 50, 7) },
+      char_body_human_female:  g => { g.fillStyle(0xAAAAAA); g.fillRoundedRect(13, 6, 22, 48, 7) },
+      // Elf (slimmer)
+      char_body_elf_male:      g => { g.fillStyle(0xAAAAAA); g.fillRoundedRect(14, 4, 20, 52, 6) },
+      char_body_elf_female:    g => { g.fillStyle(0xAAAAAA); g.fillRoundedRect(15, 4, 18, 50, 6) },
+      // Dwarf (shorter, wider)
+      char_body_dwarf_male:    g => { g.fillStyle(0xAAAAAA); g.fillRoundedRect(10, 12, 28, 44, 8) },
+      char_body_dwarf_female:  g => { g.fillStyle(0xAAAAAA); g.fillRoundedRect(11, 12, 26, 42, 8) },
+      // Orc (bigger, muscular)
+      char_body_orc_male:      g => { g.fillStyle(0xAAAAAA); g.fillRoundedRect(8, 4, 32, 54, 7) },
+      char_body_orc_female:    g => { g.fillStyle(0xAAAAAA); g.fillRoundedRect(10, 4, 28, 52, 7) },
+      // Beastkin
+      char_body_beastkin_male:   g => { g.fillStyle(0xAAAAAA); g.fillRoundedRect(11, 6, 26, 50, 7) },
+      char_body_beastkin_female: g => { g.fillStyle(0xAAAAAA); g.fillRoundedRect(12, 6, 24, 48, 7) },
+      // Undead (gaunt)
+      char_body_undead_male:   g => { g.fillStyle(0xAAAAAA); g.fillRoundedRect(14, 6, 20, 50, 5) },
+      char_body_undead_female: g => { g.fillStyle(0xAAAAAA); g.fillRoundedRect(15, 6, 18, 48, 5) },
+      // Fairy (small)
+      char_body_fairy_male:    g => { g.fillStyle(0xAAAAAA); g.fillRoundedRect(16, 14, 16, 38, 6) },
+      char_body_fairy_female:  g => { g.fillStyle(0xAAAAAA); g.fillRoundedRect(17, 14, 14, 36, 6) },
+      // Dragonkin (big, scales)
+      char_body_dragonkin_male:   g => { g.fillStyle(0xAAAAAA); g.fillRoundedRect(8, 2, 32, 56, 6) },
+      char_body_dragonkin_female: g => { g.fillStyle(0xAAAAAA); g.fillRoundedRect(10, 2, 28, 54, 6) },
+    }
+
+    // Pants placeholders
+    const pants: Record<string, (g: Phaser.GameObjects.Graphics) => void> = {
+      char_pants_cloth_pants:     g => { g.fillStyle(0x999999); g.fillRoundedRect(14, 38, 20, 20, 3) },
+      char_pants_leather_pants:   g => { g.fillStyle(0x888888); g.fillRoundedRect(14, 36, 20, 22, 4) },
+      char_pants_chain_leggings:  g => { g.fillStyle(0x777777); g.fillRoundedRect(13, 36, 22, 22, 3) },
+      char_pants_plate_leggings:  g => { g.fillStyle(0x666666); g.fillRoundedRect(12, 36, 24, 22, 3) },
+      char_pants_robe_skirt:      g => { g.fillStyle(0x999999); g.fillRoundedRect(12, 34, 24, 26, 5) },
+    }
+
+    // Shoes placeholders
+    const shoes: Record<string, (g: Phaser.GameObjects.Graphics) => void> = {
+      char_shoes_sandals:       g => { g.fillStyle(0x8B7355); g.fillRoundedRect(14, 56, 20, 6, 2) },
+      char_shoes_boots:         g => { g.fillStyle(0x6B4423); g.fillRoundedRect(13, 52, 22, 10, 3) },
+      char_shoes_armored_boots: g => { g.fillStyle(0x555555); g.fillRoundedRect(12, 50, 24, 12, 3) },
+      char_shoes_mage_shoes:    g => { g.fillStyle(0x4444AA); g.fillRoundedRect(14, 54, 20, 8, 3) },
+    }
+
+    // Weapon placeholders
+    const weapons: Record<string, (g: Phaser.GameObjects.Graphics) => void> = {
+      char_weapon_sword:       g => { g.fillStyle(0xCCCCCC); g.fillRect(22, 2, 4, 30); g.fillStyle(0x8B7355); g.fillRect(18, 30, 12, 4) },
+      char_weapon_greatsword:  g => { g.fillStyle(0xCCCCCC); g.fillRect(20, 0, 8, 38); g.fillStyle(0x8B7355); g.fillRect(16, 36, 16, 4) },
+      char_weapon_axe:         g => { g.fillStyle(0x8B7355); g.fillRect(22, 8, 4, 30); g.fillStyle(0xAAAAAA); g.beginPath(); g.moveTo(26, 8); g.lineTo(36, 14); g.lineTo(26, 20); g.closePath(); g.fillPath() },
+      char_weapon_dagger:      g => { g.fillStyle(0xCCCCCC); g.fillRect(22, 14, 4, 18); g.fillStyle(0x8B7355); g.fillRect(20, 30, 8, 3) },
+      char_weapon_spear:       g => { g.fillStyle(0x8B7355); g.fillRect(23, 4, 3, 44); g.fillStyle(0xCCCCCC); g.beginPath(); g.moveTo(20, 4); g.lineTo(24, 0); g.lineTo(28, 4); g.closePath(); g.fillPath() },
+      char_weapon_bow:         g => { g.fillStyle(0x8B7355); g.beginPath(); g.arc(24, 24, 16, -1.2, 1.2, false); g.strokePath(); g.lineStyle(1, 0xCCCCCC); g.lineBetween(24, 8, 24, 40) },
+      char_weapon_staff:       g => { g.fillStyle(0x8B7355); g.fillRect(22, 0, 4, 48); g.fillStyle(0x6644CC); g.fillCircle(24, 4, 6) },
+      char_weapon_wand:        g => { g.fillStyle(0x8B7355); g.fillRect(22, 16, 4, 28); g.fillStyle(0xFFDD44); g.fillCircle(24, 16, 4) },
+      char_weapon_hammer:      g => { g.fillStyle(0x8B7355); g.fillRect(22, 10, 4, 30); g.fillStyle(0x888888); g.fillRect(16, 6, 16, 10) },
+      char_weapon_mace:        g => { g.fillStyle(0x8B7355); g.fillRect(22, 14, 4, 26); g.fillStyle(0x888888); g.fillCircle(24, 12, 8) },
+    }
+
+    // Shield placeholders
+    const shields: Record<string, (g: Phaser.GameObjects.Graphics) => void> = {
+      char_shield_buckler:      g => { g.fillStyle(0x888888); g.fillCircle(24, 28, 10) },
+      char_shield_kite_shield:  g => { g.fillStyle(0x777777); g.beginPath(); g.moveTo(14, 14); g.lineTo(34, 14); g.lineTo(34, 32); g.lineTo(24, 44); g.lineTo(14, 32); g.closePath(); g.fillPath() },
+      char_shield_tower_shield: g => { g.fillStyle(0x666666); g.fillRoundedRect(12, 10, 24, 36, 4) },
+    }
+
+    // Helmet placeholders
+    const helmets: Record<string, (g: Phaser.GameObjects.Graphics) => void> = {
+      char_helmet_leather_cap: g => { g.fillStyle(0x8B6544); g.fillRoundedRect(12, 0, 24, 12, 6) },
+      char_helmet_chain_coif:  g => { g.fillStyle(0x999999); g.fillRoundedRect(10, 0, 28, 16, 6) },
+      char_helmet_iron_helm:   g => { g.fillStyle(0x777777); g.fillRoundedRect(10, 0, 28, 16, 4); g.fillRect(14, 8, 4, 10) },
+      char_helmet_full_helm:   g => { g.fillStyle(0x666666); g.fillRoundedRect(8, 0, 32, 20, 6); g.fillStyle(0x333333); g.fillRect(14, 10, 20, 3) },
+      char_helmet_crown:       g => { g.fillStyle(0xFFD700); g.fillRoundedRect(12, 0, 24, 10, 2); g.beginPath(); g.moveTo(14, 0); g.lineTo(16, -6); g.lineTo(18, 0); g.moveTo(22, 0); g.lineTo(24, -8); g.lineTo(26, 0); g.moveTo(30, 0); g.lineTo(32, -6); g.lineTo(34, 0); g.closePath(); g.fillPath() },
+    }
+
+    // Cloak placeholders
+    const cloaks: Record<string, (g: Phaser.GameObjects.Graphics) => void> = {
+      char_cloak_short_cloak: g => { g.fillStyle(0x555555); g.fillRoundedRect(10, 10, 28, 30, 6) },
+      char_cloak_long_cloak:  g => { g.fillStyle(0x444444); g.fillRoundedRect(8, 8, 32, 46, 8) },
+      char_cloak_royal_cloak: g => { g.fillStyle(0x880000); g.fillRoundedRect(6, 6, 36, 50, 8); g.fillStyle(0xFFFFFF); g.fillEllipse(12, 10, 6, 4); g.fillEllipse(36, 10, 6, 4) },
+    }
+
+    // Hair split (front/back) placeholders
+    const hairBacks: Record<string, (g: Phaser.GameObjects.Graphics) => void> = {
+      char_hair_back_long_straight: g => { g.fillStyle(0xCCCCCC); g.fillRoundedRect(10, 4, 28, 36, 6) },
+      char_hair_back_long_braided:  g => { g.fillStyle(0xCCCCCC); g.fillRoundedRect(18, 4, 12, 40, 4) },
+      char_hair_back_ponytail:      g => { g.fillStyle(0xCCCCCC); g.fillRoundedRect(26, 4, 8, 28, 4) },
+      char_hair_back_twin_tails:    g => { g.fillStyle(0xCCCCCC); g.fillRoundedRect(8, 4, 8, 28, 4); g.fillRoundedRect(32, 4, 8, 28, 4) },
+      char_hair_back_medium_wavy:   g => { g.fillStyle(0xCCCCCC); g.fillRoundedRect(10, 4, 28, 24, 8) },
+    }
+
+    const hairFronts: Record<string, (g: Phaser.GameObjects.Graphics) => void> = {
+      char_hair_front_short_crop:     g => { g.fillStyle(0xCCCCCC); g.fillRoundedRect(12, 0, 24, 14, 6) },
+      char_hair_front_medium_wavy:    g => { g.fillStyle(0xCCCCCC); g.fillRoundedRect(12, 0, 24, 16, 8) },
+      char_hair_front_long_straight:  g => { g.fillStyle(0xCCCCCC); g.fillRoundedRect(10, 0, 28, 14, 6) },
+      char_hair_front_long_braided:   g => { g.fillStyle(0xCCCCCC); g.fillRoundedRect(12, 0, 24, 14, 6) },
+      char_hair_front_ponytail:       g => { g.fillStyle(0xCCCCCC); g.fillRoundedRect(12, 0, 24, 14, 8) },
+      char_hair_front_mohawk:         g => { g.fillStyle(0xCCCCCC); g.fillRoundedRect(18, 0, 12, 20, 4) },
+      char_hair_front_curly:          g => { g.fillStyle(0xCCCCCC); g.fillRoundedRect(10, 0, 28, 18, 10) },
+      char_hair_front_twin_tails:     g => { g.fillStyle(0xCCCCCC); g.fillRoundedRect(12, 0, 24, 14, 6) },
+      char_hair_front_topknot:        g => { g.fillStyle(0xCCCCCC); g.fillCircle(24, 0, 8) },
+    }
+
     // Generate all fallbacks — skip if real PNG was loaded
-    const allMaps = [bodies, armors, hairs, faces, capes, facialHairs, headgears, accs, markings, racials]
+    const allMaps = [
+      bodies, armors, hairs, faces, capes, facialHairs, headgears, accs, markings, racials,
+      raceGenderBodies, pants, shoes, weapons, shields, helmets, cloaks, hairBacks, hairFronts,
+    ]
     for (const map of allMaps) {
       for (const [key, drawFn] of Object.entries(map)) {
         if (this.textures.exists(key)) continue

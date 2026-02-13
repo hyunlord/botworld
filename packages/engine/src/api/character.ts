@@ -305,6 +305,18 @@ characterRouter.post('/characters/create', requireAuth(), async (req, res) => {
     })
   }
 
+  // Fire-and-forget portrait generation (don't block character creation)
+  const portraitService = req.app.get('portraitService')
+  if (portraitService) {
+    portraitService.generatePortrait(agent.id, {
+      race: body.race,
+      gender: body.appearance.gender,
+      appearance: body.appearance,
+      personality: body.backstory,
+      characterClass: body.characterClass,
+    }).catch((err: Error) => console.error('[Character] Portrait generation failed:', err))
+  }
+
   res.status(201).json({
     id: agent.id,
     agentId: agent.id,

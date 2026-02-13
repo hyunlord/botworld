@@ -10,6 +10,8 @@ import { Server as SocketServer } from 'socket.io'
 import { WorldEngine } from './core/world-engine.js'
 import { registryRouter, claimRouter, sessionRouter } from './auth/index.js'
 import { characterRouter } from './api/character.js'
+import { PortraitService } from './services/portrait-service.js'
+import { createPortraitRouter } from './api/portraits.js'
 import { createActionRouter } from './api/actions.js'
 import { createWorldRouter } from './api/world.js'
 import { ChatRelay } from './systems/chat-relay.js'
@@ -114,6 +116,10 @@ async function main() {
   // Expose world engine to route handlers
   app.set('world', world)
 
+  // Portrait service
+  const portraitService = new PortraitService()
+  app.set('portraitService', portraitService)
+
   const httpServer = createServer(app)
 
   // Socket.io
@@ -147,6 +153,7 @@ async function main() {
   app.use('/api', sessionRouter)
   app.use('/api', authRouter)
   app.use('/api', characterRouter)
+  app.use('/api', createPortraitRouter(portraitService))
   app.use('/api', createActionRouter(world, chatRelay))
   app.use('/api', createWorldRouter(world))
   app.use('/api', createMarketRouter(marketplace))

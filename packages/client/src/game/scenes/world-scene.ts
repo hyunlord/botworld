@@ -2105,14 +2105,32 @@ export class WorldScene extends Phaser.Scene {
   // ── Monster rendering ──
 
   private static MONSTER_COLORS: Record<string, number> = {
-    slime: 0x44CC44,
-    goblin: 0x88AA44,
+    // P0 creatures
+    rabbit: 0xCCBBAA,
+    deer: 0xBB8844,
     wolf: 0x888888,
+    goblin: 0x88AA44,
     skeleton: 0xCCCCBB,
+    slime: 0x44CC44,
+    chicken: 0xEEDD88,
+    cow: 0xDDCCBB,
+    // P1 creatures
+    bear: 0x775533,
+    boar: 0x886644,
+    spider: 0x444444,
+    orc: 0x668844,
     bandit: 0xAA6644,
+    bat: 0x555566,
+    eagle: 0x887755,
+    sheep: 0xEEEEDD,
+    dog: 0xBB9966,
+    cat: 0xCC8844,
     troll: 0x558844,
     ghost: 0x8888DD,
     dragon_whelp: 0xCC4444,
+    snake: 0x668833,
+    rat: 0x776655,
+    beetle: 0x334433,
   }
 
   updateMonsters(monsters: Monster[]): void {
@@ -2173,14 +2191,10 @@ export class WorldScene extends Phaser.Scene {
         sprite.play(idleAnim)
       }
     } else {
-      // Fallback: procedural graphics
+      // Fallback: procedural graphics with distinctive creature shapes
       const gfx = this.add.graphics()
-      const size = 10 + monster.level * 1.5
-      gfx.fillStyle(color, 1)
-      gfx.fillRoundedRect(-size / 2, -size, size, size, 3)
-      gfx.fillStyle(0xFF0000, 0.9)
-      gfx.fillCircle(-size * 0.2, -size * 0.7, 2)
-      gfx.fillCircle(size * 0.2, -size * 0.7, 2)
+      const s = 10 + monster.level * 1.5
+      WorldScene.drawCreatureShape(gfx, monster.type, color, s)
       body = gfx
 
       this.tweens.add({
@@ -2227,6 +2241,86 @@ export class WorldScene extends Phaser.Scene {
     })
 
     this.monsterSprites.set(monster.id, container)
+  }
+
+  /** Draw a distinctive procedural shape per creature type */
+  private static drawCreatureShape(gfx: Phaser.GameObjects.Graphics, type: string, color: number, s: number): void {
+    gfx.fillStyle(color, 1)
+    switch (type) {
+      case 'rabbit':
+        gfx.fillEllipse(0, -s * 0.5, s * 0.8, s * 0.6) // body
+        gfx.fillEllipse(-s * 0.15, -s * 1.1, s * 0.15, s * 0.4) // left ear
+        gfx.fillEllipse(s * 0.15, -s * 1.1, s * 0.15, s * 0.4) // right ear
+        break
+      case 'chicken':
+        gfx.fillEllipse(0, -s * 0.4, s * 0.6, s * 0.5) // body
+        gfx.fillCircle(0, -s * 0.8, s * 0.2) // head
+        gfx.fillStyle(0xFF4444); gfx.fillRect(-s * 0.05, -s * 0.95, s * 0.1, s * 0.15) // comb
+        gfx.fillStyle(0xFFAA00); gfx.beginPath(); gfx.moveTo(s * 0.2, -s * 0.8); gfx.lineTo(s * 0.35, -s * 0.75); gfx.lineTo(s * 0.2, -s * 0.7); gfx.closePath(); gfx.fillPath() // beak
+        break
+      case 'cow': case 'sheep':
+        gfx.fillRoundedRect(-s * 0.5, -s * 0.8, s, s * 0.6, 4) // body
+        gfx.fillCircle(s * 0.4, -s * 0.9, s * 0.2) // head
+        gfx.fillStyle(color, 0.8); gfx.fillRect(-s * 0.4, -s * 0.2, s * 0.15, s * 0.3); gfx.fillRect(s * 0.25, -s * 0.2, s * 0.15, s * 0.3) // legs
+        break
+      case 'deer':
+        gfx.fillEllipse(0, -s * 0.5, s * 0.7, s * 0.5) // body
+        gfx.fillCircle(s * 0.3, -s * 0.9, s * 0.15) // head
+        gfx.fillStyle(0x886633); gfx.fillRect(s * 0.25, -s * 1.2, s * 0.04, s * 0.25); gfx.fillRect(s * 0.35, -s * 1.2, s * 0.04, s * 0.25) // antlers
+        break
+      case 'wolf': case 'dog':
+        gfx.fillEllipse(0, -s * 0.5, s * 0.8, s * 0.5) // body
+        gfx.fillCircle(s * 0.35, -s * 0.7, s * 0.18) // head
+        gfx.beginPath(); gfx.moveTo(s * 0.25, -s * 0.95); gfx.lineTo(s * 0.3, -s * 1.1); gfx.lineTo(s * 0.35, -s * 0.95); gfx.closePath(); gfx.fillPath() // ear
+        gfx.fillStyle(0xFF0000, 0.9); gfx.fillCircle(s * 0.4, -s * 0.75, 1.5) // eye
+        break
+      case 'bear':
+        gfx.fillRoundedRect(-s * 0.5, -s, s, s * 0.9, 5) // body (big)
+        gfx.fillCircle(0, -s * 1.1, s * 0.25) // head
+        gfx.fillCircle(-s * 0.2, -s * 1.3, s * 0.08); gfx.fillCircle(s * 0.2, -s * 1.3, s * 0.08) // ears
+        break
+      case 'spider':
+        gfx.fillCircle(0, -s * 0.4, s * 0.3) // body
+        gfx.lineStyle(1, color, 0.8)
+        for (let i = 0; i < 4; i++) { // legs
+          const a = -0.8 + i * 0.5
+          gfx.lineBetween(0, -s * 0.4, Math.cos(a) * s * 0.6, -s * 0.4 + Math.sin(a) * s * 0.4)
+          gfx.lineBetween(0, -s * 0.4, -Math.cos(a) * s * 0.6, -s * 0.4 + Math.sin(a) * s * 0.4)
+        }
+        gfx.fillStyle(0xFF0000, 0.9); gfx.fillCircle(-s * 0.08, -s * 0.5, 1.5); gfx.fillCircle(s * 0.08, -s * 0.5, 1.5) // eyes
+        break
+      case 'slime':
+        gfx.fillEllipse(0, -s * 0.3, s * 0.7, s * 0.4) // blob body
+        gfx.fillStyle(0xFFFFFF, 0.6); gfx.fillCircle(-s * 0.1, -s * 0.4, s * 0.08); gfx.fillCircle(s * 0.1, -s * 0.4, s * 0.08) // eyes
+        break
+      case 'skeleton':
+        gfx.fillRoundedRect(-s * 0.25, -s, s * 0.5, s * 0.9, 2) // torso
+        gfx.fillCircle(0, -s * 1.1, s * 0.18) // skull
+        gfx.fillStyle(0x222222); gfx.fillCircle(-s * 0.06, -s * 1.12, 2); gfx.fillCircle(s * 0.06, -s * 1.12, 2) // eye sockets
+        break
+      case 'goblin':
+        gfx.fillRoundedRect(-s * 0.3, -s * 0.8, s * 0.6, s * 0.7, 3) // body
+        gfx.fillCircle(0, -s * 0.95, s * 0.2) // head
+        gfx.beginPath(); gfx.moveTo(-s * 0.25, -s * 0.95); gfx.lineTo(-s * 0.35, -s * 1.05); gfx.lineTo(-s * 0.2, -s * 0.9); gfx.closePath(); gfx.fillPath() // ear
+        gfx.beginPath(); gfx.moveTo(s * 0.25, -s * 0.95); gfx.lineTo(s * 0.35, -s * 1.05); gfx.lineTo(s * 0.2, -s * 0.9); gfx.closePath(); gfx.fillPath() // ear
+        gfx.fillStyle(0xFF0000, 0.9); gfx.fillCircle(-s * 0.08, -s, 1.5); gfx.fillCircle(s * 0.08, -s, 1.5) // eyes
+        break
+      case 'bat':
+        gfx.fillCircle(0, -s * 0.4, s * 0.2) // body
+        gfx.beginPath(); gfx.moveTo(-s * 0.15, -s * 0.5); gfx.lineTo(-s * 0.6, -s * 0.7); gfx.lineTo(-s * 0.4, -s * 0.2); gfx.closePath(); gfx.fillPath() // left wing
+        gfx.beginPath(); gfx.moveTo(s * 0.15, -s * 0.5); gfx.lineTo(s * 0.6, -s * 0.7); gfx.lineTo(s * 0.4, -s * 0.2); gfx.closePath(); gfx.fillPath() // right wing
+        break
+      case 'snake':
+        gfx.lineStyle(3, color, 1)
+        gfx.beginPath(); gfx.arc(0, -s * 0.3, s * 0.3, 0, Math.PI, false); gfx.strokePath() // coiled body
+        gfx.fillCircle(s * 0.3, -s * 0.3, s * 0.1) // head
+        break
+      default:
+        // Generic: colored rectangle with eyes
+        gfx.fillRoundedRect(-s / 2, -s, s, s, 3)
+        gfx.fillStyle(0xFF0000, 0.9); gfx.fillCircle(-s * 0.2, -s * 0.7, 2); gfx.fillCircle(s * 0.2, -s * 0.7, 2)
+        break
+    }
   }
 
   private updateMonsterHpBar(container: Phaser.GameObjects.Container, monster: Monster): void {

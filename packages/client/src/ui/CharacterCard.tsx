@@ -9,6 +9,11 @@ interface CharacterCardProps {
   onFollow?: (agentId: string) => void
   onNavigate?: (x: number, y: number) => void
   isFollowing?: boolean
+  characterData?: {
+    appearance?: any
+    race?: string
+    characterClass?: string
+  }
 }
 
 type TabType = 'profile' | 'stats' | 'inventory' | 'relationships' | 'history' | 'achievements'
@@ -41,6 +46,7 @@ export default function CharacterCard({
   onFollow,
   onNavigate,
   isFollowing = false,
+  characterData,
 }: CharacterCardProps) {
   const [isFullProfile, setIsFullProfile] = useState(false)
   const [activeTab, setActiveTab] = useState<TabType>('profile')
@@ -49,6 +55,43 @@ export default function CharacterCard({
   const [history, setHistory] = useState<HistoryEvent[]>([])
   const [achievements, setAchievements] = useState<Achievement[]>([])
   const [historyFilter, setHistoryFilter] = useState<string>('all')
+
+  // Extract character appearance data
+  const charData = characterData
+  const portraitUrl = charData?.appearance?.portraitUrl || null
+
+  // Helper: get race-based color for portrait fallback
+  function getRaceColor(race?: string): string {
+    const colors: Record<string, string> = {
+      human: '#E8C8A0',
+      elf: '#C8E8C0',
+      dwarf: '#D4A060',
+      orc: '#7CAA6E',
+      beastkin: '#D4A373',
+      undead: '#A0B8C8',
+      fairy: '#E8D0F0',
+      dragonkin: '#A08060',
+    }
+    return colors[race || 'human'] || '#CCCCCC'
+  }
+
+  // Helper: get quality color for equipment
+  function getQualityColor(quality?: string): string {
+    const colors: Record<string, string> = {
+      crude: '#888888',
+      basic: '#AAAAAA',
+      fine: '#44AAFF',
+      masterwork: '#FFD700',
+      legendary: '#CC44FF',
+    }
+    return colors[quality || 'basic'] || '#AAAAAA'
+  }
+
+  // Helper: get quality label for equipment
+  function getQualityLabel(quality?: string): string {
+    if (!quality || quality === 'basic') return ''
+    return ` [${quality}]`
+  }
 
   useEffect(() => {
     soundManager.playUIOpen()
@@ -155,13 +198,32 @@ export default function CharacterCard({
         {/* Header */}
         <div style={styles.header}>
           <div style={styles.avatar}>
-            <span style={styles.avatarEmoji}>🧑</span>
+            {portraitUrl ? (
+              <img
+                src={portraitUrl}
+                alt={`${agent.name} portrait`}
+                style={styles.portrait}
+                onError={(e) => { (e.target as HTMLImageElement).style.display = 'none' }}
+              />
+            ) : (
+              <div style={{
+                ...styles.portraitFallback,
+                backgroundColor: getRaceColor(charData?.race),
+              }}>
+                <span style={styles.portraitInitial}>{agent.name[0]}</span>
+              </div>
+            )}
           </div>
           <div style={styles.headerInfo}>
             <div style={styles.name}>{agent.name}</div>
             <div style={styles.subtitle}>
               <span style={styles.levelBadge}>Lv.{agent.level}</span>
               <span style={styles.archetypeBadge}>{agent.archetype || 'Wanderer'}</span>
+              {charData?.appearance?.gender && (
+                <span style={{ color: OV.textMuted, fontSize: 11 }}>
+                  {charData.appearance.gender}
+                </span>
+              )}
             </div>
           </div>
         </div>
@@ -184,11 +246,21 @@ export default function CharacterCard({
         {/* Equipment summary */}
         <div style={styles.equipmentRow}>
           <span style={styles.equipLabel}>⚔️ Weapon:</span>
-          <span style={styles.equipValue}>{agent.equipment?.weapon || 'None'}</span>
+          <span style={{
+            ...styles.equipValue,
+            color: getQualityColor(charData?.appearance?.weaponQuality),
+          }}>
+            {agent.equipment?.weapon || 'None'}{getQualityLabel(charData?.appearance?.weaponQuality)}
+          </span>
         </div>
         <div style={styles.equipmentRow}>
           <span style={styles.equipLabel}>🛡️ Armor:</span>
-          <span style={styles.equipValue}>{agent.equipment?.armor || 'None'}</span>
+          <span style={{
+            ...styles.equipValue,
+            color: getQualityColor(charData?.appearance?.armorQuality),
+          }}>
+            {agent.equipment?.armor || 'None'}{getQualityLabel(charData?.appearance?.armorQuality)}
+          </span>
         </div>
 
         {/* Affiliations */}
@@ -238,13 +310,32 @@ export default function CharacterCard({
         {/* Header */}
         <div style={styles.modalHeader}>
           <div style={styles.avatar}>
-            <span style={styles.avatarEmoji}>🧑</span>
+            {portraitUrl ? (
+              <img
+                src={portraitUrl}
+                alt={`${agent.name} portrait`}
+                style={styles.portrait}
+                onError={(e) => { (e.target as HTMLImageElement).style.display = 'none' }}
+              />
+            ) : (
+              <div style={{
+                ...styles.portraitFallback,
+                backgroundColor: getRaceColor(charData?.race),
+              }}>
+                <span style={styles.portraitInitial}>{agent.name[0]}</span>
+              </div>
+            )}
           </div>
           <div style={styles.headerInfo}>
             <div style={styles.modalName}>{agent.name}</div>
             <div style={styles.subtitle}>
               <span style={styles.levelBadge}>Lv.{agent.level}</span>
               <span style={styles.archetypeBadge}>{agent.archetype || 'Wanderer'}</span>
+              {charData?.appearance?.gender && (
+                <span style={{ color: OV.textMuted, fontSize: 11 }}>
+                  {charData.appearance.gender}
+                </span>
+              )}
             </div>
           </div>
         </div>
@@ -682,9 +773,29 @@ const styles: Record<string, React.CSSProperties> = {
     alignItems: 'center',
     justifyContent: 'center',
     flexShrink: 0,
+    overflow: 'hidden',
   },
   avatarEmoji: {
     fontSize: 32,
+  },
+  portrait: {
+    width: '100%',
+    height: '100%',
+    objectFit: 'cover' as const,
+    borderRadius: 8,
+  },
+  portraitFallback: {
+    width: '100%',
+    height: '100%',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 8,
+  },
+  portraitInitial: {
+    fontSize: 24,
+    fontWeight: 'bold' as const,
+    color: 'rgba(255, 255, 255, 0.8)',
   },
   headerInfo: {
     display: 'flex',
