@@ -383,6 +383,48 @@ export class WorldScene extends Phaser.Scene {
         cam.scrollY -= (pointer.y - pointer.prevPosition.y) / cam.zoom
       }
     })
+
+    // Terrain click - fires when clicking ground that doesn't hit an interactive object
+    this.input.on('pointerdown', (pointer: Phaser.Input.Pointer) => {
+      // Distinguish click from drag (duration < 200ms)
+      if (pointer.getDuration() >= 200) return
+
+      // Skip if we hit an interactive game object (agent, building, resource, monster)
+      const hitObjects = this.input.hitTestPointer(pointer)
+      if (hitObjects.length > 0) return
+
+      // Convert screen position to world tile coordinates
+      const cam = this.cameras.main
+      const worldX = pointer.x / cam.zoom + cam.scrollX
+      const worldY = pointer.y / cam.zoom + cam.scrollY
+      const tilePos = screenToWorld(worldX, worldY)
+
+      // Look up the tile data from chunk store
+      const chunkX = Math.floor(tilePos.x / CHUNK_SIZE)
+      const chunkY = Math.floor(tilePos.y / CHUNK_SIZE)
+      const chunkKey = `${chunkX},${chunkY}`
+      const chunkData = this.chunkDataStore.get(chunkKey)
+      if (!chunkData) return
+
+      const localX = tilePos.x - chunkX * CHUNK_SIZE
+      const localY = tilePos.y - chunkY * CHUNK_SIZE
+      if (localX < 0 || localX >= CHUNK_SIZE || localY < 0 || localY >= CHUNK_SIZE) return
+      const tileData = chunkData.tiles[localY]?.[localX]
+      if (!tileData) return
+
+      this.events.emit('terrain:selected', {
+        position: tilePos,
+        type: tileData.type,
+        biome: tileData.biome,
+        elevation: tileData.elevation,
+        elevationLevel: tileData.elevationLevel,
+        resource: tileData.resource,
+        poiType: tileData.poiType,
+        decoration: tileData.decoration,
+        walkable: tileData.walkable,
+        movementCost: tileData.movementCost,
+      })
+    })
   }
 
   update(_time: number, delta: number): void {
@@ -953,6 +995,16 @@ export class WorldScene extends Phaser.Scene {
             .setDepth(isoDepth(tile.position.x, tile.position.y) + 0.3)
           objectSprites.push(bldgSprite)
 
+          // Make building clickable
+          bldgSprite.setInteractive({ useHandCursor: true })
+          bldgSprite.on('pointerdown', () => {
+            this.events.emit('building:selected', {
+              type: tile.poiType,
+              position: tile.position,
+              name: tile.poiType,
+            })
+          })
+
           // Tavern warm light flicker
           if (tile.poiType === 'tavern') {
             this.tweens.add({
@@ -1001,6 +1053,17 @@ export class WorldScene extends Phaser.Scene {
             .setAlpha(0.85)
             .setFlipX((hash % 3) === 0)
           objectSprites.push(resSprite)
+
+          // Make resource clickable
+          resSprite.setInteractive({ useHandCursor: true })
+          resSprite.on('pointerdown', () => {
+            this.events.emit('resource:selected', {
+              type: tile.resource!.type,
+              amount: tile.resource!.amount,
+              position: tile.position,
+              biome: tile.biome,
+            })
+          })
 
           // Register vegetation with season system for seasonal tinting
           const isVegetation = ['wood', 'food', 'herb'].includes(tile.resource.type)
@@ -2124,6 +2187,13 @@ export class WorldScene extends Phaser.Scene {
       [shadow, body, nameText, hpBarBg, hpBarFill],
     )
     container.setDepth(490 + isoDepth(monster.position.x, monster.position.y))
+
+    // Make monster clickable
+    container.setSize(30, 40)
+    container.setInteractive()
+    container.on('pointerdown', () => {
+      this.events.emit('creature:selected', monster)
+    })
 
     this.monsterSprites.set(monster.id, container)
   }

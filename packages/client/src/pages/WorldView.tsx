@@ -6,13 +6,20 @@ import { createGameConfig } from '../game/config.js'
 import { WorldScene } from '../game/scenes/world-scene.js'
 import { socketClient, type WorldState, type SpeedState } from '../network/socket-client.js'
 import { BottomHUD } from '../ui/BottomHUD.js'
-import { CharacterCard } from '../ui/CharacterCard.js'
+import CharacterCard from '../ui/CharacterCard.js'
 import { EventFeed } from '../ui/EventFeed.js'
 import { Minimap } from '../ui/Minimap.js'
 import { EventBanner } from '../ui/EventBanner.js'
 import { PoliticsPanel } from '../ui/PoliticsPanel.js'
 import { HistoryPanel } from '../ui/HistoryPanel.js'
 import { SendAgentModal } from '../ui/SendAgentButton.js'
+import CreatureCard from '../ui/CreatureCard.js'
+import BuildingCard from '../ui/BuildingCard.js'
+import ItemCard from '../ui/ItemCard.js'
+import ResourceCard from '../ui/ResourceCard.js'
+import TerrainCard from '../ui/TerrainCard.js'
+import { FollowHUD } from '../ui/FollowHUD.js'
+import { NotificationSystem } from '../ui/NotificationSystem.js'
 import { soundManager } from '../game/audio/sound-manager.js'
 import { OV, injectGameStyles } from '../ui/overlay-styles.js'
 
@@ -38,6 +45,12 @@ export function WorldView() {
   const [weather, setWeather] = useState<string | null>(null)
   const [agentChat, setAgentChat] = useState<Map<string, string[]>>(new Map())
   const [showSendModal, setShowSendModal] = useState(false)
+  const [selectedCreature, setSelectedCreature] = useState<any>(null)
+  const [selectedBuilding, setSelectedBuilding] = useState<any>(null)
+  const [selectedResource, setSelectedResource] = useState<any>(null)
+  const [selectedTerrain, setSelectedTerrain] = useState<any>(null)
+  const [followActionLog, setFollowActionLog] = useState<string[]>([])
+  const [notifSubscriptions, setNotifSubscriptions] = useState<string[]>([])
 
   const agentNames = new Map(agents.map(a => [a.id, a.name]))
 
@@ -93,8 +106,44 @@ export function WorldView() {
           setAgents(prev => {
             const agent = prev.find(a => a.id === agentId) ?? null
             setSelectedAgent(agent)
+            setSelectedCreature(null)
+            setSelectedBuilding(null)
+            setSelectedResource(null)
+            setSelectedTerrain(null)
             return prev
           })
+        })
+
+        scene.events.on('creature:selected', (creature: any) => {
+          setSelectedCreature(creature)
+          setSelectedAgent(null)
+          setSelectedBuilding(null)
+          setSelectedResource(null)
+          setSelectedTerrain(null)
+        })
+
+        scene.events.on('building:selected', (building: any) => {
+          setSelectedBuilding(building)
+          setSelectedAgent(null)
+          setSelectedCreature(null)
+          setSelectedResource(null)
+          setSelectedTerrain(null)
+        })
+
+        scene.events.on('resource:selected', (resource: any) => {
+          setSelectedResource(resource)
+          setSelectedAgent(null)
+          setSelectedCreature(null)
+          setSelectedBuilding(null)
+          setSelectedTerrain(null)
+        })
+
+        scene.events.on('terrain:selected', (terrain: any) => {
+          setSelectedTerrain(terrain)
+          setSelectedAgent(null)
+          setSelectedCreature(null)
+          setSelectedBuilding(null)
+          setSelectedResource(null)
         })
 
         scene.events.on('follow:stopped', () => {
@@ -143,6 +192,20 @@ export function WorldView() {
       }
 
       sceneRef.current?.handleEvent(event)
+
+      // Track action log for followed agent
+      if (following && selectedAgent &&
+          'agentId' in event && event.agentId === selectedAgent.id) {
+        const description = event.type === 'agent:spoke' ? `Said: "${event.message}"`
+          : event.type === 'agent:moved' ? `Moved to (${event.to.x}, ${event.to.y})`
+          : event.type === 'combat:started' ? 'Entered combat!'
+          : event.type === 'item:crafted' ? `Crafted ${event.item.name}`
+          : event.type === 'resource:gathered' ? `Gathered ${event.resourceType}`
+          : null
+        if (description) {
+          setFollowActionLog(prev => [...prev.slice(-49), description])
+        }
+      }
 
       if (event.type === 'agent:spoke') {
         setAgentChat(prev => {
@@ -280,6 +343,14 @@ export function WorldView() {
     }
   }
 
+  const handleToggleSubscription = (agentId: string) => {
+    setNotifSubscriptions(prev =>
+      prev.includes(agentId)
+        ? prev.filter(id => id !== agentId)
+        : [...prev, agentId]
+    )
+  }
+
   const selectedCharData = selectedAgent ? characterMap[selectedAgent.id] : undefined
 
   return (
@@ -292,16 +363,6 @@ export function WorldView() {
         ...styles.connectionDot,
         background: connected ? '#2ecc71' : '#e74c3c',
       }} title={connected ? 'Connected' : 'Disconnected'} />
-
-      {/* Follow Banner (top center, shown when following an agent) */}
-      {following && selectedAgent && (
-        <div style={styles.followBanner}>
-          <span>{'\uD83D\uDCCD'} Following {selectedAgent.name}</span>
-          <button style={styles.followUnfollowBtn} onClick={handleUnfollow}>
-            Unfollow
-          </button>
-        </div>
-      )}
 
       {/* Event Banner (top center) */}
       <EventBanner
@@ -352,14 +413,70 @@ export function WorldView() {
       {selectedAgent && (
         <CharacterCard
           agent={selectedAgent}
-          characterData={selectedCharData}
-          onFollow={handleFollow}
-          onUnfollow={handleUnfollow}
-          isFollowing={following}
-          recentChat={agentChat.get(selectedAgent.id)}
+          allAgents={agents}
           onClose={() => { setSelectedAgent(null); setFollowing(false) }}
+          onFollow={handleFollow}
+          onNavigate={(x, y) => sceneRef.current?.centerOnTile(x, y)}
+          isFollowing={following}
         />
       )}
+
+      {/* Creature Card */}
+      {selectedCreature && (
+        <CreatureCard
+          creature={selectedCreature}
+          onClose={() => setSelectedCreature(null)}
+          onNavigate={(x, y) => sceneRef.current?.centerOnTile(x, y)}
+        />
+      )}
+
+      {/* Building Card */}
+      {selectedBuilding && (
+        <BuildingCard
+          building={selectedBuilding}
+          onClose={() => setSelectedBuilding(null)}
+          onNavigate={(x, y) => sceneRef.current?.centerOnTile(x, y)}
+        />
+      )}
+
+      {/* Resource Card */}
+      {selectedResource && (
+        <ResourceCard
+          resource={selectedResource}
+          position={selectedResource.position || { x: 0, y: 0 }}
+          onClose={() => setSelectedResource(null)}
+          onNavigate={(x, y) => sceneRef.current?.centerOnTile(x, y)}
+        />
+      )}
+
+      {/* Terrain Card */}
+      {selectedTerrain && (
+        <TerrainCard
+          tile={selectedTerrain}
+          position={selectedTerrain.position || { x: 0, y: 0 }}
+          onClose={() => setSelectedTerrain(null)}
+          onNavigate={(x, y) => sceneRef.current?.centerOnTile(x, y)}
+        />
+      )}
+
+      {/* Follow HUD (shown when following an agent) */}
+      {following && selectedAgent && (
+        <FollowHUD
+          agent={selectedAgent}
+          actionLog={followActionLog}
+          onStopFollow={handleUnfollow}
+          onNavigate={(x, y) => sceneRef.current?.centerOnTile(x, y)}
+        />
+      )}
+
+      {/* Notification System */}
+      <NotificationSystem
+        subscriptions={notifSubscriptions}
+        events={events}
+        onNavigate={(x, y) => sceneRef.current?.centerOnTile(x, y)}
+        onSelectAgent={handleFeedSelectAgent}
+        onToggleSubscription={handleToggleSubscription}
+      />
 
       {/* Send Agent modal */}
       {showSendModal && (
@@ -392,38 +509,5 @@ const styles: Record<string, React.CSSProperties> = {
     borderRadius: 4,
     zIndex: 50,
     pointerEvents: 'none',
-  },
-  followBanner: {
-    position: 'absolute',
-    top: 12,
-    left: '50%',
-    transform: 'translateX(-50%)',
-    zIndex: 200,
-    background: OV.bg,
-    backdropFilter: OV.blur,
-    borderRadius: OV.radius,
-    border: `1px solid ${OV.borderActive}`,
-    padding: '6px 16px',
-    display: 'flex',
-    alignItems: 'center',
-    gap: 12,
-    fontSize: 13,
-    color: OV.accent,
-    fontWeight: 'bold',
-    fontFamily: OV.font,
-    pointerEvents: 'auto',
-    boxShadow: '0 4px 24px rgba(0,0,0,0.4)',
-    animation: 'fadeSlideIn 0.2s ease-out',
-  },
-  followUnfollowBtn: {
-    background: 'rgba(255,255,255,0.1)',
-    border: '1px solid rgba(255,255,255,0.15)',
-    borderRadius: OV.radiusSm,
-    color: OV.text,
-    fontSize: 11,
-    padding: '3px 10px',
-    cursor: 'pointer',
-    fontFamily: OV.font,
-    transition: 'background 0.15s',
   },
 }
