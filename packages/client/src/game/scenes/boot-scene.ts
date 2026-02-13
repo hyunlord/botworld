@@ -116,6 +116,23 @@ export class BootScene extends Phaser.Scene {
       dotTimer.destroy()
     })
 
+    // ── Asset loading diagnostics ──
+    const loadedAssets: string[] = []
+    const failedAssets: string[] = []
+    this.load.on('filecomplete', (key: string) => {
+      loadedAssets.push(key)
+    })
+    this.load.on('loaderror', (file: { key: string; url: string }) => {
+      failedAssets.push(file.key)
+    })
+    this.load.on('complete', () => {
+      const total = loadedAssets.length + failedAssets.length
+      console.log(`[BootScene] Assets: ${loadedAssets.length} loaded, ${failedAssets.length} failed (${total} total)`)
+      if (failedAssets.length > 0) {
+        console.warn('[BootScene] Failed assets:', failedAssets)
+      }
+    })
+
     // ── Isometric terrain tilemap spritesheet (primary ground layer) ──
     this.load.spritesheet('iso-terrain-sheet', 'assets/tiles/iso-terrain-sheet.png', {
       frameWidth: ISO_TILE_WIDTH,
@@ -355,10 +372,17 @@ export class BootScene extends Phaser.Scene {
       'mushroom_2', 'moss_rock', 'fern', 'rock_2', 'rock_3',
       'shell', 'driftwood', 'lily_pad', 'cattail', 'dead_tree',
       'ice_crystal', 'dead_bush', 'cactus', 'dry_bush',
+      // Additional decorations emitted by world generation
+      'pebbles', 'bones', 'butterfly',
+      'ruins_pillar', 'ruins_stone', 'giant_tree', 'mushroom_ring',
+      'cave_entrance', 'bridge_stone',
     ]
     for (const name of decoNames) {
       this.load.image(`deco_${name}`, `assets/decorations/deco_${name}.png`)
     }
+    // Non-prefixed decorations from world generation
+    this.load.image('tree_roadside', 'assets/decorations/tree_roadside.png')
+    this.load.image('ripple', 'assets/decorations/ripple.png')
   }
 
   create(): void {
@@ -686,6 +710,19 @@ export class BootScene extends Phaser.Scene {
       deco_dead_bush:   { color: 0x7a6a4a, shape: 'cross', w: 10, h: 10 },
       deco_cactus:      { color: 0x3a7a3a, shape: 'cross', w: 8, h: 14 },
       deco_dry_bush:    { color: 0x8a7a4a, shape: 'circle', w: 10, h: 8 },
+      // Additional decorations emitted by world generation
+      deco_pebbles:       { color: 0x8a8a7a, shape: 'circle', w: 12, h: 8 },
+      deco_bones:         { color: 0xe8e0d0, shape: 'cross', w: 10, h: 10 },
+      deco_butterfly:     { color: 0xe0a040, shape: 'circle', w: 6, h: 6 },
+      deco_ruins_pillar:  { color: 0x7a7a7a, shape: 'rect', w: 8, h: 16 },
+      deco_ruins_stone:   { color: 0x6a6a6a, shape: 'rect', w: 12, h: 8 },
+      deco_giant_tree:    { color: 0x2a6a2a, shape: 'triangle', w: 16, h: 20 },
+      deco_mushroom_ring: { color: 0xd04040, shape: 'circle', w: 14, h: 14 },
+      deco_cave_entrance: { color: 0x2a2a2a, shape: 'rect', w: 14, h: 10 },
+      deco_bridge_stone:  { color: 0x8a8a8a, shape: 'rect', w: 16, h: 8 },
+      // Non-prefixed decorations from world generation
+      tree_roadside:      { color: 0x3a7a3a, shape: 'triangle', w: 10, h: 14 },
+      ripple:             { color: 0x5a9ac0, shape: 'circle', w: 10, h: 6 },
     }
 
     for (const [key, info] of Object.entries(decos)) {
