@@ -258,6 +258,10 @@ export class AmbientParticles {
     }
   }
 
+  setVisible(visible: boolean): void {
+    this.graphics.setVisible(visible)
+  }
+
   destroy(): void {
     this.graphics.destroy()
     this.particles = []

@@ -124,6 +124,13 @@ export class BootScene extends Phaser.Scene {
     })
     this.load.on('loaderror', (file: { key: string; url: string }) => {
       failedAssets.push(file.key)
+      // Create 1x1 transparent canvas texture to prevent downstream errors
+      if (!this.textures.exists(file.key)) {
+        const canvas = document.createElement('canvas')
+        canvas.width = 1
+        canvas.height = 1
+        this.textures.addCanvas(file.key, canvas)
+      }
     })
     this.load.on('complete', () => {
       const total = loadedAssets.length + failedAssets.length
@@ -145,24 +152,13 @@ export class BootScene extends Phaser.Scene {
       frameHeight: TILE_SIZE,
     })
 
-    // ── Legacy tile sprites (12 types) ──
-    const tileTypes = ['grass', 'water', 'deep_water', 'forest', 'dense_forest', 'sand', 'mountain', 'road', 'building', 'farmland', 'snow', 'swamp']
-    for (const type of tileTypes) {
-      this.load.image(`tile_${type}`, `assets/tiles/tile_${type}.png`)
-    }
-
-    // Tile variants (3 per type)
-    for (const type of tileTypes) {
-      for (let v = 0; v < 3; v++) {
-        this.load.image(`tile_${type}_v${v}`, `assets/tiles/variants/tile_${type}_v${v}.png`)
-      }
-    }
+    // Legacy tile sprites & variants — no PNG files on disk; procedural fallbacks generated in create()
 
     // ── New terrain tiles (biome-specific, 20 types) ──
     const newTiles = [
       'grass_plains', 'grass_flowers', 'forest_light', 'forest_dense', 'forest_autumn',
       'mountain_low', 'mountain_high', 'mountain_rocky',
-      'water_shallow', 'water_deep', 'water_river',
+      // water_shallow, water_deep, water_river — no PNGs on disk; procedural fallbacks in create()
       'desert_sand', 'desert_oasis', 'swamp',
       'snow_field', 'snow_forest', 'farmland',
       'road_dirt', 'road_stone', 'beach',
@@ -316,36 +312,7 @@ export class BootScene extends Phaser.Scene {
       this.load.image(`agent_${i}`, `assets/agents/agent_${i}.png`)
     }
 
-    // Character part sprites (layered rendering system)
-    const charParts: Record<string, string[]> = {
-      body:        ['slim', 'average', 'athletic', 'large'],
-      armor:       ['casual', 'leather', 'chainmail', 'plate', 'cloth_robe'],
-      cape:        ['short', 'long'],
-      hair:        ['short_messy', 'long_straight', 'braided', 'mohawk', 'ponytail', 'bald', 'afro', 'curly', 'bob', 'spiky'],
-      face:        ['round', 'oval', 'square', 'heart', 'long'],
-      facialhair:  ['stubble', 'beard', 'mustache', 'goatee'],
-      headgear:    ['hood', 'crown', 'circlet', 'helmet', 'wizard_hat', 'bandana'],
-      acc:         ['scarf', 'necklace', 'monocle', 'earring', 'gloves', 'belt_pouch', 'glasses', 'eyepatch'],
-      marking:     ['scar_left_eye', 'freckles', 'tattoo_arm', 'birthmark', 'war_paint'],
-    }
-    for (const [category, variants] of Object.entries(charParts)) {
-      for (const v of variants) {
-        this.load.image(`char_${category}_${v}`, `assets/character/${category}/char_${category}_${v}.png`)
-      }
-    }
-
-    // Racial feature sprites
-    const racialParts: Record<string, string[]> = {
-      ear:  ['pointed', 'long_pointed', 'animal'],
-      horn: ['small', 'curved', 'dragon'],
-      tail: ['fox', 'cat', 'dragon', 'demon'],
-      wing: ['fairy', 'bat', 'feathered'],
-    }
-    for (const [part, variants] of Object.entries(racialParts)) {
-      for (const v of variants) {
-        this.load.image(`char_racial_${part}_${v}`, `assets/character/racial/char_racial_${part}_${v}.png`)
-      }
-    }
+    // Character part sprites & racial features — no assets/character/ directory; procedural fallbacks in create()
 
     // Legacy resource icons (6 types)
     const resourceTypes = ['wood', 'stone', 'food', 'iron', 'gold', 'herb']
@@ -359,30 +326,7 @@ export class BootScene extends Phaser.Scene {
       this.load.image(`action_${type}`, `assets/actions/action_${type}.png`)
     }
 
-    // Legacy POI building sprites (6 types)
-    const buildingTypes = ['marketplace', 'tavern', 'workshop', 'library', 'farm', 'mine']
-    for (const type of buildingTypes) {
-      this.load.image(`building_${type}`, `assets/buildings/building_${type}.png`)
-    }
-
-    // Decoration sprites (23 unique)
-    const decoNames = [
-      'flowers_1', 'flowers_2', 'grass_tuft', 'hay_bale', 'scarecrow',
-      'bush_1', 'mushroom_1', 'fallen_log', 'pine_small', 'rock_1',
-      'mushroom_2', 'moss_rock', 'fern', 'rock_2', 'rock_3',
-      'shell', 'driftwood', 'lily_pad', 'cattail', 'dead_tree',
-      'ice_crystal', 'dead_bush', 'cactus', 'dry_bush',
-      // Additional decorations emitted by world generation
-      'pebbles', 'bones', 'butterfly',
-      'ruins_pillar', 'ruins_stone', 'giant_tree', 'mushroom_ring',
-      'cave_entrance', 'bridge_stone',
-    ]
-    for (const name of decoNames) {
-      this.load.image(`deco_${name}`, `assets/decorations/deco_${name}.png`)
-    }
-    // Non-prefixed decorations from world generation
-    this.load.image('tree_roadside', 'assets/decorations/tree_roadside.png')
-    this.load.image('ripple', 'assets/decorations/ripple.png')
+    // Legacy building sprites & decorations — no PNGs on disk; procedural fallbacks in create()
   }
 
   create(): void {

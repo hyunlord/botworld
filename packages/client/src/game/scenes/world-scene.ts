@@ -317,6 +317,11 @@ export class WorldScene extends Phaser.Scene {
   /** Timer for viewport emission (ms since last emit) */
   private viewportEmitTimer = 0
   private hasCentered = false
+  private _wasDragged = false
+  private _isDragging = false
+  private _dragLastX = 0
+  private _dragLastY = 0
+  private _dragCleanup: (() => void) | null = null
 
   // WASD + arrow key camera controls
   private keys!: {
@@ -438,23 +443,59 @@ export class WorldScene extends Phaser.Scene {
       RIGHT: this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.RIGHT),
     }
 
-    // Drag to pan
-    this.input.on('pointermove', (pointer: Phaser.Input.Pointer) => {
-      if (pointer.isDown) {
-        if (this.followingAgentId) {
-          this.followingAgentId = null
-          this.events.emit('follow:stopped')
-        }
-        const cam = this.cameras.main
-        cam.scrollX -= (pointer.x - pointer.prevPosition.x) / cam.zoom
-        cam.scrollY -= (pointer.y - pointer.prevPosition.y) / cam.zoom
+    // ── Drag-to-pan via Phaser scene events + DOM fallback ──
+    this.input.on('pointerdown', (p: Phaser.Input.Pointer) => {
+      console.log('[DRAG] pointerdown:', p.x.toFixed(0), p.y.toFixed(0), 'btn:', p.button)
+      this._dragLastX = p.x
+      this._dragLastY = p.y
+      this._wasDragged = false
+      this._isDragging = true
+    })
+
+    this.input.on('pointermove', (p: Phaser.Input.Pointer) => {
+      if (!this._isDragging) return
+      const dx = p.x - this._dragLastX
+      const dy = p.y - this._dragLastY
+      if (Math.abs(dx) > 2 || Math.abs(dy) > 2) {
+        this._wasDragged = true
+      }
+      const cam = this.cameras.main
+      cam.scrollX -= dx / cam.zoom
+      cam.scrollY -= dy / cam.zoom
+      this._dragLastX = p.x
+      this._dragLastY = p.y
+      if (this._wasDragged && this.followingAgentId) {
+        this.followingAgentId = null
+        this.events.emit('follow:stopped')
       }
     })
 
-    // Terrain click - fires when clicking ground that doesn't hit an interactive object
-    this.input.on('pointerdown', (pointer: Phaser.Input.Pointer) => {
-      // Distinguish click from drag (duration < 200ms)
-      if (pointer.getDuration() >= 200) return
+    this.input.on('pointerup', () => {
+      console.log('[DRAG] Phaser pointerup')
+      this._isDragging = false
+    })
+
+    // Window-level pointerup catches releases over React UI elements only
+    // (skip canvas events — Phaser handles those via its own pointerup)
+    const onGlobalPointerUp = (e: Event) => {
+      const target = e.target as HTMLElement
+      if (target?.tagName === 'CANVAS') return // let Phaser handle canvas pointerup
+      if (this._isDragging) {
+        console.log('[DRAG] window pointerup (non-canvas) — resetting drag')
+      }
+      this._isDragging = false
+    }
+    window.addEventListener('pointerup', onGlobalPointerUp, true)
+    window.addEventListener('pointercancel', onGlobalPointerUp, true)
+    this._dragCleanup = () => {
+      window.removeEventListener('pointerup', onGlobalPointerUp, true)
+      window.removeEventListener('pointercancel', onGlobalPointerUp, true)
+    }
+
+    // Terrain click — use pointerup so we can distinguish click vs drag
+    this.input.on('pointerup', (pointer: Phaser.Input.Pointer) => {
+      // Skip if user was dragging the camera
+      if (this._wasDragged) return
 
       // Skip if we hit an interactive game object (agent, building, resource, monster)
       const hitObjects = this.input.hitTestPointer(pointer)
@@ -599,10 +640,18 @@ export class WorldScene extends Phaser.Scene {
     this.cullOffscreenObjects()
     this.updateLOD()
 
-    // Update FPS counter
+    // Update FPS counter with debug info
     if (this.fpsText) {
-      this.fpsText.setText(`FPS: ${Math.round(this.game.loop.actualFps)}`)
+      const p = this.input.activePointer
+      const cam = this.cameras.main
+      this.fpsText.setText(`FPS:${Math.round(this.game.loop.actualFps)} drag:${this._isDragging ? 1 : 0} wd:${this._wasDragged ? 1 : 0} down:${p.isDown ? 1 : 0} cam:${Math.round(cam.scrollX)},${Math.round(cam.scrollY)}`)
     }
+  }
+
+  shutdown(): void {
+    this._isDragging = false
+    this._dragCleanup?.()
+    this._dragCleanup = null
   }
 
   // --- Chunk data management ---
@@ -2535,24 +2584,28 @@ export class WorldScene extends Phaser.Scene {
 
   /** Update LOD (Level of Detail) based on camera zoom */
   private updateLOD(): void {
-    const zoom = this.cameras.main.zoom
-    const newLOD = zoom >= 0.8 ? 'high' : zoom >= 0.5 ? 'medium' : 'low'
+    try {
+      const zoom = this.cameras.main.zoom
+      const newLOD = zoom >= 0.8 ? 'high' : zoom >= 0.5 ? 'medium' : 'low'
 
-    if (newLOD === this.currentLOD) return
-    this.currentLOD = newLOD
+      if (newLOD === this.currentLOD) return
+      this.currentLOD = newLOD
 
-    // Toggle decoration visibility based on LOD
-    for (const [, chunk] of this.renderedChunks) {
-      for (const sprite of chunk.objectSprites) {
-        if (sprite.getData?.('isDecoration')) {
-          (sprite as any).setVisible(newLOD !== 'low')
+      // Toggle decoration visibility based on LOD
+      for (const [, chunk] of this.renderedChunks) {
+        for (const sprite of chunk.objectSprites) {
+          if (sprite.getData?.('isDecoration')) {
+            (sprite as any).setVisible(newLOD !== 'low')
+          }
         }
       }
-    }
 
-    // At low zoom, hide particle effects
-    if (this.ambientParticles) {
-      (this.ambientParticles as any).setVisible(newLOD !== 'low')
+      // At low zoom, hide particle effects
+      if (this.ambientParticles) {
+        this.ambientParticles.setVisible(newLOD !== 'low')
+      }
+    } catch {
+      // Silently ignore LOD errors to not break the game loop
     }
   }
 
