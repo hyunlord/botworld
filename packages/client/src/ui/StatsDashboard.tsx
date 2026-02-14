@@ -230,13 +230,19 @@ export function StatsDashboard({ onClose }: StatsDashboardProps) {
   const [activeTab, setActiveTab] = useState<TabKey>('economy')
   const [data, setData] = useState<StatisticsData>({})
   const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState(false)
 
   const fetchData = async () => {
     try {
       const response = await fetch('/api/statistics')
+      if (!response.ok) {
+        setLoading(false)
+        return
+      }
       const result = await response.json()
       setData(result)
       setLoading(false)
+      setLoadError(false)
     } catch (error) {
       console.error('Failed to fetch statistics:', error)
       setLoading(false)
@@ -244,9 +250,22 @@ export function StatsDashboard({ onClose }: StatsDashboardProps) {
   }
 
   useEffect(() => {
+    let timeoutId: NodeJS.Timeout | null = null
+
     fetchData()
+
+    timeoutId = setTimeout(() => {
+      if (loading && Object.keys(data).length === 0) {
+        setLoadError(true)
+        setLoading(false)
+      }
+    }, 5000)
+
     const interval = setInterval(fetchData, 15000)
-    return () => clearInterval(interval)
+    return () => {
+      clearInterval(interval)
+      if (timeoutId) clearTimeout(timeoutId)
+    }
   }, [])
 
   useEffect(() => {
@@ -341,6 +360,8 @@ export function StatsDashboard({ onClose }: StatsDashboardProps) {
         }}>
           {loading ? (
             <div style={{ textAlign: 'center', padding: 40, color: OV.textMuted }}>Loading...</div>
+          ) : loadError ? (
+            <div style={{ textAlign: 'center', padding: 40, color: OV.textMuted }}>Unable to connect to server</div>
           ) : (
             <>
               {activeTab === 'economy' && <EconomyTab data={data.economy} />}

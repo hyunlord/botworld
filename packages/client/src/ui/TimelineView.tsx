@@ -58,8 +58,11 @@ export function TimelineView({ onClose, onNavigate, onSelectAgent }: TimelineVie
 
   // Fetch timeline data
   useEffect(() => {
+    let timeoutId: NodeJS.Timeout | null = null
+
     setLoading(true)
     setError(null)
+
     fetch('/api/timeline')
       .then(res => {
         if (!res.ok) throw new Error('Failed to fetch timeline')
@@ -73,6 +76,17 @@ export function TimelineView({ onClose, onNavigate, onSelectAgent }: TimelineVie
         setError(err.message)
         setLoading(false)
       })
+
+    timeoutId = setTimeout(() => {
+      if (loading && events.length === 0) {
+        setError('Unable to connect to server')
+        setLoading(false)
+      }
+    }, 5000)
+
+    return () => {
+      if (timeoutId) clearTimeout(timeoutId)
+    }
   }, [])
 
   const handleCloseClick = () => {
