@@ -86,8 +86,11 @@ export function AgentCompare({
       return
     }
 
+    let timeoutId: NodeJS.Timeout | null = null
+
     setLoading(true)
     setError(null)
+
     fetch(`/api/rankings/compare/${agentId1}/${agentId2}`)
       .then(res => {
         if (!res.ok) throw new Error('Failed to fetch comparison')
@@ -101,6 +104,17 @@ export function AgentCompare({
         setError(err.message)
         setLoading(false)
       })
+
+    timeoutId = setTimeout(() => {
+      if (loading && !comparison) {
+        setError('Unable to connect to server')
+        setLoading(false)
+      }
+    }, 5000)
+
+    return () => {
+      if (timeoutId) clearTimeout(timeoutId)
+    }
   }, [agentId1, agentId2])
 
   const handleCloseClick = () => {

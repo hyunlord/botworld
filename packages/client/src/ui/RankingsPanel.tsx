@@ -54,13 +54,15 @@ const ITEM_TYPE_EMOJI: Record<string, string> = {
 }
 
 function RankingBoard({ board, onSelectAgent }: { board: RankingBoard; onSelectAgent?: (id: string) => void }) {
+  const entries = Array.isArray(board.entries) ? board.entries : []
+
   return (
     <div style={{ ...glassPanel, padding: 12, minWidth: 220 }}>
       <h4 style={{ color: OV.accent, margin: '0 0 8px 0', fontSize: 13, fontWeight: 600 }}>
         {board.label}
       </h4>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-        {board.entries.map((entry, i) => (
+        {entries.map((entry, i) => (
           <div
             key={entry.agentId}
             style={{
@@ -93,7 +95,7 @@ function RankingBoard({ board, onSelectAgent }: { board: RankingBoard; onSelectA
           </div>
         ))}
       </div>
-      {(!board.entries || board.entries.length === 0) && (
+      {entries.length === 0 && (
         <div style={{ color: OV.textMuted, fontSize: 11, textAlign: 'center', padding: 16 }}>
           No data yet
         </div>
@@ -103,13 +105,15 @@ function RankingBoard({ board, onSelectAgent }: { board: RankingBoard; onSelectA
 }
 
 function ItemRankingBoard({ board }: { board: ItemRankingBoard }) {
+  const entries = Array.isArray(board.entries) ? board.entries : []
+
   return (
     <div style={{ ...glassPanel, padding: 12, minWidth: 220 }}>
       <h4 style={{ color: OV.accent, margin: '0 0 8px 0', fontSize: 13, fontWeight: 600 }}>
         {board.label}
       </h4>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-        {board.entries.map((entry, i) => (
+        {entries.map((entry, i) => (
           <div
             key={entry.itemId}
             style={{
@@ -139,7 +143,7 @@ function ItemRankingBoard({ board }: { board: ItemRankingBoard }) {
           </div>
         ))}
       </div>
-      {(!board.entries || board.entries.length === 0) && (
+      {entries.length === 0 && (
         <div style={{ color: OV.textMuted, fontSize: 11, textAlign: 'center', padding: 16 }}>
           No items yet
         </div>
@@ -214,14 +218,18 @@ export function RankingsPanel({ onClose, onSelectAgent, onNavigate }: RankingsPa
   const [rankings, setRankings] = useState<any>(null)
   const [itemRankings, setItemRankings] = useState<any>(null)
   const [worldRecords, setWorldRecords] = useState<WorldRecord[] | null>(null)
+  const [loadError, setLoadError] = useState(false)
 
   useEffect(() => {
+    let timeoutId: NodeJS.Timeout | null = null
+
     const fetchRankings = async () => {
       try {
         const res = await fetch('/api/rankings')
         if (res.ok) {
           const data = await res.json()
           setRankings(data)
+          setLoadError(false)
         }
       } catch (err) {
         console.error('Failed to fetch rankings:', err)
@@ -234,6 +242,7 @@ export function RankingsPanel({ onClose, onSelectAgent, onNavigate }: RankingsPa
         if (res.ok) {
           const data = await res.json()
           setItemRankings(data)
+          setLoadError(false)
         }
       } catch (err) {
         console.error('Failed to fetch item rankings:', err)
@@ -246,6 +255,7 @@ export function RankingsPanel({ onClose, onSelectAgent, onNavigate }: RankingsPa
         if (res.ok) {
           const data = await res.json()
           setWorldRecords(data)
+          setLoadError(false)
         }
       } catch (err) {
         console.error('Failed to fetch world records:', err)
@@ -256,13 +266,22 @@ export function RankingsPanel({ onClose, onSelectAgent, onNavigate }: RankingsPa
     fetchItemRankings()
     fetchWorldRecords()
 
+    timeoutId = setTimeout(() => {
+      if (!rankings && !itemRankings && !worldRecords) {
+        setLoadError(true)
+      }
+    }, 5000)
+
     const interval = setInterval(() => {
       fetchRankings()
       fetchItemRankings()
       fetchWorldRecords()
     }, 10000)
 
-    return () => clearInterval(interval)
+    return () => {
+      clearInterval(interval)
+      if (timeoutId) clearTimeout(timeoutId)
+    }
   }, [])
 
   useEffect(() => {
@@ -286,6 +305,14 @@ export function RankingsPanel({ onClose, onSelectAgent, onNavigate }: RankingsPa
   ]
 
   const renderTabContent = () => {
+    if (loadError) {
+      return (
+        <div style={{ color: OV.textMuted, textAlign: 'center', padding: 32 }}>
+          Unable to connect to server
+        </div>
+      )
+    }
+
     if (!rankings && activeTab !== 'items') {
       return (
         <div style={{ color: OV.textMuted, textAlign: 'center', padding: 32 }}>
@@ -305,7 +332,7 @@ export function RankingsPanel({ onClose, onSelectAgent, onNavigate }: RankingsPa
 
       const boards: ItemRankingBoard[] = Object.entries(itemRankings).map(([key, entries]) => ({
         label: key.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase()),
-        entries: entries as ItemRankingEntry[],
+        entries: Array.isArray(entries) ? entries as ItemRankingEntry[] : [],
       }))
 
       return (
@@ -328,7 +355,7 @@ export function RankingsPanel({ onClose, onSelectAgent, onNavigate }: RankingsPa
 
     const boards: RankingBoard[] = Object.entries(categoryData).map(([key, entries]) => ({
       label: key.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase()),
-      entries: entries as RankingEntry[],
+      entries: Array.isArray(entries) ? entries as RankingEntry[] : [],
     }))
 
     return (
