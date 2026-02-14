@@ -322,6 +322,7 @@ export class WorldScene extends Phaser.Scene {
   private _dragLastX = 0
   private _dragLastY = 0
   private _dragCleanup: (() => void) | null = null
+  private _clickedInteractive = false
 
   // WASD + arrow key camera controls
   private keys!: {
@@ -450,6 +451,7 @@ export class WorldScene extends Phaser.Scene {
       this._dragLastY = p.y
       this._wasDragged = false
       this._isDragging = true
+      this._clickedInteractive = false
     })
 
     this.input.on('pointermove', (p: Phaser.Input.Pointer) => {
@@ -497,7 +499,10 @@ export class WorldScene extends Phaser.Scene {
       // Skip if user was dragging the camera
       if (this._wasDragged) return
 
-      // Skip if we hit an interactive game object (agent, building, resource, monster)
+      // Skip if an interactive game object (agent, building, resource, monster) was clicked
+      if (this._clickedInteractive) return
+
+      // Fallback: also check hitTest for any remaining interactive objects
       const hitObjects = this.input.hitTestPointer(pointer)
       if (hitObjects.length > 0) return
 
@@ -1144,6 +1149,7 @@ export class WorldScene extends Phaser.Scene {
           // Make building clickable
           bldgSprite.setInteractive({ useHandCursor: true })
           bldgSprite.on('pointerdown', () => {
+            this._clickedInteractive = true
             this.events.emit('building:selected', {
               type: tile.poiType,
               position: tile.position,
@@ -1204,6 +1210,7 @@ export class WorldScene extends Phaser.Scene {
           // Make resource clickable
           resSprite.setInteractive({ useHandCursor: true })
           resSprite.on('pointerdown', () => {
+            this._clickedInteractive = true
             this.events.emit('resource:selected', {
               type: tile.resource!.type,
               amount: tile.resource!.amount,
@@ -1523,6 +1530,7 @@ export class WorldScene extends Phaser.Scene {
     })
 
     container.on('pointerdown', () => {
+      this._clickedInteractive = true
       this.selectedAgentId = agent.id
       this.events.emit('agent:selected', agent.id)
       this.updateSelectionRing()
@@ -2361,6 +2369,7 @@ export class WorldScene extends Phaser.Scene {
     )
     container.input!.cursor = 'pointer'
     container.on('pointerdown', () => {
+      this._clickedInteractive = true
       this.events.emit('creature:selected', monster)
     })
 
