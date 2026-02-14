@@ -36,6 +36,9 @@ export class TileMap {
       }
     }
 
+    // Phase 1.5: Cross-chunk biome smoothing
+    this.smoothChunkBoundaries()
+
     // Phase 2: Rivers (gradient descent from mountain sources)
     this.buildInitialRivers()
 
@@ -186,6 +189,160 @@ export class TileMap {
 
   getSerializable() {
     return { chunks: this.getSerializableChunks() }
+  }
+
+  // ===========================================
+  // Cross-chunk biome boundary smoothing
+  // ===========================================
+
+  /**
+   * Smooth biome boundaries at chunk edges using neighbor chunk data.
+   * Runs cellular automata smoothing only on border tiles (the outer 1-tile-wide strip
+   * of each chunk) by creating a padded grid with neighbor borders.
+   */
+  private smoothChunkBoundaries(): void {
+    const PROTECTED: Set<string> = new Set([
+      'water', 'deep_water', 'river', 'road', 'building', 'cliff', 'lava', 'ice',
+    ])
+
+    let totalSmoothings = 0
+
+    for (const chunk of this.chunks.values()) {
+      const { cx, cy, tiles } = chunk
+      const S = CHUNK_SIZE
+
+      // Gather neighbor chunks (N, S, E, W)
+      const northChunk = this.chunks.get(chunkKeyStr(cx, cy - 1))
+      const southChunk = this.chunks.get(chunkKeyStr(cx, cy + 1))
+      const westChunk = this.chunks.get(chunkKeyStr(cx - 1, cy))
+      const eastChunk = this.chunks.get(chunkKeyStr(cx + 1, cy))
+
+      // Create a padded grid (size+2 x size+2) with borders from neighbors
+      const padded: Tile[][] = []
+      for (let py = 0; py < S + 2; py++) {
+        padded[py] = []
+        for (let px = 0; px < S + 2; px++) {
+          // Determine source tile for padded position
+          if (py === 0 && northChunk) {
+            // Top row from north chunk (their bottom row)
+            padded[py][px] = northChunk.tiles[S - 1][Math.max(0, Math.min(S - 1, px - 1))]
+          } else if (py === S + 1 && southChunk) {
+            // Bottom row from south chunk (their top row)
+            padded[py][px] = southChunk.tiles[0][Math.max(0, Math.min(S - 1, px - 1))]
+          } else if (px === 0 && westChunk) {
+            // Left column from west chunk (their right column)
+            padded[py][px] = westChunk.tiles[Math.max(0, Math.min(S - 1, py - 1))][S - 1]
+          } else if (px === S + 1 && eastChunk) {
+            // Right column from east chunk (their left column)
+            padded[py][px] = eastChunk.tiles[Math.max(0, Math.min(S - 1, py - 1))][0]
+          } else if (py > 0 && py <= S && px > 0 && px <= S) {
+            // Interior: current chunk's tile
+            padded[py][px] = tiles[py - 1][px - 1]
+          } else {
+            // Corner fallback: use current chunk edge tile
+            const ly = Math.max(0, Math.min(S - 1, py - 1))
+            const lx = Math.max(0, Math.min(S - 1, px - 1))
+            padded[py][px] = tiles[ly][lx]
+          }
+        }
+      }
+
+      // Smooth only the border tiles of the original chunk
+      const changes: { lx: number; ly: number; type: string; biome: string }[] = []
+
+      for (let ly = 0; ly < S; ly++) {
+        for (let lx = 0; lx < S; lx++) {
+          // Only process border tiles (edge of chunk)
+          if (lx !== 0 && lx !== S - 1 && ly !== 0 && ly !== S - 1) continue
+
+          const current = tiles[ly][lx]
+          if (PROTECTED.has(current.type)) continue
+
+          // Count neighbors in the padded grid (py = ly + 1, px = lx + 1)
+          const py = ly + 1
+          const px = lx + 1
+          const counts = new Map<string, number>()
+
+          for (let dy = -1; dy <= 1; dy++) {
+            for (let dx = -1; dx <= 1; dx++) {
+              if (dx === 0 && dy === 0) continue
+              const neighbor = padded[py + dy][px + dx]
+              if (neighbor?.biome) {
+                counts.set(neighbor.biome, (counts.get(neighbor.biome) ?? 0) + 1)
+              }
+            }
+          }
+
+          const sameCount = counts.get(current.biome ?? 'grassland') ?? 0
+          if (sameCount < 3) {
+            // Find majority biome among neighbors
+            let maxBiome = current.biome ?? 'grassland'
+            let maxCount = 0
+            for (const [biome, count] of counts) {
+              // Skip protected biomes
+              const biomeType = this.getBiomeTileType(biome)
+              if (biomeType && PROTECTED.has(biomeType)) continue
+              if (count > maxCount) {
+                maxBiome = biome
+                maxCount = count
+              }
+            }
+            if (maxBiome !== current.biome) {
+              const newType = this.getBiomeTileType(maxBiome) ?? current.type
+              changes.push({ lx, ly, type: newType, biome: maxBiome })
+            }
+          }
+        }
+      }
+
+      // Apply changes to the chunk
+      for (const c of changes) {
+        const tile = tiles[c.ly][c.lx]
+        tile.type = c.type as any
+        tile.biome = c.biome
+        const cost = MOVEMENT_COSTS[c.type] ?? 1.0
+        tile.walkable = cost > 0
+        tile.movementCost = cost
+        totalSmoothings++
+      }
+    }
+
+    if (totalSmoothings > 0) {
+      console.log(`[TileMap] Cross-chunk smoothing: ${totalSmoothings} border tiles smoothed`)
+    }
+  }
+
+  /**
+   * Map biome name to its canonical TileType (mirrors biome-classifier.ts logic)
+   */
+  private getBiomeTileType(biome: string): string | null {
+    const BIOME_TILE_MAP: Record<string, string> = {
+      deep_ocean: 'deep_water',
+      ocean: 'water',
+      ice_shelf: 'ice',
+      beach: 'beach',
+      snow_peak: 'snow',
+      mountain: 'mountain',
+      alpine_meadow: 'meadow',
+      alpine_forest: 'forest',
+      highland: 'grass',
+      tundra: 'tundra',
+      dense_forest: 'dense_forest',
+      temperate_forest: 'forest',
+      savanna: 'grass',
+      desert: 'sand',
+      grassland: 'grass',
+      meadow: 'meadow',
+      swamp: 'swamp',
+      mangrove: 'swamp',
+      farmland: 'farmland',
+      volcanic: 'volcanic',
+      ruins: 'grass',
+      ancient_forest: 'forest',
+      cave: 'grass',
+      road: 'road',
+    }
+    return BIOME_TILE_MAP[biome] ?? null
   }
 
   // ===========================================
