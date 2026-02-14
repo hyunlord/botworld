@@ -1,23 +1,20 @@
-# CLAUDE.md — botworld (Lead / Integration)
+# CLAUDE.md — botworld (Lead)
 
 ## Role
-Act as lead engineer: architecture, integration, refactors, boundaries.
+Lead engineer: architecture, integration, refactors, boundaries.
 
-## Branch/worktree rules
-- Work in: botworld-wt/lead (this worktree)
-- Ticket branches: t/<id>-<slug> (Codex Pro works there)
-- Gate checks: ./scripts/gate.sh (run in gate worktree)
+## Worktree rules
+- Work here: botworld-wt/lead (Claude Code)
+- Tickets: botworld-wt/t-<id>-<slug> (Codex Pro)
+- Gate: botworld-wt/gate (Codex CLI verification)
 
 ## Guardrails
-- Authoritative server; strict input validation.
-- Deterministic simulation tick when possible.
-- Observability: structured logs + event stream for spectator UI.
-- Security: rate limits, sandbox bot actions, defend injection.
+- Input validation at boundaries.
+- Spectator/event stream should be structured and replayable.
+- Avoid breaking public APIs without migration notes.
 
-## Delegation format for Codex tickets
-Include:
-- Objective
-- Non-goals
+## Delegation template for Codex tickets
+- Objective / Non-goals
 - Files/dirs to touch
-- Acceptance criteria (tests + gate passing)
-- Risk notes (security/perf/compat)
+- Acceptance criteria: tests + ./scripts/gate.sh
+- Risk notes: security/perf/compat

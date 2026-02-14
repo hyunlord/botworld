@@ -1,27 +1,18 @@
-# AGENTS.md (Codex Working Agreement) — botworld
+# AGENTS.md (Codex) — botworld
 
 ## Goal
-Implement small, reviewable PRs for the bot world web game.
+Small, reviewable PRs for the bot world web game.
 
 ## Non-negotiables
-- One ticket = one PR. Keep scope minimal.
-- Do NOT touch secrets (.env, credentials, keys).
+- One ticket = one PR.
+- Do NOT touch secrets (.env, credentials, keys) or leak tokens in logs.
 - Do NOT run destructive commands.
-- Prefer explicit, boring solutions over clever ones.
+- Prefer minimal diffs over refactors.
 
-## How to run checks (Gate)
+## Gate
 Run: ./scripts/gate.sh
 
-If scripts are missing, add npm scripts:
-- format:check, lint, typecheck, test, smoke
-
 ## Botworld guidelines
-- Server is authoritative: validate all inputs (client + bots).
-- Keep simulation deterministic where feasible (stable tick).
-- Add tests for invariants if touching core simulation.
-
-## PR checklist
-- [ ] Scoped to ticket
-- [ ] ./scripts/gate.sh passes
-- [ ] Tests added/updated
-- [ ] No secrets/log leaks
+- Server authoritative: validate all inputs (client + bots).
+- Determinism: keep tick/update stable where feasible.
+- Add tests for invariants when touching core simulation.
