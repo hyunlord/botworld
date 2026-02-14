@@ -447,6 +447,7 @@ export class WorldScene extends Phaser.Scene {
     // ── Drag-to-pan via Phaser scene events + DOM fallback ──
     this.input.on('pointerdown', (p: Phaser.Input.Pointer) => {
       console.log('[DRAG] pointerdown:', p.x.toFixed(0), p.y.toFixed(0), 'btn:', p.button)
+      this._objectClickedThisPress = false
       this._dragLastX = p.x
       this._dragLastY = p.y
       this._wasDragged = false

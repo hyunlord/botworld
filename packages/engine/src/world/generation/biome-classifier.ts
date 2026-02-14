@@ -313,3 +313,72 @@ export function smoothBiomes(
 
   removeFragments(tiles, width, height)
 }
+
+/**
+ * Fix deep_ocean / ocean tiles that appear inland (not connected to map edge).
+ * Uses flood-fill from edges to find the main ocean body.
+ * Isolated ocean pockets are converted to swamp or lake.
+ */
+export function fixInlandOcean(
+  tiles: Tile[][],
+  width: number,
+  height: number,
+): void {
+  // Mark all ocean/deep_ocean tiles reachable from map edges
+  const isOcean = (t: Tile) => t.type === 'water' || t.type === 'deep_water'
+  const reachable: boolean[][] = []
+  for (let y = 0; y < height; y++) {
+    reachable[y] = new Array(width).fill(false)
+  }
+
+  // BFS from all edge ocean tiles
+  const queue: { x: number; y: number }[] = []
+  for (let x = 0; x < width; x++) {
+    if (isOcean(tiles[0][x])) queue.push({ x, y: 0 })
+    if (isOcean(tiles[height - 1][x])) queue.push({ x, y: height - 1 })
+  }
+  for (let y = 1; y < height - 1; y++) {
+    if (isOcean(tiles[y][0])) queue.push({ x: 0, y })
+    if (isOcean(tiles[y][width - 1])) queue.push({ x: width - 1, y })
+  }
+
+  // Mark initial edge tiles
+  for (const pos of queue) {
+    reachable[pos.y][pos.x] = true
+  }
+
+  // BFS expansion
+  while (queue.length > 0) {
+    const pos = queue.shift()!
+    for (const [dx, dy] of [[-1, 0], [1, 0], [0, -1], [0, 1]]) {
+      const nx = pos.x + dx
+      const ny = pos.y + dy
+      if (nx < 0 || ny < 0 || nx >= width || ny >= height) continue
+      if (reachable[ny][nx]) continue
+      if (!isOcean(tiles[ny][nx])) continue
+      reachable[ny][nx] = true
+      queue.push({ x: nx, y: ny })
+    }
+  }
+
+  // Convert unreachable ocean tiles
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      const tile = tiles[y][x]
+      if (!isOcean(tile)) continue
+      if (reachable[y][x]) continue
+
+      // Count moisture from neighbors for biome choice
+      const moisture = tile.elevation ?? 0.3
+      if (moisture > 0.5) {
+        tile.type = 'swamp'
+        tile.biome = 'swamp'
+      } else {
+        tile.type = 'grass'
+        tile.biome = 'grassland'
+      }
+      tile.walkable = true
+      tile.movementCost = MOVEMENT_COSTS[tile.type] ?? 1.0
+    }
+  }
+}

@@ -6,6 +6,8 @@ import { TILE_SIZE, ISO_TILE_WIDTH, ISO_TILE_HEIGHT } from '../utils/coordinates
  * for tile variants / decorations / buildings, then starts WorldScene.
  */
 export class BootScene extends Phaser.Scene {
+  private assetManifest: any = null
+
   constructor() {
     super({ key: 'BootScene' })
   }
@@ -116,6 +118,12 @@ export class BootScene extends Phaser.Scene {
       dotTimer.destroy()
     })
 
+    // ── Load asset manifest first ──
+    this.load.json('asset-manifest', 'assets/asset-manifest.json')
+    this.load.once('filecomplete-json-asset-manifest', () => {
+      this.assetManifest = this.cache.json.get('asset-manifest')
+    })
+
     // ── Asset loading diagnostics ──
     const loadedAssets: string[] = []
     const failedAssets: string[] = []
@@ -164,7 +172,7 @@ export class BootScene extends Phaser.Scene {
       'road_dirt', 'road_stone', 'beach',
     ]
     for (const name of newTiles) {
-      this.load.image(`tile_new_${name}`, `assets/tiles/${name}.png`)
+      this.loadImageIfExists(`tile_new_${name}`, `assets/tiles/${name}.png`)
     }
 
     // ── New POI building sprites (15 legacy + 14 new) ──
@@ -174,7 +182,7 @@ export class BootScene extends Phaser.Scene {
       'inn', 'fountain', 'ruins', 'witch_hut', 'port',
     ]
     for (const name of newBuildings) {
-      this.load.image(`bldg_${name}`, `assets/buildings/${name}.png`)
+      this.loadImageIfExists(`bldg_${name}`, `assets/buildings/${name}.png`)
     }
 
     // ── Iso building sprites (bldg_ prefixed files) ──
@@ -186,7 +194,7 @@ export class BootScene extends Phaser.Scene {
       'bldg_gate_01', 'bldg_workshop',
     ]
     for (const name of isoBuildings) {
-      this.load.image(name, `assets/buildings/${name}.png`)
+      this.loadImageIfExists(name, `assets/buildings/${name}.png`)
     }
 
     // ── Isometric object sprites ──
@@ -223,7 +231,7 @@ export class BootScene extends Phaser.Scene {
       'mushroom_ring_01', 'campfire_remains_01',
     ]
     for (const name of isoObjects) {
-      this.load.image(`obj_${name}`, `assets/objects/${name}.png`)
+      this.loadImageIfExists(`obj_${name}`, `assets/objects/${name}.png`)
     }
 
     // ── New resource objects (17 types) ──
@@ -238,7 +246,7 @@ export class BootScene extends Phaser.Scene {
       'ore_iron', 'ore_gold', 'ore_crystal',
     ]
     for (const name of newResources) {
-      this.load.image(`res_${name}`, `assets/resources/${name}.png`)
+      this.loadImageIfExists(`res_${name}`, `assets/resources/${name}.png`)
     }
 
     // ── New item icons (26 types) ──
@@ -250,7 +258,7 @@ export class BootScene extends Phaser.Scene {
       'gem_red', 'gem_blue', 'scroll', 'key', 'map',
     ]
     for (const name of newItems) {
-      this.load.image(`item_${name}`, `assets/items/${name}.png`)
+      this.loadImageIfExists(`item_${name}`, `assets/items/${name}.png`)
     }
 
     // ── Character spritesheets (32x48 frames, 3 cols x 4 rows) ──
@@ -260,17 +268,17 @@ export class BootScene extends Phaser.Scene {
     // 8 race spritesheets
     const races = ['human', 'elf', 'dwarf', 'orc', 'beastkin', 'undead', 'fairy', 'dragonkin']
     for (const race of races) {
-      this.load.spritesheet(`char_${race}`, `assets/characters/${race}_sprite.png`, {
+      this.loadSpritesheetIfExists(`char_${race}`, `assets/characters/${race}_sprite.png`, {
         frameWidth: CHAR_FRAME_W, frameHeight: CHAR_FRAME_H,
       })
       // Legacy single-frame base (backward compat)
-      this.load.image(`char_race_${race}`, `assets/characters/${race}_base.png`)
+      this.loadImageIfExists(`char_race_${race}`, `assets/characters/${race}_base.png`)
     }
 
     // 5 NPC spritesheets
     const npcTypes = ['merchant', 'innkeeper', 'guildmaster', 'guard', 'wanderer']
     for (const npc of npcTypes) {
-      this.load.spritesheet(`char_npc_${npc}`, `assets/characters/npc_${npc}.png`, {
+      this.loadSpritesheetIfExists(`char_npc_${npc}`, `assets/characters/npc_${npc}.png`, {
         frameWidth: CHAR_FRAME_W, frameHeight: CHAR_FRAME_H,
       })
     }
@@ -278,7 +286,7 @@ export class BootScene extends Phaser.Scene {
     // 4 monster spritesheets
     const monsterSpriteTypes = ['goblin', 'wolf', 'skeleton', 'slime']
     for (const mon of monsterSpriteTypes) {
-      this.load.spritesheet(`char_monster_${mon}`, `assets/characters/monster_${mon}.png`, {
+      this.loadSpritesheetIfExists(`char_monster_${mon}`, `assets/characters/monster_${mon}.png`, {
         frameWidth: CHAR_FRAME_W, frameHeight: CHAR_FRAME_H,
       })
     }
@@ -287,29 +295,29 @@ export class BootScene extends Phaser.Scene {
     // Minimap POI icons
     const minimapIcons = ['tavern', 'market', 'blacksmith', 'library', 'temple', 'farm', 'mine', 'port']
     for (const name of minimapIcons) {
-      this.load.image(`minimap_${name}`, `assets/ui/minimap_icons/${name}.png`)
+      this.loadImageIfExists(`minimap_${name}`, `assets/ui/minimap_icons/${name}.png`)
     }
 
     // Emotion bubble icons
     const emotions = ['happy', 'sad', 'angry', 'surprised', 'scared', 'love', 'thinking', 'sleepy']
     for (const name of emotions) {
-      this.load.image(`emotion_${name}`, `assets/ui/emotion_bubbles/${name}.png`)
+      this.loadImageIfExists(`emotion_${name}`, `assets/ui/emotion_bubbles/${name}.png`)
     }
 
     // Speech bubble frame
-    this.load.image('speech_bubble_frame', 'assets/ui/speech_bubble.png')
+    this.loadImageIfExists('speech_bubble_frame', 'assets/ui/speech_bubble.png')
 
     // Action indicator icons (new set)
     const newActions = ['gathering', 'crafting', 'fighting', 'resting', 'trading', 'walking', 'eating', 'exploring']
     for (const name of newActions) {
-      this.load.image(`act_${name}`, `assets/ui/action_icons/${name}.png`)
+      this.loadImageIfExists(`act_${name}`, `assets/ui/action_icons/${name}.png`)
     }
 
     // ── Legacy assets (backward compatibility) ──
 
     // Agent sprites (5 characters — legacy fallback)
     for (let i = 0; i < 5; i++) {
-      this.load.image(`agent_${i}`, `assets/agents/agent_${i}.png`)
+      this.loadImageIfExists(`agent_${i}`, `assets/agents/agent_${i}.png`)
     }
 
     // Character part sprites & racial features — no assets/character/ directory; procedural fallbacks in create()
@@ -317,13 +325,13 @@ export class BootScene extends Phaser.Scene {
     // Legacy resource icons (6 types)
     const resourceTypes = ['wood', 'stone', 'food', 'iron', 'gold', 'herb']
     for (const type of resourceTypes) {
-      this.load.image(`resource_${type}`, `assets/resources/resource_${type}.png`)
+      this.loadImageIfExists(`resource_${type}`, `assets/resources/resource_${type}.png`)
     }
 
     // Legacy action icons (5 types)
     const actionTypes = ['gather', 'talk', 'craft', 'rest', 'trade']
     for (const type of actionTypes) {
-      this.load.image(`action_${type}`, `assets/actions/action_${type}.png`)
+      this.loadImageIfExists(`action_${type}`, `assets/actions/action_${type}.png`)
     }
 
     // Legacy building sprites & decorations — no PNGs on disk; procedural fallbacks in create()
@@ -713,38 +721,120 @@ export class BootScene extends Phaser.Scene {
   private generateCharacterFallbacks(): void {
     const W = 48, H = 64
 
-    // Body silhouettes (grayscale so tint works)
+    // Body silhouettes (grayscale so tint works) with shading
     const bodies: Record<string, (g: Phaser.GameObjects.Graphics) => void> = {
-      char_body_slim:     g => { g.fillStyle(0xAAAAAA); g.fillRoundedRect(14, 8, 20, 48, 6) },
-      char_body_average:  g => { g.fillStyle(0xAAAAAA); g.fillRoundedRect(12, 6, 24, 50, 7) },
-      char_body_athletic: g => { g.fillStyle(0xAAAAAA); g.fillRoundedRect(11, 6, 26, 50, 6) },
-      char_body_large:    g => { g.fillStyle(0xAAAAAA); g.fillRoundedRect(9, 4, 30, 54, 8) },
+      char_body_slim:     g => {
+        g.fillStyle(0xAAAAAA); g.fillRoundedRect(14, 8, 20, 48, 6)
+        g.fillStyle(0x888888); g.fillRect(14, 8, 1, 48); g.fillRect(33, 8, 1, 48) // edges
+      },
+      char_body_average:  g => {
+        g.fillStyle(0xAAAAAA); g.fillRoundedRect(12, 6, 24, 50, 7)
+        g.fillStyle(0x888888); g.fillRect(12, 6, 1, 50); g.fillRect(35, 6, 1, 50)
+      },
+      char_body_athletic: g => {
+        g.fillStyle(0xAAAAAA); g.fillRoundedRect(11, 6, 26, 50, 6)
+        g.fillStyle(0x888888); g.fillRect(11, 6, 1, 50); g.fillRect(36, 6, 1, 50)
+      },
+      char_body_large:    g => {
+        g.fillStyle(0xAAAAAA); g.fillRoundedRect(9, 4, 30, 54, 8)
+        g.fillStyle(0x888888); g.fillRect(9, 4, 2, 54); g.fillRect(37, 4, 2, 54)
+      },
     }
 
-    // Armor overlays
+    // Armor overlays with shading and detail lines
     const armors: Record<string, (g: Phaser.GameObjects.Graphics) => void> = {
-      char_armor_casual:    g => { g.fillStyle(0x888888); g.fillRoundedRect(14, 18, 20, 28, 4) },
-      char_armor_leather:   g => { g.fillStyle(0x777777); g.fillRoundedRect(13, 16, 22, 30, 5) },
-      char_armor_chainmail: g => { g.fillStyle(0x999999); g.fillRoundedRect(12, 14, 24, 32, 5) },
-      char_armor_plate:     g => { g.fillStyle(0x666666); g.fillRoundedRect(11, 12, 26, 34, 4) },
-      char_armor_cloth_robe:g => { g.fillStyle(0x888888); g.fillRoundedRect(12, 14, 24, 40, 6) },
+      char_armor_casual:    g => {
+        g.fillStyle(0x888888); g.fillRoundedRect(14, 18, 20, 28, 4)
+        g.fillStyle(0x666666); g.fillRect(14, 18, 1, 28); g.fillRect(33, 18, 1, 28)
+      },
+      char_armor_leather:   g => {
+        g.fillStyle(0x777777); g.fillRoundedRect(13, 16, 22, 30, 5)
+        g.fillStyle(0x555555); g.fillRect(13, 16, 1, 30); g.fillRect(34, 16, 1, 30)
+        g.fillRect(24, 20, 1, 22) // center seam
+      },
+      char_armor_chainmail: g => {
+        g.fillStyle(0x999999); g.fillRoundedRect(12, 14, 24, 32, 5)
+        g.fillStyle(0x777777)
+        // Horizontal chain lines
+        for (let y = 16; y < 44; y += 3) {
+          g.fillRect(13, y, 22, 1)
+        }
+      },
+      char_armor_plate:     g => {
+        g.fillStyle(0x666666); g.fillRoundedRect(11, 12, 26, 34, 4)
+        g.fillStyle(0x444444)
+        // Vertical plate segments
+        g.fillRect(11, 12, 1, 34); g.fillRect(36, 12, 1, 34)
+        g.fillRect(19, 12, 1, 34); g.fillRect(29, 12, 1, 34)
+        // Horizontal plate lines
+        g.fillRect(11, 24, 26, 1); g.fillRect(11, 36, 26, 1)
+      },
+      char_armor_cloth_robe:g => {
+        g.fillStyle(0x888888); g.fillRoundedRect(12, 14, 24, 40, 6)
+        g.fillStyle(0x666666); g.fillRect(12, 14, 1, 40); g.fillRect(35, 14, 1, 40)
+      },
     }
 
-    // Hair shapes
+    // Hair shapes with more distinct styles
     const hairs: Record<string, (g: Phaser.GameObjects.Graphics) => void> = {
-      char_hair_short_messy:   g => { g.fillStyle(0xCCCCCC); g.fillRoundedRect(12, 0, 24, 18, 8) },
-      char_hair_long_straight: g => { g.fillStyle(0xCCCCCC); g.fillRoundedRect(10, 0, 28, 30, 6) },
-      char_hair_braided:       g => { g.fillStyle(0xCCCCCC); g.fillRoundedRect(12, 0, 24, 28, 6) },
-      char_hair_mohawk:        g => { g.fillStyle(0xCCCCCC); g.fillRoundedRect(18, 0, 12, 20, 4) },
-      char_hair_ponytail:      g => { g.fillStyle(0xCCCCCC); g.fillRoundedRect(12, 0, 24, 22, 8) },
-      char_hair_bald:          g => { g.fillStyle(0xBBBBBB); g.fillEllipse(24, 8, 22, 16) },
-      char_hair_afro:          g => { g.fillStyle(0xCCCCCC); g.fillEllipse(24, 8, 32, 28) },
-      char_hair_curly:         g => { g.fillStyle(0xCCCCCC); g.fillRoundedRect(10, 0, 28, 24, 10) },
-      char_hair_bob:           g => { g.fillStyle(0xCCCCCC); g.fillRoundedRect(10, 0, 28, 22, 8) },
+      char_hair_short_messy:   g => {
+        g.fillStyle(0xCCCCCC); g.fillRoundedRect(12, 0, 24, 18, 8)
+        g.fillStyle(0xAAAAAA); g.fillRect(12, 0, 1, 16); g.fillRect(35, 0, 1, 16)
+      },
+      char_hair_long_straight: g => {
+        g.fillStyle(0xCCCCCC); g.fillRoundedRect(10, 0, 28, 30, 6)
+        g.fillStyle(0xAAAAAA); g.fillRect(10, 4, 1, 26); g.fillRect(37, 4, 1, 26) // edges
+      },
+      char_hair_braided:       g => {
+        g.fillStyle(0xCCCCCC); g.fillRoundedRect(12, 0, 24, 28, 6)
+        g.fillStyle(0xAAAAAA)
+        // Braid texture
+        for (let y = 4; y < 26; y += 4) {
+          g.fillRect(20, y, 8, 2)
+        }
+      },
+      char_hair_mohawk:        g => {
+        g.fillStyle(0xCCCCCC); g.fillRoundedRect(18, 0, 12, 20, 4)
+        g.fillStyle(0xAAAAAA); g.fillRect(18, 0, 1, 20); g.fillRect(29, 0, 1, 20)
+      },
+      char_hair_ponytail:      g => {
+        g.fillStyle(0xCCCCCC); g.fillRoundedRect(12, 0, 24, 22, 8)
+        g.fillEllipse(36, 12, 8, 14) // ponytail bump
+        g.fillStyle(0xAAAAAA); g.fillRect(12, 0, 1, 20); g.fillRect(35, 0, 1, 20)
+      },
+      char_hair_bald:          g => {
+        g.fillStyle(0xBBBBBB); g.fillEllipse(24, 8, 22, 16)
+      },
+      char_hair_afro:          g => {
+        g.fillStyle(0xCCCCCC); g.fillEllipse(24, 8, 32, 28)
+        g.fillStyle(0xAAAAAA)
+        // Bumpy outline texture
+        for (let i = 0; i < 360; i += 40) {
+          const rad = (i * Math.PI) / 180
+          const x = 24 + Math.cos(rad) * 14
+          const y = 8 + Math.sin(rad) * 12
+          g.fillCircle(x, y, 2)
+        }
+      },
+      char_hair_curly:         g => {
+        g.fillStyle(0xCCCCCC); g.fillRoundedRect(10, 0, 28, 24, 10)
+        g.fillStyle(0xAAAAAA)
+        // Curly bumps
+        for (let y = 4; y < 22; y += 6) {
+          g.fillCircle(12, y, 2); g.fillCircle(36, y, 2)
+        }
+      },
+      char_hair_bob:           g => {
+        g.fillStyle(0xCCCCCC); g.fillRoundedRect(10, 0, 28, 22, 8)
+        g.fillStyle(0xAAAAAA); g.fillRect(10, 0, 1, 22); g.fillRect(37, 0, 1, 22)
+      },
       char_hair_spiky:         g => {
         g.fillStyle(0xCCCCCC)
-        g.beginPath(); g.moveTo(14, 16); g.lineTo(24, 0); g.lineTo(34, 16); g.closePath(); g.fillPath()
-        g.fillRoundedRect(12, 8, 24, 12, 4)
+        // Multiple spikes
+        g.beginPath(); g.moveTo(14, 14); g.lineTo(18, 0); g.lineTo(22, 14); g.closePath(); g.fillPath()
+        g.beginPath(); g.moveTo(20, 16); g.lineTo(24, 2); g.lineTo(28, 16); g.closePath(); g.fillPath()
+        g.beginPath(); g.moveTo(26, 14); g.lineTo(30, 0); g.lineTo(34, 14); g.closePath(); g.fillPath()
+        g.fillRoundedRect(12, 8, 24, 10, 4)
       },
     }
 
@@ -1024,6 +1114,24 @@ export class BootScene extends Phaser.Scene {
     const SW = FW * 3, SH = FH * 4
     const g = this.add.graphics()
 
+    // Extract race-specific proportions and features
+    const isHuman = key.includes('human')
+    const isElf = key.includes('elf')
+    const isDwarf = key.includes('dwarf')
+    const isOrc = key.includes('orc')
+    const isUndead = key.includes('undead')
+    const isFairy = key.includes('fairy')
+    const isDragonkin = key.includes('dragonkin')
+    const isBeastkin = key.includes('beastkin')
+
+    // Race-specific proportions
+    const headSize = isFairy ? 4 : isDwarf ? 7 : 6
+    const bodyWidth = isDwarf ? 12 : isOrc ? 12 : isDragonkin ? 12 : isElf ? 8 : isFairy ? 6 : 10
+    const bodyHeight = isDwarf ? 11 : isElf ? 16 : isFairy ? 10 : 14
+    const bodyY = isDwarf ? 20 : isElf ? 17 : isFairy ? 22 : 18
+    const legLength = isDwarf ? 8 : isElf ? 12 : isFairy ? 6 : 10
+    const shoulderWidth = isOrc ? 14 : isDragonkin ? 14 : isDwarf ? 13 : 10
+
     for (let row = 0; row < 4; row++) {
       for (let col = 0; col < 3; col++) {
         const fx = col * FW
@@ -1035,30 +1143,152 @@ export class BootScene extends Phaser.Scene {
         g.fillStyle(0x000000, 0.2)
         g.fillEllipse(cx, fy + 44, 14, 4)
 
-        // Legs
+        // Legs with shading
+        const legY = bodyY + bodyHeight
         g.fillStyle(bodyColor, 0.7)
-        g.fillRect(cx - 3 + walkShift, fy + 32, 3, 10)
-        g.fillRect(cx + 1 - walkShift, fy + 32, 3, 10)
+        g.fillRect(cx - 3 + walkShift, fy + legY, 3, legLength)
+        g.fillRect(cx + 1 - walkShift, fy + legY, 3, legLength)
+        // Boot line at bottom
+        const darkerBody = this.darkenColor(bodyColor, 0.3)
+        g.fillStyle(darkerBody, 1)
+        g.fillRect(cx - 3 + walkShift, fy + legY + legLength - 2, 3, 2)
+        g.fillRect(cx + 1 - walkShift, fy + legY + legLength - 2, 3, 2)
 
-        // Body
+        // Body with clothing outline and belt
         g.fillStyle(bodyColor, 1)
-        g.fillRoundedRect(cx - 5, fy + 18, 10, 14, 2)
+        g.fillRoundedRect(cx - bodyWidth / 2, fy + bodyY, bodyWidth, bodyHeight, 2)
+        // Shoulders (wider for orcs/dragonkin)
+        if (isOrc || isDragonkin) {
+          g.fillStyle(bodyColor, 0.9)
+          g.fillRoundedRect(cx - shoulderWidth / 2, fy + bodyY, shoulderWidth, 5, 2)
+        }
+        // Clothing outline (darker edge)
+        g.fillStyle(darkerBody, 1)
+        g.fillRect(cx - bodyWidth / 2, fy + bodyY, 1, bodyHeight) // left edge
+        g.fillRect(cx + bodyWidth / 2 - 1, fy + bodyY, 1, bodyHeight) // right edge
+        // Belt line
+        const beltY = fy + bodyY + Math.floor(bodyHeight * 0.6)
+        g.fillRect(cx - bodyWidth / 2, beltY, bodyWidth, 1)
+        // Collar/neckline
+        g.fillRect(cx - 3, fy + bodyY, 6, 1)
 
         // Head
         g.fillStyle(headColor, 1)
-        g.fillCircle(cx, fy + 12, 6)
+        g.fillCircle(cx, fy + 12, headSize)
 
-        // Eyes (front/side only)
-        if (row !== 3) {
+        // Hair silhouette (simple shape above head)
+        const hairColor = this.darkenColor(headColor, 0.4)
+        g.fillStyle(hairColor, 1)
+        if (isElf) {
+          // Long straight hair
+          g.fillRoundedRect(cx - 5, fy + 4, 10, 10, 3)
+        } else if (isDwarf) {
+          // Short crop
+          g.fillRoundedRect(cx - 5, fy + 4, 10, 6, 3)
+          // Beard (front-facing)
+          if (row === 0) {
+            g.fillStyle(hairColor, 0.9)
+            g.fillRoundedRect(cx - 4, fy + 14, 8, 5, 2)
+          }
+        } else if (isFairy) {
+          // Wild/spiky
+          g.beginPath()
+          g.moveTo(cx - 4, fy + 8)
+          g.lineTo(cx - 2, fy + 2)
+          g.lineTo(cx, fy + 8)
+          g.lineTo(cx + 2, fy + 2)
+          g.lineTo(cx + 4, fy + 8)
+          g.closePath()
+          g.fillPath()
+        } else {
+          // Medium hair
+          g.fillRoundedRect(cx - 5, fy + 4, 10, 8, 3)
+        }
+
+        // Race-specific features
+        if (isElf && (row === 1 || row === 2)) {
+          // Pointed ears (side views)
+          g.fillStyle(headColor, 1)
+          const earDir = row === 1 ? -1 : 1
+          g.beginPath()
+          g.moveTo(cx + earDir * headSize, fy + 10)
+          g.lineTo(cx + earDir * (headSize + 3), fy + 8)
+          g.lineTo(cx + earDir * (headSize - 1), fy + 12)
+          g.closePath()
+          g.fillPath()
+        }
+
+        if (isOrc && row === 0) {
+          // Tusks (front view)
+          g.fillStyle(0xf0f0e0, 1)
+          g.fillRect(cx - 4, fy + 15, 2, 3)
+          g.fillRect(cx + 2, fy + 15, 2, 3)
+        }
+
+        if (isUndead) {
+          // Ragged edges and transparency
+          g.fillStyle(headColor, 0.8)
+          g.fillCircle(cx, fy + 12, headSize)
+          // Hollow eyes
+          g.fillStyle(0x000000, 1)
+          if (row === 0) {
+            g.fillCircle(cx - 2, fy + 12, 2)
+            g.fillCircle(cx + 2, fy + 12, 2)
+          }
+        }
+
+        if (isFairy && (row === 1 || row === 2)) {
+          // Small wings
+          g.fillStyle(0xffffff, 0.4)
+          const wingDir = row === 1 ? -1 : 1
+          g.beginPath()
+          g.moveTo(cx + wingDir * 4, fy + 22)
+          g.lineTo(cx + wingDir * 8, fy + 20)
+          g.lineTo(cx + wingDir * 6, fy + 26)
+          g.closePath()
+          g.fillPath()
+        }
+
+        if (isDragonkin && row === 0) {
+          // Small horns
+          g.fillStyle(darkerBody, 1)
+          g.beginPath()
+          g.moveTo(cx - 4, fy + 6)
+          g.lineTo(cx - 3, fy + 2)
+          g.lineTo(cx - 2, fy + 6)
+          g.closePath()
+          g.fillPath()
+          g.beginPath()
+          g.moveTo(cx + 2, fy + 6)
+          g.lineTo(cx + 3, fy + 2)
+          g.lineTo(cx + 4, fy + 6)
+          g.closePath()
+          g.fillPath()
+        }
+
+        if (isBeastkin && (row === 1 || row === 2)) {
+          // Pointy ears (animal-like)
+          g.fillStyle(headColor, 1)
+          const earDir = row === 1 ? -1 : 1
+          g.beginPath()
+          g.moveTo(cx + earDir * (headSize - 2), fy + 6)
+          g.lineTo(cx + earDir * (headSize + 1), fy + 2)
+          g.lineTo(cx + earDir * headSize, fy + 8)
+          g.closePath()
+          g.fillPath()
+        }
+
+        // Eyes (front/side only) - improved positioning
+        if (row !== 3 && !isUndead) {
           g.fillStyle(0x000000, 0.8)
           if (row === 0) {
             // Down
-            g.fillCircle(cx - 2, fy + 13, 1)
-            g.fillCircle(cx + 2, fy + 13, 1)
+            g.fillCircle(cx - 2, fy + 12, 1)
+            g.fillCircle(cx + 2, fy + 12, 1)
           } else {
             // Side
             const dir = row === 1 ? -1 : 1
-            g.fillCircle(cx + dir * 2, fy + 13, 1)
+            g.fillCircle(cx + dir * 2, fy + 12, 1)
           }
         }
       }
@@ -1108,5 +1338,93 @@ export class BootScene extends Phaser.Scene {
   /** Clamp color to valid 0x000000-0xffffff range */
   private clampColor(c: number): number {
     return Math.max(0, Math.min(0xffffff, c))
+  }
+
+  /** Darken a color by a percentage (0-1) */
+  private darkenColor(color: number, amount: number): number {
+    const r = (color >> 16) & 0xFF
+    const g = (color >> 8) & 0xFF
+    const b = color & 0xFF
+    const nr = Math.floor(r * (1 - amount))
+    const ng = Math.floor(g * (1 - amount))
+    const nb = Math.floor(b * (1 - amount))
+    return (nr << 16) | (ng << 8) | nb
+  }
+
+  /**
+   * Check if an asset file exists in the manifest before attempting to load.
+   * Returns true if manifest not loaded yet (fail open) or if asset exists.
+   */
+  private assetExists(path: string): boolean {
+    if (!this.assetManifest) return true // Fail open if manifest not loaded yet
+
+    // Normalize path: remove 'assets/' prefix if present
+    const normalizedPath = path.startsWith('assets/') ? path.substring(7) : path
+
+    // Check terrain spritesheet
+    if (normalizedPath === 'tiles/iso-terrain-sheet.png') return true
+    if (normalizedPath === 'tiles/terrain-sheet.png') return true
+
+    // Check buildings
+    if (normalizedPath.startsWith('buildings/')) {
+      const fileName = normalizedPath.split('/')[1].replace('.png', '')
+      const existing = this.assetManifest.buildings?.existing || []
+      return existing.includes(fileName)
+    }
+
+    // Check objects
+    if (normalizedPath.startsWith('objects/')) {
+      // Object files use obj_ prefix in the manifest, but the file is just the base name
+      const fileName = normalizedPath.split('/')[1].replace('.png', '')
+      // All 71 objects exist according to manifest
+      return true // Objects directory has all files
+    }
+
+    // Check resources
+    if (normalizedPath.startsWith('resources/')) {
+      const fileName = normalizedPath.split('/')[1].replace('.png', '')
+      const existing = this.assetManifest.resources?.existing || []
+      return existing.includes(fileName)
+    }
+
+    // Check characters
+    if (normalizedPath.startsWith('characters/')) {
+      // Characters are all procedural fallbacks - they don't exist as PNGs
+      return false
+    }
+
+    // Check UI
+    if (normalizedPath.startsWith('ui/')) {
+      if (normalizedPath === 'ui/speech_bubble.png') return true
+      // All other UI subdirectories don't have files
+      return false
+    }
+
+    // Check items, agents, actions, tiles - none of these exist
+    if (normalizedPath.startsWith('items/')) return false
+    if (normalizedPath.startsWith('agents/')) return false
+    if (normalizedPath.startsWith('actions/')) return false
+    if (normalizedPath.startsWith('tiles/') && !normalizedPath.includes('terrain-sheet')) return false
+
+    // Default: allow (fail open for unknown paths)
+    return true
+  }
+
+  /**
+   * Conditionally load an image only if it exists in the manifest.
+   */
+  private loadImageIfExists(key: string, path: string): void {
+    if (this.assetExists(path)) {
+      this.load.image(key, path)
+    }
+  }
+
+  /**
+   * Conditionally load a spritesheet only if it exists in the manifest.
+   */
+  private loadSpritesheetIfExists(key: string, path: string, frameConfig: Phaser.Types.Loader.FileTypes.ImageFrameConfig): void {
+    if (this.assetExists(path)) {
+      this.load.spritesheet(key, path, frameConfig)
+    }
   }
 }

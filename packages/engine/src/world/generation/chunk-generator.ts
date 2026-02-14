@@ -15,7 +15,7 @@
 import { CHUNK_SIZE, MOVEMENT_COSTS } from '@botworld/shared'
 import type { Tile, TileType, ChunkData, ChunkPOI, POIType, ResourceType } from '@botworld/shared'
 import { SimplexNoise2D, fbm, ridgedFbm, domainWarp, clamp, lerp } from './noise.js'
-import { classifyBiome } from './biome-classifier.js'
+import { classifyBiome, fixInlandOcean } from './biome-classifier.js'
 
 // --- World shape constants ---
 
@@ -477,6 +477,9 @@ export function generateChunk(cx: number, cy: number, seed: number): ChunkData {
 
   // Step 2: Cellular automata smoothing (inner area only)
   smoothChunkTiles(tiles, S)
+
+  // Step 2b: Fix inland ocean tiles
+  fixInlandOcean(tiles, S, S)
 
   // Step 3: Place cliff tiles at elevation transitions
   placeCliffTiles(tiles, S, cx, cy, seed)
