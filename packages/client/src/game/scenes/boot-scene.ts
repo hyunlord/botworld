@@ -6,6 +6,8 @@ import { TILE_SIZE, ISO_TILE_WIDTH, ISO_TILE_HEIGHT } from '../utils/coordinates
  * for tile variants / decorations / buildings, then starts WorldScene.
  */
 export class BootScene extends Phaser.Scene {
+  private assetManifest: any = null
+
   constructor() {
     super({ key: 'BootScene' })
   }
@@ -116,6 +118,12 @@ export class BootScene extends Phaser.Scene {
       dotTimer.destroy()
     })
 
+    // ── Load asset manifest first ──
+    this.load.json('asset-manifest', 'assets/asset-manifest.json')
+    this.load.once('filecomplete-json-asset-manifest', () => {
+      this.assetManifest = this.cache.json.get('asset-manifest')
+    })
+
     // ── Asset loading diagnostics ──
     const loadedAssets: string[] = []
     const failedAssets: string[] = []
@@ -164,7 +172,7 @@ export class BootScene extends Phaser.Scene {
       'road_dirt', 'road_stone', 'beach',
     ]
     for (const name of newTiles) {
-      this.load.image(`tile_new_${name}`, `assets/tiles/${name}.png`)
+      this.loadImageIfExists(`tile_new_${name}`, `assets/tiles/${name}.png`)
     }
 
     // ── New POI building sprites (15 legacy + 14 new) ──
@@ -174,7 +182,7 @@ export class BootScene extends Phaser.Scene {
       'inn', 'fountain', 'ruins', 'witch_hut', 'port',
     ]
     for (const name of newBuildings) {
-      this.load.image(`bldg_${name}`, `assets/buildings/${name}.png`)
+      this.loadImageIfExists(`bldg_${name}`, `assets/buildings/${name}.png`)
     }
 
     // ── Iso building sprites (bldg_ prefixed files) ──
@@ -186,7 +194,7 @@ export class BootScene extends Phaser.Scene {
       'bldg_gate_01', 'bldg_workshop',
     ]
     for (const name of isoBuildings) {
-      this.load.image(name, `assets/buildings/${name}.png`)
+      this.loadImageIfExists(name, `assets/buildings/${name}.png`)
     }
 
     // ── Isometric object sprites ──
@@ -223,7 +231,7 @@ export class BootScene extends Phaser.Scene {
       'mushroom_ring_01', 'campfire_remains_01',
     ]
     for (const name of isoObjects) {
-      this.load.image(`obj_${name}`, `assets/objects/${name}.png`)
+      this.loadImageIfExists(`obj_${name}`, `assets/objects/${name}.png`)
     }
 
     // ── New resource objects (17 types) ──
@@ -238,7 +246,7 @@ export class BootScene extends Phaser.Scene {
       'ore_iron', 'ore_gold', 'ore_crystal',
     ]
     for (const name of newResources) {
-      this.load.image(`res_${name}`, `assets/resources/${name}.png`)
+      this.loadImageIfExists(`res_${name}`, `assets/resources/${name}.png`)
     }
 
     // ── New item icons (26 types) ──
@@ -250,7 +258,7 @@ export class BootScene extends Phaser.Scene {
       'gem_red', 'gem_blue', 'scroll', 'key', 'map',
     ]
     for (const name of newItems) {
-      this.load.image(`item_${name}`, `assets/items/${name}.png`)
+      this.loadImageIfExists(`item_${name}`, `assets/items/${name}.png`)
     }
 
     // ── Character spritesheets (32x48 frames, 3 cols x 4 rows) ──
@@ -260,17 +268,17 @@ export class BootScene extends Phaser.Scene {
     // 8 race spritesheets
     const races = ['human', 'elf', 'dwarf', 'orc', 'beastkin', 'undead', 'fairy', 'dragonkin']
     for (const race of races) {
-      this.load.spritesheet(`char_${race}`, `assets/characters/${race}_sprite.png`, {
+      this.loadSpritesheetIfExists(`char_${race}`, `assets/characters/${race}_sprite.png`, {
         frameWidth: CHAR_FRAME_W, frameHeight: CHAR_FRAME_H,
       })
       // Legacy single-frame base (backward compat)
-      this.load.image(`char_race_${race}`, `assets/characters/${race}_base.png`)
+      this.loadImageIfExists(`char_race_${race}`, `assets/characters/${race}_base.png`)
     }
 
     // 5 NPC spritesheets
     const npcTypes = ['merchant', 'innkeeper', 'guildmaster', 'guard', 'wanderer']
     for (const npc of npcTypes) {
-      this.load.spritesheet(`char_npc_${npc}`, `assets/characters/npc_${npc}.png`, {
+      this.loadSpritesheetIfExists(`char_npc_${npc}`, `assets/characters/npc_${npc}.png`, {
         frameWidth: CHAR_FRAME_W, frameHeight: CHAR_FRAME_H,
       })
     }
@@ -278,7 +286,7 @@ export class BootScene extends Phaser.Scene {
     // 4 monster spritesheets
     const monsterSpriteTypes = ['goblin', 'wolf', 'skeleton', 'slime']
     for (const mon of monsterSpriteTypes) {
-      this.load.spritesheet(`char_monster_${mon}`, `assets/characters/monster_${mon}.png`, {
+      this.loadSpritesheetIfExists(`char_monster_${mon}`, `assets/characters/monster_${mon}.png`, {
         frameWidth: CHAR_FRAME_W, frameHeight: CHAR_FRAME_H,
       })
     }
@@ -287,29 +295,29 @@ export class BootScene extends Phaser.Scene {
     // Minimap POI icons
     const minimapIcons = ['tavern', 'market', 'blacksmith', 'library', 'temple', 'farm', 'mine', 'port']
     for (const name of minimapIcons) {
-      this.load.image(`minimap_${name}`, `assets/ui/minimap_icons/${name}.png`)
+      this.loadImageIfExists(`minimap_${name}`, `assets/ui/minimap_icons/${name}.png`)
     }
 
     // Emotion bubble icons
     const emotions = ['happy', 'sad', 'angry', 'surprised', 'scared', 'love', 'thinking', 'sleepy']
     for (const name of emotions) {
-      this.load.image(`emotion_${name}`, `assets/ui/emotion_bubbles/${name}.png`)
+      this.loadImageIfExists(`emotion_${name}`, `assets/ui/emotion_bubbles/${name}.png`)
     }
 
     // Speech bubble frame
-    this.load.image('speech_bubble_frame', 'assets/ui/speech_bubble.png')
+    this.loadImageIfExists('speech_bubble_frame', 'assets/ui/speech_bubble.png')
 
     // Action indicator icons (new set)
     const newActions = ['gathering', 'crafting', 'fighting', 'resting', 'trading', 'walking', 'eating', 'exploring']
     for (const name of newActions) {
-      this.load.image(`act_${name}`, `assets/ui/action_icons/${name}.png`)
+      this.loadImageIfExists(`act_${name}`, `assets/ui/action_icons/${name}.png`)
     }
 
     // ── Legacy assets (backward compatibility) ──
 
     // Agent sprites (5 characters — legacy fallback)
     for (let i = 0; i < 5; i++) {
-      this.load.image(`agent_${i}`, `assets/agents/agent_${i}.png`)
+      this.loadImageIfExists(`agent_${i}`, `assets/agents/agent_${i}.png`)
     }
 
     // Character part sprites & racial features — no assets/character/ directory; procedural fallbacks in create()
@@ -317,13 +325,13 @@ export class BootScene extends Phaser.Scene {
     // Legacy resource icons (6 types)
     const resourceTypes = ['wood', 'stone', 'food', 'iron', 'gold', 'herb']
     for (const type of resourceTypes) {
-      this.load.image(`resource_${type}`, `assets/resources/resource_${type}.png`)
+      this.loadImageIfExists(`resource_${type}`, `assets/resources/resource_${type}.png`)
     }
 
     // Legacy action icons (5 types)
     const actionTypes = ['gather', 'talk', 'craft', 'rest', 'trade']
     for (const type of actionTypes) {
-      this.load.image(`action_${type}`, `assets/actions/action_${type}.png`)
+      this.loadImageIfExists(`action_${type}`, `assets/actions/action_${type}.png`)
     }
 
     // Legacy building sprites & decorations — no PNGs on disk; procedural fallbacks in create()
@@ -1108,5 +1116,82 @@ export class BootScene extends Phaser.Scene {
   /** Clamp color to valid 0x000000-0xffffff range */
   private clampColor(c: number): number {
     return Math.max(0, Math.min(0xffffff, c))
+  }
+
+  /**
+   * Check if an asset file exists in the manifest before attempting to load.
+   * Returns true if manifest not loaded yet (fail open) or if asset exists.
+   */
+  private assetExists(path: string): boolean {
+    if (!this.assetManifest) return true // Fail open if manifest not loaded yet
+
+    // Normalize path: remove 'assets/' prefix if present
+    const normalizedPath = path.startsWith('assets/') ? path.substring(7) : path
+
+    // Check terrain spritesheet
+    if (normalizedPath === 'tiles/iso-terrain-sheet.png') return true
+    if (normalizedPath === 'tiles/terrain-sheet.png') return true
+
+    // Check buildings
+    if (normalizedPath.startsWith('buildings/')) {
+      const fileName = normalizedPath.split('/')[1].replace('.png', '')
+      const existing = this.assetManifest.buildings?.existing || []
+      return existing.includes(fileName)
+    }
+
+    // Check objects
+    if (normalizedPath.startsWith('objects/')) {
+      // Object files use obj_ prefix in the manifest, but the file is just the base name
+      const fileName = normalizedPath.split('/')[1].replace('.png', '')
+      // All 71 objects exist according to manifest
+      return true // Objects directory has all files
+    }
+
+    // Check resources
+    if (normalizedPath.startsWith('resources/')) {
+      const fileName = normalizedPath.split('/')[1].replace('.png', '')
+      const existing = this.assetManifest.resources?.existing || []
+      return existing.includes(fileName)
+    }
+
+    // Check characters
+    if (normalizedPath.startsWith('characters/')) {
+      // Characters are all procedural fallbacks - they don't exist as PNGs
+      return false
+    }
+
+    // Check UI
+    if (normalizedPath.startsWith('ui/')) {
+      if (normalizedPath === 'ui/speech_bubble.png') return true
+      // All other UI subdirectories don't have files
+      return false
+    }
+
+    // Check items, agents, actions, tiles - none of these exist
+    if (normalizedPath.startsWith('items/')) return false
+    if (normalizedPath.startsWith('agents/')) return false
+    if (normalizedPath.startsWith('actions/')) return false
+    if (normalizedPath.startsWith('tiles/') && !normalizedPath.includes('terrain-sheet')) return false
+
+    // Default: allow (fail open for unknown paths)
+    return true
+  }
+
+  /**
+   * Conditionally load an image only if it exists in the manifest.
+   */
+  private loadImageIfExists(key: string, path: string): void {
+    if (this.assetExists(path)) {
+      this.load.image(key, path)
+    }
+  }
+
+  /**
+   * Conditionally load a spritesheet only if it exists in the manifest.
+   */
+  private loadSpritesheetIfExists(key: string, path: string, frameConfig: Phaser.Types.Loader.FileTypes.ImageFrameConfig): void {
+    if (this.assetExists(path)) {
+      this.load.spritesheet(key, path, frameConfig)
+    }
   }
 }
