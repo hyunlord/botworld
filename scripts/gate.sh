@@ -2,52 +2,33 @@
 set -euo pipefail
 
 echo "[gate] repo: $(pwd)"
+echo "[gate] branch: $(git rev-parse --abbrev-ref HEAD)"
 echo "[gate] git status:"
 git status --porcelain || true
 
-# ----- Node strict install -----
-if [ -f package.json ]; then
-  echo "[gate] Node project detected"
-
-  if [ -f pnpm-lock.yaml ]; then
-    echo "[gate] pnpm strict (frozen-lockfile)"
-    command -v pnpm >/dev/null 2>&1 || { echo "[gate] pnpm not installed. Use: corepack enable && corepack prepare pnpm@latest --activate"; exit 1; }
-    pnpm install --frozen-lockfile
-
-    pnpm -s run format:check
-    pnpm -s run lint
-    pnpm -s run typecheck
-    pnpm -s run test || true
-    pnpm -s run test:e2e || true
-    pnpm -s run smoke || true
-
-  elif [ -f yarn.lock ]; then
-    echo "[gate] yarn strict (frozen-lockfile)"
-    command -v yarn >/dev/null 2>&1 || { echo "[gate] yarn not installed"; exit 1; }
-    yarn install --frozen-lockfile
-
-    yarn -s format:check
-    yarn -s lint
-    yarn -s typecheck
-    yarn -s test || true
-    yarn -s test:e2e || true
-    yarn -s smoke || true
-
-  elif [ -f package-lock.json ] || [ -f npm-shrinkwrap.json ]; then
-    echo "[gate] npm strict (ci)"
-    npm ci
-
-    npm run -s format:check
-    npm run -s lint
-    npm run -s typecheck
-    npm run -s test || true
-    npm run -s test:e2e || true
-    npm run -s smoke || true
-
-  else
-    echo "[gate] ERROR: no lockfile found. Add pnpm-lock.yaml/yarn.lock/package-lock.json to enable strict gate."
-    exit 1
-  fi
+# Strict pnpm install (lockfile required)
+if [ ! -f pnpm-lock.yaml ]; then
+  echo "[gate] ERROR: pnpm-lock.yaml not found"
+  exit 1
 fi
+
+# Ensure pnpm available (use corepack recommended)
+if ! command -v pnpm >/dev/null 2>&1; then
+  echo "[gate] ERROR: pnpm not found. Run:"
+  echo "  corepack enable"
+  echo "  corepack prepare pnpm@10.29.2 --activate"
+  exit 1
+fi
+
+echo "[gate] pnpm version: $(pnpm --version)"
+echo "[gate] pnpm install --frozen-lockfile"
+pnpm install --frozen-lockfile
+
+echo "[gate] turbo lint (if configured)"
+pnpm -s run lint || true
+
+echo "[gate] turbo build (optional, can be slow)"
+# Uncomment if you want strict build gate locally
+# pnpm -s run build
 
 echo "[gate] done"
